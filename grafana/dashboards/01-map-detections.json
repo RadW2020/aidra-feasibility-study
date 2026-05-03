@@ -102,7 +102,7 @@
       "title": "Temporal coverage of the data shown",
       "description": "Summary of WHEN the vessels on the map were captured and WHEN AIDRA processed them.\n\n• First scene / Last scene: timestamps at which the Sentinel-1 satellite acquired the SAR images (sensing date). This is the REAL moment the radar flew over the area. If a single scene is shown, both values match; if several passes are aggregated, they bound the temporal range.\n\n• Scenes: number of distinct satellite passes / images aggregated on the map under the active filters.\n\n• Last processed: when AIDRA downloaded and analysed the latest image (ran YOLO + CFAR, geocoded the detections and wrote them to the DB). This is pipeline time, not satellite time.\n\nThe gap between 'Last scene' and 'Last processed' is the END-TO-END LATENCY: how long the system takes from the satellite acquisition to the operator receiving actionable data. Key metric for maritime surveillance (SatCen tender criterion).\n\nAll values honour the active dashboard filters (profile, model, include on-land, include cluster anomalies, and the time range at the top right).",
       "type": "table",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 3 },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 5 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -139,7 +139,8 @@
       },
       "options": {
         "showHeader": true,
-        "footer": { "show": false }
+        "footer": { "show": false },
+        "cellHeight": "lg"
       }
     },
     {
@@ -147,7 +148,7 @@
       "title": "Vessel detections",
       "description": "Map with detection points color-coded by confidence level: green > 0.8, yellow > 0.5, red < 0.5.",
       "type": "geomap",
-      "gridPos": { "x": 0, "y": 3, "w": 24, "h": 18 },
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 18 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -226,7 +227,7 @@
       "title": "Total detections",
       "description": "Number of detections matching the active filters.",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 21, "w": 6, "h": 4 },
+      "gridPos": { "x": 0, "y": 23, "w": 6, "h": 4 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -274,7 +275,7 @@
       "title": "Average confidence",
       "description": "Mean detection confidence score across the active filters. Higher is better; YOLO scores between 0 and 1, CFAR is normalised to the same range.",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 21, "w": 6, "h": 4 },
+      "gridPos": { "x": 6, "y": 23, "w": 6, "h": 4 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -324,7 +325,7 @@
       "title": "Detections by source",
       "description": "Breakdown of detections by detector: 'cfar' (statistical SAR detector), 'yolo' (deep learning) and 'fused' (overlapping detection confirmed by both).",
       "type": "piechart",
-      "gridPos": { "x": 12, "y": 21, "w": 6, "h": 4 },
+      "gridPos": { "x": 12, "y": 23, "w": 6, "h": 4 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -366,7 +367,7 @@
       "title": "Pipeline runs in range",
       "description": "Number of successful AIDRA pipeline executions in the selected time range. Each run processes one Sentinel-1 scene end-to-end.",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 21, "w": 6, "h": 4 },
+      "gridPos": { "x": 18, "y": 23, "w": 6, "h": 4 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -413,7 +414,7 @@
       "title": "Detection gallery (top confidence)",
       "description": "Visual evidence per detection: actual SAR crop centred on the bounding box (log-stretched, percentile-clipped). Useful for the GEOINT analyst (visual proof of the vessel) and the AI Act auditor (explainability). Sorted by confidence; honours all dashboard filters.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 25, "w": 24, "h": 12 },
+      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 12 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -491,7 +492,7 @@
       "title": "Scenes processed (most recent first)",
       "description": "One row per pipeline run. 'sensing_date' is when the Sentinel-1 satellite captured the image; 'processed_at' is when AIDRA analysed it. Their gap is the end-to-end latency. 'dur_s' is the run duration in seconds.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 37, "w": 24, "h": 7 },
+      "gridPos": { "x": 0, "y": 39, "w": 24, "h": 7 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -558,7 +559,7 @@
       "title": "Tip & Cue chains (autonomous re-tasking)",
       "description": "Each row is a re-tasking cue triggered by a previous low-confidence detection. The 'replay' link opens a side-by-side T0 → Cue → T1 visualisation with SAR thumbnails before/after and confidence uplift. This is the SatCen tender extra: shows how the satellite re-observes its own findings autonomously.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 44, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 46, "w": 24, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
