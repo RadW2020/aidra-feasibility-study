@@ -84,6 +84,8 @@ services:
       - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_EXPLORE_ENABLED=false
+      - GF_PANELS_DISABLE_SANITIZE_HTML=true
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/00-home.json
       - DB_PASSWORD=${DB_PASSWORD}
     volumes:
       - aidra-grafana-data:/var/lib/grafana
