@@ -133,8 +133,15 @@ class DetectionEngine:
         cfar: CFARDetector | None = None,
         constraint_profile: str = "ground",
         scene_shape: tuple[int, int] | None = None,
+        cpu_throttle: Any = None,
     ) -> DetectionResult:
-        """Execute detection on a set of tiles using the provided detector."""
+        """Execute detection on a set of tiles using the provided detector.
+
+        ``cpu_throttle`` is an optional :class:`src.profiles.throttle.CPUThrottle`
+        instance.  When provided, ``tick()`` is called after each per-tile
+        detector invocation so that sub-core constraint profiles can
+        emulate fractional-OCPU hardware via wall-clock duty cycling.
+        """
         process = psutil.Process()
         process.cpu_percent(interval=None)
 
@@ -147,6 +154,8 @@ class DetectionEngine:
 
         # --- CFAR pass (optional, typical for SAR) --------------------
         t_cfar_start = time.perf_counter()
+        if cpu_throttle is not None:
+            cpu_throttle.reset()
         if cfar is not None:
             for tile in tiles:
                 tile_data: NDArray = tile.get("data", tile.get("array"))
@@ -164,10 +173,14 @@ class DetectionEngine:
                     d["tile_index"] = tile_idx
                 all_cfar_raw.extend(cfar_dets)
                 ram_peak = max(ram_peak, process.memory_info().rss / (1024 * 1024))
+                if cpu_throttle is not None:
+                    cpu_throttle.tick()
         t_cfar_end = time.perf_counter()
 
         # --- Primary Detector pass (YOLO/Custom) ----------------------
         t_det_start = time.perf_counter()
+        if cpu_throttle is not None:
+            cpu_throttle.reset()
         for tile in tiles:
             tile_data = tile.get("data", tile.get("array"))
             tile_idx = tile.get("tile_index", 0)
@@ -191,6 +204,8 @@ class DetectionEngine:
             all_yolo_raw.extend(dets)
 
             ram_peak = max(ram_peak, process.memory_info().rss / (1024 * 1024))
+            if cpu_throttle is not None:
+                cpu_throttle.tick()
         t_det_end = time.perf_counter()
 
         # --- Fusion --------------------------------------------------

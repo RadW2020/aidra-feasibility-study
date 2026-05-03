@@ -37,6 +37,7 @@ from src.profiles.definitions import (
     get_profile,
 )
 from src.profiles.metrics_collector import ResourceCollector, ResourceMetrics
+from src.profiles.throttle import CPUThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,18 @@ class ProfileManager:
             # 1. Apply resource limits (memory + CPU)
             self._apply_memory_limit(profile.memory_limit_mb)
             self._apply_cpu_limit(profile.cpu_limit)
+
+            # 1b. Soft sub-core throttle.  sched_setaffinity rounds
+            # fractional cpu_limits up to a full core, so sat-low (0.5)
+            # and sat-extreme (0.25) would otherwise be indistinguishable
+            # from sat-mid (1.0).  CPUThrottle keeps the average duty
+            # cycle close to ``cpu_limit`` by sleeping between ticks.
+            # The pipeline function is responsible for calling
+            # ``cpu_throttle.tick()`` after each work unit; we only inject
+            # the instance.  No-op when cpu_limit >= 1.0.
+            cpu_throttle = CPUThrottle(profile.cpu_limit)
+            if cpu_throttle.enabled and "cpu_throttle" not in kwargs:
+                kwargs["cpu_throttle"] = cpu_throttle
 
             # 2. Start resource monitoring
             collector.start()
