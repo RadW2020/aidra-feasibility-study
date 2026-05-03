@@ -1,0 +1,311 @@
+"""
+Consultas SQL parametrizadas.
+
+Todas las queries usan $1, $2... (parametros asyncpg, no f-strings).
+Nunca concatenar strings SQL.
+"""
+
+# ====================================================================
+# execution_log
+# ====================================================================
+
+INSERT_EXECUTION = """
+    INSERT INTO execution_log (
+        id, image_id, image_title, image_hash, image_bbox,
+        image_sensing_date, image_size_mb, search_zone,
+        model_name, model_version, model_hash, model_size_mb,
+        model_format, compression_technique,
+        confidence_threshold, iou_threshold, constraint_profile,
+        cpu_limit, memory_limit_mb, tile_size, tile_overlap,
+        num_detections, avg_confidence, max_confidence, min_confidence,
+        total_duration_ms, download_ms, preprocessing_ms, inference_ms,
+        postprocessing_ms, peak_ram_mb, avg_ram_mb, cpu_usage_pct,
+        num_tiles, output_hash, input_params_hash,
+        status, error_message, trigger_type, triggered_by,
+        pipeline_version, hostname, commit_sha
+    ) VALUES (
+        $1, $2, $3, $4, CASE WHEN $5::text IS NOT NULL THEN ST_GeomFromGeoJSON($5::text) ELSE NULL END,
+        $6, $7, $8,
+        $9, $10, $11, $12,
+        $13, $14,
+        $15, $16, $17,
+        $18, $19, $20, $21,
+        $22, $23, $24, $25,
+        $26, $27, $28, $29,
+        $30, $31, $32, $33,
+        $34, $35, $36,
+        $37, $38, $39, $40,
+        $41, $42, $43
+    )
+"""
+
+SELECT_EXECUTION_BY_ID = """
+    SELECT *, ST_AsGeoJSON(image_bbox) AS image_bbox_geojson
+    FROM execution_log
+    WHERE id = $1
+"""
+
+SELECT_EXECUTIONS = """
+    SELECT *, ST_AsGeoJSON(image_bbox) AS image_bbox_geojson
+    FROM execution_log
+    WHERE ($1::text IS NULL OR constraint_profile = $1)
+      AND ($2::text IS NULL OR model_name = $2)
+      AND ($3::text IS NULL OR status = $3)
+      AND ($4::timestamptz IS NULL OR created_at >= $4)
+      AND ($5::timestamptz IS NULL OR created_at <= $5)
+    ORDER BY created_at DESC
+    LIMIT $6 OFFSET $7
+"""
+
+COUNT_EXECUTIONS = """
+    SELECT COUNT(*)
+    FROM execution_log
+    WHERE ($1::text IS NULL OR constraint_profile = $1)
+      AND ($2::text IS NULL OR model_name = $2)
+      AND ($3::text IS NULL OR status = $3)
+"""
+
+# ====================================================================
+# detections
+# ====================================================================
+
+INSERT_DETECTION = """
+    INSERT INTO detections (
+        id, execution_id,
+        center_geo, bbox_geo, bbox_pixel,
+        confidence, source, cfar_snr, yolo_score, class_name,
+        tile_index, tile_row_offset, tile_col_offset,
+        on_land, cluster_anomaly, thumbnail_path
+    ) VALUES (
+        $1, $2,
+        ST_SetSRID(ST_MakePoint($3, $4), 4326),
+        CASE WHEN $5::text IS NOT NULL THEN ST_GeomFromGeoJSON($5::text) ELSE NULL END,
+        $6,
+        $7, $8, $9, $10, $11,
+        $12, $13, $14,
+        $15, $16, $17
+    )
+"""
+
+INSERT_DETECTIONS_BATCH = """
+    INSERT INTO detections (
+        execution_id, center_geo, bbox_geo, bbox_pixel,
+        confidence, source, cfar_snr, yolo_score, class_name,
+        tile_index
+    )
+    SELECT
+        unnest($1::uuid[]),
+        ST_SetSRID(ST_MakePoint(unnest($2::double precision[]), unnest($3::double precision[])), 4326),
+        ST_GeomFromGeoJSON(unnest($4::text[])),
+        unnest($5::real[][]),
+        unnest($6::real[]),
+        unnest($7::text[]),
+        unnest($8::real[]),
+        unnest($9::real[]),
+        unnest($10::text[]),
+        unnest($11::integer[])
+"""
+
+SELECT_DETECTIONS = """
+    SELECT
+        d.*,
+        ST_X(d.center_geo) AS longitude,
+        ST_Y(d.center_geo) AS latitude,
+        ST_AsGeoJSON(d.center_geo) AS center_geojson,
+        ST_AsGeoJSON(d.bbox_geo) AS bbox_geojson,
+        e.constraint_profile,
+        e.model_name,
+        e.model_version,
+        e.image_id
+    FROM detections d
+    JOIN execution_log e ON d.execution_id = e.id
+    WHERE ($1::text IS NULL OR e.constraint_profile = $1)
+      AND ($2::text IS NULL OR e.model_name = $2)
+      AND ($3::real IS NULL OR d.confidence >= $3)
+      AND ($4::timestamptz IS NULL OR d.created_at >= $4)
+      AND ($5::timestamptz IS NULL OR d.created_at <= $5)
+      AND ($6::geometry IS NULL OR ST_Intersects(d.center_geo, $6))
+      AND ($9::boolean IS NULL OR d.on_land = $9)
+      AND ($10::boolean IS NULL OR d.cluster_anomaly = $10)
+    ORDER BY d.confidence DESC
+    LIMIT $7 OFFSET $8
+"""
+
+SELECT_DETECTION_BY_ID = """
+    SELECT
+        d.id AS detection_id,
+        d.execution_id,
+        d.created_at AS detection_created_at,
+        d.bbox_pixel,
+        d.confidence,
+        d.source,
+        d.cfar_snr,
+        d.yolo_score,
+        d.class_name,
+        d.on_land,
+        d.cluster_anomaly,
+        d.thumbnail_path,
+        d.tile_index,
+        d.tile_row_offset,
+        d.tile_col_offset,
+        ST_X(d.center_geo) AS longitude,
+        ST_Y(d.center_geo) AS latitude,
+        ST_AsGeoJSON(d.center_geo) AS center_geojson,
+        ST_AsGeoJSON(d.bbox_geo) AS bbox_geojson,
+        e.id AS execution_log_id,
+        e.created_at AS execution_created_at,
+        e.image_id,
+        e.image_title,
+        e.image_hash,
+        ST_AsGeoJSON(e.image_bbox) AS image_bbox_geojson,
+        e.image_sensing_date,
+        e.image_size_mb,
+        e.search_zone,
+        e.model_name,
+        e.model_version,
+        e.model_hash,
+        e.model_size_mb,
+        e.model_format,
+        e.compression_technique,
+        e.confidence_threshold,
+        e.iou_threshold,
+        e.constraint_profile,
+        e.cpu_limit,
+        e.memory_limit_mb,
+        e.tile_size,
+        e.tile_overlap,
+        e.num_detections,
+        e.avg_confidence,
+        e.max_confidence,
+        e.min_confidence,
+        e.total_duration_ms,
+        e.download_ms,
+        e.preprocessing_ms,
+        e.inference_ms,
+        e.postprocessing_ms,
+        e.peak_ram_mb,
+        e.avg_ram_mb,
+        e.cpu_usage_pct,
+        e.num_tiles,
+        e.output_hash,
+        e.input_params_hash,
+        e.status,
+        e.error_message,
+        e.trigger_type,
+        e.triggered_by,
+        e.pipeline_version,
+        e.hostname,
+        e.notes
+    FROM detections d
+    JOIN execution_log e ON d.execution_id = e.id
+    WHERE d.id = $1
+"""
+
+# ====================================================================
+# benchmarks (queries agregadas)
+# ====================================================================
+
+SELECT_BENCHMARKS_BY_MODEL = """
+    SELECT
+        model_name,
+        model_version,
+        model_size_mb,
+        compression_technique,
+        constraint_profile,
+        COUNT(*) AS runs,
+        AVG(inference_ms) AS avg_inference_ms,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY inference_ms) AS p50_inference_ms,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY inference_ms) AS p95_inference_ms,
+        AVG(peak_ram_mb) AS avg_peak_ram_mb,
+        AVG(cpu_usage_pct) AS avg_cpu_pct,
+        AVG(num_detections) AS avg_detections,
+        AVG(avg_confidence) AS avg_confidence
+    FROM execution_log
+    WHERE status = 'success'
+      AND ($1::text IS NULL OR model_name = $1)
+      AND ($2::text IS NULL OR constraint_profile = $2)
+    GROUP BY model_name, model_version, model_size_mb,
+             compression_technique, constraint_profile
+    ORDER BY model_size_mb, constraint_profile
+"""
+
+SELECT_PROFILE_COMPARISON = """
+    SELECT
+        constraint_profile,
+        model_name,
+        model_version,
+        AVG(inference_ms) AS avg_latency_ms,
+        AVG(peak_ram_mb) AS avg_ram_mb,
+        AVG(cpu_usage_pct) AS avg_cpu_pct,
+        AVG(num_detections) AS avg_detections,
+        AVG(avg_confidence) AS avg_confidence,
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,
+        SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failures
+    FROM execution_log
+    WHERE image_id = $1
+      AND model_name = $2
+    GROUP BY constraint_profile, model_name, model_version
+    ORDER BY CASE constraint_profile
+        WHEN 'ground' THEN 1
+        WHEN 'sat-high' THEN 2
+        WHEN 'sat-mid' THEN 3
+        WHEN 'sat-low' THEN 4
+        WHEN 'sat-extreme' THEN 5
+    END
+"""
+
+# ====================================================================
+# tasking_queue
+# ====================================================================
+
+INSERT_CUE = """
+    INSERT INTO tasking_queue (
+        triggered_by, triggering_detections,
+        target_bbox, target_zone, priority, reason
+    ) VALUES (
+        $1, $2,
+        ST_GeomFromGeoJSON($3), $4, $5, $6
+    )
+    RETURNING id
+"""
+
+SELECT_PENDING_CUES = """
+    SELECT *, ST_AsGeoJSON(target_bbox) AS target_bbox_geojson
+    FROM tasking_queue
+    WHERE status = 'pending'
+      AND (cooldown_until IS NULL OR cooldown_until < NOW())
+      AND attempts < max_attempts
+    ORDER BY priority DESC, created_at
+    LIMIT $1
+"""
+
+UPDATE_CUE_STATUS = """
+    UPDATE tasking_queue
+    SET status = $2,
+        executed_at = CASE WHEN $2 = 'completed' THEN NOW() ELSE executed_at END,
+        execution_id = $3,
+        result_status = $4,
+        confirmed_detections = $5,
+        attempts = attempts + 1
+    WHERE id = $1
+"""
+
+# ====================================================================
+# models_registry
+# ====================================================================
+
+UPSERT_MODEL = """
+    INSERT INTO models_registry (
+        name, version, format, file_path, file_hash, size_mb,
+        base_model, compression_technique, compression_params,
+        num_params, num_layers, input_size, classes, metadata
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    ON CONFLICT (name, version) DO UPDATE SET
+        file_hash = EXCLUDED.file_hash,
+        size_mb = EXCLUDED.size_mb,
+        metadata = EXCLUDED.metadata
+"""
+
+SELECT_ALL_MODELS = """
+    SELECT * FROM models_registry ORDER BY name, version
+"""
