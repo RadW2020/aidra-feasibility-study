@@ -5,7 +5,7 @@ providers:
     folder: 'AIDRA'
     type: file
     disableDeletion: false
-    editable: true
+    editable: false
     options:
       path: /var/lib/grafana/dashboards
       foldersFromFilesStructure: false
