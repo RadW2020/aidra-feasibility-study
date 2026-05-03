@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     loki_url: str = "http://aidra-loki:3100"
     log_level: str = "INFO"
 
+    # ---- API protection ----
+    # Optional bearer token for state-changing endpoints. When empty,
+    # local development and tests keep the unauthenticated behavior.
+    aidra_api_token: str = ""
+
     # ---- Limites ----
     max_image_size_gb: float = 2.0
     max_concurrent_pipelines: int = 1

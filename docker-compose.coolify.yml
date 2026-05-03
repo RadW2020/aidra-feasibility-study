@@ -26,6 +26,7 @@ services:
       - PROMETHEUS_ENABLED=true
       - LOKI_URL=http://aidra-loki:3100
       - AIDRA_COMMIT_SHA=${AIDRA_COMMIT_SHA:-unknown}
+      - AIDRA_API_TOKEN=${AIDRA_API_TOKEN}
     volumes:
       - aidra-models:/app/models
       - aidra-images:/data/images

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import secrets
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -21,6 +22,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.api.router import router as api_router
 from src.config import Settings
@@ -272,6 +274,30 @@ async def add_process_time_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Process-Time"] = f"{time.perf_counter() - start:.4f}"
     return response
+
+
+@app.middleware("http")
+async def require_api_token_for_writes(request: Request, call_next):
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return await call_next(request)
+
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    token = Settings().aidra_api_token
+    if not token:
+        return await call_next(request)
+
+    expected = f"Bearer {token}"
+    provided = request.headers.get("authorization", "")
+    if not secrets.compare_digest(provided, expected):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Missing or invalid API bearer token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await call_next(request)
 
 
 app.include_router(api_router)
