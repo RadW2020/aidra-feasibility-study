@@ -65,23 +65,6 @@ services:
         reservations:
           memory: 512M
 
-  aidra-front:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    expose:
-      - "80"
-    volumes:
-      - ./landing/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./landing:/srv:ro
-    depends_on:
-      - aidra-grafana
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-        reservations:
-          memory: 16M
-
   aidra-grafana:
     build:
       context: .
