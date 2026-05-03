@@ -85,12 +85,12 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_EXPLORE_ENABLED=false
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/00-home.json
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/dashboards/00-home.json
       - DB_PASSWORD=${DB_PASSWORD}
     volumes:
       - aidra-grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/dashboards:/etc/grafana/dashboards
     depends_on:
       - aidra-db
       - aidra-prom
