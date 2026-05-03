@@ -1,0 +1,138 @@
+# AIDRA demo deployment for Coolify.
+#
+# This file is intentionally separate from docker-compose.yml:
+# - no host port bindings, so it cannot collide with Coolify or other apps
+# - only aidra-app and aidra-grafana are meant to be routed by Coolify
+# - Postgres, Prometheus and Loki stay inside the application network
+# - promtail is omitted to avoid mounting host logs or docker.sock on a shared server
+
+services:
+  aidra-app:
+    build:
+      context: .
+      args:
+        AIDRA_COMMIT_SHA: ${AIDRA_COMMIT_SHA:-unknown}
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://aidra:${DB_PASSWORD}@aidra-db:5432/aidra
+      - COPERNICUS_USER=${COPERNICUS_USER}
+      - COPERNICUS_PASSWORD=${COPERNICUS_PASSWORD}
+      - MODELS_DIR=/app/models
+      - IMAGES_DIR=/data/images
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-vesseltracker-sar-yolov8}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PROMETHEUS_ENABLED=true
+      - LOKI_URL=http://aidra-loki:3100
+      - AIDRA_COMMIT_SHA=${AIDRA_COMMIT_SHA:-unknown}
+    volumes:
+      - aidra-models:/app/models
+      - aidra-images:/data/images
+      - aidra-thumbnails:/data/thumbnails
+      - aidra-interpretability:/data/interpretability
+    depends_on:
+      aidra-db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 10G
+        reservations:
+          memory: 3G
+
+  aidra-db:
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=aidra
+      - POSTGRES_USER=aidra
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - aidra-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aidra -d aidra"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  aidra-grafana:
+    image: grafana/grafana-oss:11.0.0
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_ANONYMOUS_ENABLED:-true}
+      - GF_AUTH_ANONYMOUS_ORG_NAME=${GRAFANA_ANONYMOUS_ORG_NAME:-Main Org.}
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_EXPLORE_ENABLED=false
+      - GF_INSTALL_PLUGINS=grafana-worldmap-panel
+      - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - aidra-grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - aidra-db
+      - aidra-prom
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  aidra-prom:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    expose:
+      - "9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - aidra-prom-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=5GB"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  aidra-loki:
+    image: grafana/loki:3.1.0
+    restart: unless-stopped
+    expose:
+      - "3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml
+      - aidra-loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 128M
+
+volumes:
+  aidra-db-data:
+  aidra-grafana-data:
+  aidra-prom-data:
+  aidra-loki-data:
+  aidra-models:
+  aidra-images:
+  aidra-thumbnails:
+  aidra-interpretability:
