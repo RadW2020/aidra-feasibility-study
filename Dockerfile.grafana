@@ -1,0 +1,4 @@
+FROM grafana/grafana-oss:11.0.0
+
+COPY --chown=472:0 grafana/provisioning /etc/grafana/provisioning
+COPY --chown=472:0 grafana/dashboards /var/lib/grafana/dashboards

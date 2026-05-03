@@ -64,7 +64,9 @@ services:
           memory: 512M
 
   aidra-grafana:
-    image: grafana/grafana-oss:11.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile.grafana
     restart: unless-stopped
     expose:
       - "3000"
@@ -81,8 +83,6 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
     volumes:
       - aidra-grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - aidra-db
       - aidra-prom
@@ -94,12 +94,13 @@ services:
           memory: 256M
 
   aidra-prom:
-    image: prom/prometheus:v2.53.0
+    build:
+      context: .
+      dockerfile: Dockerfile.prometheus
     restart: unless-stopped
     expose:
       - "9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - aidra-prom-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -113,12 +114,13 @@ services:
           memory: 256M
 
   aidra-loki:
-    image: grafana/loki:3.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile.loki
     restart: unless-stopped
     expose:
       - "3100"
     volumes:
-      - ./loki/loki-config.yml:/etc/loki/local-config.yaml
       - aidra-loki-data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     deploy:
