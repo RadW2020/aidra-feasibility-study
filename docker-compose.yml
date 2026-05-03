@@ -84,7 +84,6 @@ services:
       - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_EXPLORE_ENABLED=false
-      - GF_INSTALL_PLUGINS=grafana-worldmap-panel
       - DB_PASSWORD=${DB_PASSWORD}
     volumes:
       - aidra-grafana-data:/var/lib/grafana
