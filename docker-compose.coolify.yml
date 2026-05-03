@@ -43,7 +43,9 @@ services:
           memory: 3G
 
   aidra-db:
-    image: postgis/postgis:16-3.4-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgis
     restart: unless-stopped
     environment:
       - POSTGRES_DB=aidra
