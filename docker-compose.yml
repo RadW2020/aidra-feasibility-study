@@ -1,0 +1,175 @@
+# ---- docker-compose.yml ----
+# AIDRA - Artificial Intelligence In-orbit Data pRocessing Assessment
+# All 6 services: app, db, grafana, prometheus, loki, promtail
+
+services:
+  # ====== APP PRINCIPAL ======
+  aidra-app:
+    build:
+      context: .
+      args:
+        AIDRA_COMMIT_SHA: ${AIDRA_COMMIT_SHA:-unknown}
+    container_name: aidra-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://aidra:${DB_PASSWORD}@aidra-db:5432/aidra
+      - COPERNICUS_USER=${COPERNICUS_USER}
+      - COPERNICUS_PASSWORD=${COPERNICUS_PASSWORD}
+      - MODELS_DIR=/app/models
+      - IMAGES_DIR=/data/images
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-vesseltracker-sar-yolov8}
+      - LOG_LEVEL=INFO
+      - PROMETHEUS_ENABLED=true
+      - LOKI_URL=http://aidra-loki:3100
+      - AIDRA_COMMIT_SHA=${AIDRA_COMMIT_SHA:-unknown}
+    volumes:
+      - ./models:/app/models
+      - aidra-images:/data/images
+      - aidra-thumbnails:/data/thumbnails
+      - aidra-interpretability:/data/interpretability
+    depends_on:
+      aidra-db:
+        condition: service_healthy
+    networks:
+      - aidra-net
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          memory: 4G
+
+  # ====== BASE DE DATOS ======
+  aidra-db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: aidra-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=aidra
+      - POSTGRES_USER=aidra
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - aidra-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aidra -d aidra"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aidra-net
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # ====== GRAFANA ======
+  aidra-grafana:
+    image: grafana/grafana-oss:11.0.0
+    container_name: aidra-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_INSTALL_PLUGINS=grafana-worldmap-panel
+      - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - aidra-grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - aidra-db
+      - aidra-prom
+    networks:
+      - aidra-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ====== PROMETHEUS ======
+  aidra-prom:
+    image: prom/prometheus:v2.53.0
+    container_name: aidra-prom
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - aidra-prom-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=5GB'
+    networks:
+      - aidra-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ====== LOKI ======
+  aidra-loki:
+    image: grafana/loki:3.1.0
+    container_name: aidra-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml
+      - aidra-loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - aidra-net
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 128M
+
+  # ====== PROMTAIL ======
+  aidra-promtail:
+    image: grafana/promtail:3.1.0
+    container_name: aidra-promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml
+      - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - aidra-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+volumes:
+  aidra-db-data:        # Persistencia PostgreSQL
+  aidra-grafana-data:   # Dashboards y configuracion Grafana
+  aidra-prom-data:      # Datos historicos Prometheus
+  aidra-loki-data:      # Logs historicos
+  aidra-images:         # Cache temporal de imagenes satelitales
+  aidra-thumbnails:     # SAR detection thumbnails (wow #1)
+  aidra-interpretability:  # Grad-CAM + CFAR heatmaps (D4 annex, I-AIA-2)
+
+networks:
+  aidra-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

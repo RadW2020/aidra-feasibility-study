@@ -1,0 +1,27 @@
+# Docker Compose for integration tests — spins up PostgreSQL + PostGIS only.
+# Usage:
+#   docker compose -f docker-compose.test.yml up -d
+#   DATABASE_URL=postgresql+asyncpg://aidra_test:test@localhost:5433/aidra_test pytest tests/ -v -m db
+#   docker compose -f docker-compose.test.yml down -v
+
+version: "3.9"
+
+services:
+  aidra-test-db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: aidra-test-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: aidra_test
+      POSTGRES_USER: aidra_test
+      POSTGRES_PASSWORD: test
+    volumes:
+      - ./src/db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aidra_test -d aidra_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data  # In-memory for speed

@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Docker
+docker-compose.override.yml
+
+# Data (too large for git)
+models/*.pt
+models/*.onnx
+models/*.bin
+data/
+images/
+*.tiff
+*.tif
+*.zip
+*.tar.gz
+
+# Validation artefacts (regenerable via scripts/run_validation.py)
+reports/
+
+# xView3-SAR raw labels + aria2 inputs (downloaded from iuu.xview.us
+# under research-only EULA — not redistributable, not in git).
+x-view-us-data/
+
+# Datasets
+datasets/
+
+# Grafana (generated)
+grafana/grafana.db
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/projects/
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
