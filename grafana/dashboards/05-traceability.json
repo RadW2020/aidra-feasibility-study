@@ -1,0 +1,489 @@
+{
+  "uid": "aidra-traceability",
+  "title": "AIDRA — Traceability",
+  "description": "Immutable log of pipeline executions with provenance hashes (SHA256).",
+  "tags": ["aidra", "traceability", "provenance", "hashes"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["10s", "30s", "1m", "5m"]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "label": "Model",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT model_name FROM execution_log ORDER BY model_name",
+        "includeAll": true,
+        "allValue": "all",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      },
+      {
+        "name": "profile",
+        "type": "query",
+        "label": "Profile",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT constraint_profile FROM execution_log ORDER BY constraint_profile",
+        "includeAll": true,
+        "allValue": "all",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      },
+      {
+        "name": "status",
+        "type": "query",
+        "label": "Status",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT status FROM execution_log ORDER BY status",
+        "includeAll": true,
+        "allValue": "all",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Execution Summary",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT COUNT(*) AS total_executions\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n    AND ('$status' = 'all' OR status = '$status')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Success Rate",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    ROUND(\n        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::numeric\n        / NULLIF(COUNT(*)::numeric, 0),\n        3\n    ) AS success_rate\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.8 },
+              { "color": "green", "value": 0.95 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Unique Images Processed",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT COUNT(DISTINCT image_id) AS unique_images\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n    AND ('$status' = 'all' OR status = '$status')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "purple", "value": null }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Unique Models Used",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT COUNT(DISTINCT model_name || model_version) AS unique_models\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n    AND ('$status' = 'all' OR status = '$status')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Execution Log",
+      "description": "Interactive table with the complete pipeline execution log.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    e.id,\n    e.created_at AS timestamp,\n    e.image_id,\n    e.image_title,\n    e.model_name,\n    e.model_version,\n    e.compression_technique,\n    e.constraint_profile AS profile,\n    e.num_detections AS detections,\n    ROUND(e.avg_confidence::numeric, 3) AS avg_confidence,\n    ROUND(e.inference_ms::numeric, 1) AS latency_ms,\n    ROUND(e.peak_ram_mb::numeric, 1) AS peak_ram_mb,\n    e.status,\n    e.trigger_type,\n    e.error_message\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$status' = 'all' OR e.status = '$status')\nORDER BY e.created_at DESC\nLIMIT 200",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": true,
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "success": { "text": "SUCCESS", "color": "green" } } },
+                  { "type": "value", "options": { "error": { "text": "ERROR", "color": "red" } } },
+                  { "type": "value", "options": { "timeout": { "text": "TIMEOUT", "color": "orange" } } },
+                  { "type": "value", "options": { "oom": { "text": "OOM", "color": "red" } } },
+                  { "type": "value", "options": { "pending": { "text": "PENDING", "color": "blue" } } }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "latency_ms" },
+            "properties": [
+              { "id": "unit", "value": "ms" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "peak_ram_mb" },
+            "properties": [
+              { "id": "unit", "value": "decmbytes" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "id" },
+            "properties": [
+              { "id": "custom.width", "value": 280 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "timestamp" },
+            "properties": [
+              { "id": "custom.width", "value": 180 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": true,
+          "reducer": ["count"],
+          "countRows": true
+        },
+        "sortBy": [
+          { "displayName": "timestamp", "desc": true }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "title": "Hash Verification (Provenance Detail)",
+      "description": "SHA256 hashes of inputs, models and outputs for traceability verification.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    e.id AS execution_id,\n    e.created_at AS timestamp,\n    e.image_id,\n    e.image_hash,\n    e.model_name,\n    e.model_version,\n    e.model_hash,\n    e.model_format,\n    e.model_size_mb,\n    e.output_hash,\n    e.input_params_hash,\n    e.confidence_threshold,\n    e.iou_threshold,\n    e.tile_size,\n    e.constraint_profile AS profile,\n    e.status,\n    e.pipeline_version,\n    e.hostname\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$status' = 'all' OR e.status = '$status')\nORDER BY e.created_at DESC\nLIMIT 100",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": true,
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "image_hash" },
+            "properties": [
+              { "id": "custom.width", "value": 200 },
+              { "id": "displayName", "value": "Image SHA256" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "model_hash" },
+            "properties": [
+              { "id": "custom.width", "value": 200 },
+              { "id": "displayName", "value": "Model SHA256" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "output_hash" },
+            "properties": [
+              { "id": "custom.width", "value": 200 },
+              { "id": "displayName", "value": "Output SHA256" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "input_params_hash" },
+            "properties": [
+              { "id": "custom.width", "value": 200 },
+              { "id": "displayName", "value": "Params SHA256" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "execution_id" },
+            "properties": [
+              { "id": "custom.width", "value": 280 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Execution Timeline",
+      "description": "Timeline of executions by status.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    $__timeGroup(created_at, '1h') AS \"time\",\n    status,\n    COUNT(*) AS count\nFROM execution_log\nWHERE $__timeFilter(created_at)\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY 1, status\nORDER BY 1",
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": { "mode": "normal" }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "success" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "error" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

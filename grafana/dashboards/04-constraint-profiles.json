@@ -1,0 +1,341 @@
+{
+  "uid": "aidra-constraint-profiles",
+  "title": "AIDRA — Constraint Profiles",
+  "description": "Performance comparison under space-grade hardware constraint profiles.",
+  "tags": ["aidra", "profiles", "constraints", "space"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m", "15m"]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "label": "Model",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT model_name FROM execution_log ORDER BY model_name",
+        "includeAll": false,
+        "current": {},
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      },
+      {
+        "name": "image_id",
+        "type": "query",
+        "label": "Image ID",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT image_id FROM execution_log WHERE model_name = '$model' ORDER BY image_id",
+        "includeAll": false,
+        "current": {},
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Latency by Profile (ms)",
+      "description": "Inference latency comparison across profiles for the same image and model.",
+      "type": "barchart",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "RAM Usage by Profile (MB)",
+      "description": "Peak RAM usage per constraint profile.",
+      "type": "barchart",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Detections by Profile",
+      "description": "Average number of detections per profile, showing progressive degradation.",
+      "type": "barchart",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 4,
+      "title": "CPU Usage by Profile (%)",
+      "description": "Average CPU usage per profile.",
+      "type": "barchart",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Profile Pass/Fail Status",
+      "description": "Traffic-light status per profile: green (OK), yellow (degraded), red (failure / OOM).",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,\n    SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failures,\n    CASE\n        WHEN SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) > 0 THEN 'FAIL'\n        WHEN AVG(avg_confidence) < 0.5 THEN 'DEGRADED'\n        ELSE 'PASS'\n    END AS verdict\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false,
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "verdict" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "PASS": { "text": "PASS", "color": "green" } } },
+                  { "type": "value", "options": { "DEGRADED": { "text": "DEGRADED", "color": "yellow" } } },
+                  { "type": "value", "options": { "FAIL": { "text": "FAIL", "color": "red" } } }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_latency_ms" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              { "id": "displayName", "value": "Avg Latency" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_ram_mb" },
+            "properties": [
+              { "id": "unit", "value": "decmbytes" },
+              { "id": "displayName", "value": "Avg RAM" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_cpu_pct" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "displayName", "value": "Avg CPU" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_confidence" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" },
+              { "id": "displayName", "value": "Avg Confidence" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "countRows": false
+        }
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

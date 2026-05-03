@@ -1,0 +1,289 @@
+{
+  "uid": "aidra-tipcue-replay",
+  "title": "AIDRA — Tip & Cue Replay",
+  "description": "Autonomous re-tasking chains: every time AIDRA detects a low-confidence vessel cluster, it queues a re-observation cue (T0 → Cue → T1). Each row links to a side-by-side visual replay with SAR thumbnails before/after and confidence uplift. This is the SatCen tender extra.",
+  "tags": ["aidra", "tipcue", "tasking", "autonomy", "wow"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-30d", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["10s", "30s", "1m", "5m"],
+    "time_options": ["1h", "6h", "24h", "2d", "7d", "30d", "90d"]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "status",
+        "type": "custom",
+        "label": "Cue status",
+        "description": "Filter cues by lifecycle status.",
+        "query": "all,pending,executing,completed,failed",
+        "current": {"text": "all", "value": "all"},
+        "options": [
+          {"text": "all",       "value": "all",       "selected": true},
+          {"text": "pending",   "value": "pending",   "selected": false},
+          {"text": "executing", "value": "executing", "selected": false},
+          {"text": "completed", "value": "completed", "selected": false},
+          {"text": "failed",    "value": "failed",    "selected": false}
+        ],
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "title": "How to read this dashboard",
+      "type": "text",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Tip & Cue** is AIDRA's autonomous re-tasking loop. When a pipeline run produces a low-or-moderate-confidence detection cluster in a zone of interest, the evaluator queues a `cue` to **re-observe** the same area in the next satellite pass. Each row below is a chain `T0 → Cue → T1`.\n\n- **T0** = the original execution that triggered the cue.\n- **Cue** = the re-tasking entry (target zone, priority, reason).\n- **T1** = the re-observation execution (when the scheduler runs the cue).\n\nClick **▶ Open replay** to see a visual side-by-side comparison: SAR thumbnails of the triggering detections vs. the confirming detections, with confidence uplift and latency metrics. This is the SatCen tender extra: the satellite chasing its own findings."
+      }
+    },
+    {
+      "id": 1,
+      "title": "Cues queued",
+      "description": "Total cues created in the selected time range with the current status filter.",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR status = '$status')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Completed (re-observed)",
+      "description": "Cues whose re-observation has been executed.",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 4, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT COUNT(*) AS completed\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND status = 'completed'",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Avg triggering detections",
+      "description": "Mean number of detections per cue (the cluster size that fired the re-tasking).",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 4, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT ROUND(AVG(cardinality(triggering_detections))::numeric, 1) AS avg_dets\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR status = '$status')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Top zones by cues",
+      "description": "Which zones of interest fire the most re-tasking events.",
+      "type": "piechart",
+      "gridPos": { "x": 18, "y": 4, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT COALESCE(target_zone, 'unknown') AS zone, COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR status = '$status')\nGROUP BY target_zone\nORDER BY cues DESC\nLIMIT 8",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "right" },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "pieType": "donut"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Tip & Cue chains (click ▶ Open replay)",
+      "description": "Each row is a re-tasking cue. Click '▶ Open replay' to see the visual T0 → Cue → T1 walkthrough with SAR thumbnails before / after and confidence uplift.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 16 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT\n    'http://localhost:8000/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    t.attempts                                    AS \"attempts\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR t.status = '$status')\nORDER BY t.created_at DESC\nLIMIT 100",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "filterable": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "replay" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "text" } },
+              { "id": "custom.width", "value": 140 },
+              {
+                "id": "links",
+                "value": [
+                  { "title": "Open replay (new tab)", "url": "${__value.text}", "targetBlank": true }
+                ]
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "regex", "options": { "pattern": ".*", "result": { "text": "▶ Open replay" } } }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "cue_at" },
+            "properties": [
+              { "id": "unit", "value": "dateTimeAsIso" },
+              { "id": "custom.width", "value": 200 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": {
+                    "pending":   { "text": "pending",   "color": "yellow" },
+                    "executing": { "text": "executing", "color": "blue" },
+                    "completed": { "text": "completed", "color": "green" },
+                    "failed":    { "text": "failed",    "color": "red" }
+                  } }
+                ]
+              },
+              { "id": "custom.width", "value": 110 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "prio" },
+            "properties": [
+              { "id": "custom.width", "value": 70 },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "gradient" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "blue",   "value": null },
+                    { "color": "yellow", "value": 1 },
+                    { "color": "red",    "value": 2 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "trigger_dets" },
+            "properties": [{ "id": "custom.width", "value": 120 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "confirmed" },
+            "properties": [{ "id": "custom.width", "value": 110 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "attempts" },
+            "properties": [{ "id": "custom.width", "value": 90 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "tasking_id" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

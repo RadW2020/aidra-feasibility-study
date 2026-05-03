@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'aidra-app'
+    static_configs:
+      - targets: ['aidra-app:8000']
+    metrics_path: '/api/metrics'

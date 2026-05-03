@@ -1,0 +1,338 @@
+{
+  "uid": "aidra-orbital-latency",
+  "title": "AIDRA — Orbital Latency",
+  "description": "End-to-end latency analysis: from sensor acquisition to result available on ground, with and without OBDP.",
+  "tags": ["aidra", "orbital", "latency", "obdp"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m", "15m"]
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Speedup Factor (OBDP vs Traditional)",
+      "description": "Latency improvement factor: how many times faster the system is with OBDP.",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS avg_processing_min,\n        AVG(image_size_mb) AS avg_image_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND inference_ms IS NOT NULL\n        AND image_size_mb IS NOT NULL\n),\ntraditional AS (\n    -- Traditional: wait for ground station (avg 360 min) + downlink full image (X-band 50Mbps) + ground processing (30 min)\n    SELECT\n        360.0 + (l.avg_image_mb * 8.0 / 50.0 / 60.0) + 30.0 AS total_min_traditional\n    FROM latency_data l\n),\nobdp AS (\n    -- OBDP: process onboard (inference) + wait for ground station (avg 360 min) + downlink result JSON (~0.001 MB)\n    SELECT\n        l.avg_processing_min + 360.0 + (0.001 * 8.0 / 50.0 / 60.0) AS total_min_obdp\n    FROM latency_data l\n)\nSELECT ROUND((t.total_min_traditional / NULLIF(o.total_min_obdp, 0))::numeric, 1) AS speedup_factor\nFROM traditional t, obdp o",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "yellow", "value": null },
+              { "color": "green", "value": 2 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "suffix:x"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 16,
+          "valueSize": 48
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Vessel Displacement During Latency",
+      "description": "Distance a vessel (20 knots) travels during total latency: with vs without OBDP.",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "WithOBDP",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS avg_processing_min\n    FROM execution_log\n    WHERE status = 'success'\n        AND inference_ms IS NOT NULL\n)\n-- A vessel at 20 knots = 37 km/h = 0.617 km/min\nSELECT ROUND(((l.avg_processing_min + 5.0) * 0.617)::numeric, 1) AS \"With OBDP (km)\"\nFROM latency_data l",
+          "format": "table",
+          "editorMode": "code"
+        },
+        {
+          "refId": "WithoutOBDP",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "-- Without OBDP: wait orbit (360 min) + ground processing (55 min) = 415 min\n-- At 20 knots = 0.617 km/min\nSELECT ROUND((415.0 * 0.617)::numeric, 0) AS \"Without OBDP (km)\"",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "suffix: km"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Avg Onboard Processing Time",
+      "description": "Average on-board processing time (inference).",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT ROUND(AVG(inference_ms)::numeric, 0) AS avg_inference_ms\nFROM execution_log\nWHERE status = 'success'\n    AND inference_ms IS NOT NULL",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5000 },
+              { "color": "red", "value": 30000 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Latency Breakdown: With vs Without OBDP (Stacked Bar)",
+      "description": "Latency breakdown: on-board processing, orbital wait, downlink, ground processing.",
+      "type": "barchart",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 10 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH avg_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS proc_min,\n        AVG(image_size_mb) AS img_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND inference_ms IS NOT NULL\n        AND image_size_mb IS NOT NULL\n),\norbits AS (\n    SELECT * FROM (VALUES\n        ('LEO 500km', 360, 10),\n        ('SSO 700km (Sentinel)', 180, 12),\n        ('LEO 350km (ISS-like)', 720, 7)\n    ) AS t(orbit, avg_wait_min, contact_min)\n)\nSELECT\n    o.orbit || ' - With OBDP' AS scenario,\n    ROUND(a.proc_min::numeric, 2) AS \"Onboard Processing (min)\",\n    o.avg_wait_min AS \"Orbital Wait (min)\",\n    ROUND((0.001 * 8.0 / 50.0 / 60.0)::numeric, 4) AS \"Downlink (min)\",\n    0 AS \"Ground Processing (min)\"\nFROM avg_data a\nCROSS JOIN orbits o\n\nUNION ALL\n\nSELECT\n    o.orbit || ' - Without OBDP' AS scenario,\n    0 AS \"Onboard Processing (min)\",\n    o.avg_wait_min AS \"Orbital Wait (min)\",\n    ROUND((a.img_mb * 8.0 / 50.0 / 60.0)::numeric, 2) AS \"Downlink (min)\",\n    55 AS \"Ground Processing (min)\"\nFROM avg_data a\nCROSS JOIN orbits o\n\nORDER BY scenario",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "min"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Onboard Processing (min)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Orbital Wait (min)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Downlink (min)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Ground Processing (min)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "barWidth": 0.6,
+        "groupWidth": 0.7,
+        "stacking": "normal",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Scenario Comparison Table",
+      "description": "Detailed comparison by orbit × downlink × processing scenario.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH avg_data AS (\n    SELECT\n        ROUND(AVG(inference_ms)::numeric, 0) AS avg_inference_ms,\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND inference_ms IS NOT NULL\n        AND image_size_mb IS NOT NULL\n),\norbits AS (\n    SELECT * FROM (VALUES\n        ('LEO 500km', 500, 360, 10),\n        ('SSO 700km', 700, 180, 12),\n        ('LEO 350km', 350, 720, 7)\n    ) AS t(orbit_name, altitude_km, avg_wait_min, contact_min)\n),\nground_chains AS (\n    SELECT * FROM (VALUES\n        ('Fast Automated', 5, 10, 2),\n        ('Standard NRT', 15, 30, 10),\n        ('Manual Analysis', 30, 120, 30)\n    ) AS t(chain_name, ingest_min, processing_min, dissemination_min)\n)\nSELECT\n    o.orbit_name AS \"Orbit\",\n    o.altitude_km AS \"Alt (km)\",\n    g.chain_name AS \"Ground Chain\",\n    o.avg_wait_min AS \"Orbital Wait (min)\",\n    ROUND((a.avg_inference_ms / 1000.0 / 60.0)::numeric, 2) AS \"Onboard Proc (min)\",\n    ROUND((a.avg_image_mb * 8.0 / 50.0 / 60.0)::numeric, 2) AS \"Full Image DL (min)\",\n    g.ingest_min + g.processing_min + g.dissemination_min AS \"Ground Proc (min)\",\n    o.avg_wait_min + ROUND((a.avg_image_mb * 8.0 / 50.0 / 60.0)::numeric, 2) + g.ingest_min + g.processing_min + g.dissemination_min AS \"Total Without OBDP (min)\",\n    ROUND((a.avg_inference_ms / 1000.0 / 60.0)::numeric, 2) + o.avg_wait_min AS \"Total With OBDP (min)\",\n    ROUND((\n        (o.avg_wait_min + (a.avg_image_mb * 8.0 / 50.0 / 60.0) + g.ingest_min + g.processing_min + g.dissemination_min)\n        / NULLIF((a.avg_inference_ms / 1000.0 / 60.0) + o.avg_wait_min, 0)\n    )::numeric, 1) AS \"Speedup\"\nFROM avg_data a\nCROSS JOIN orbits o\nCROSS JOIN ground_chains g\nORDER BY o.altitude_km, g.ingest_min",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": { "type": "auto" },
+            "inspect": false,
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Speedup" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "yellow", "value": null },
+                    { "color": "green", "value": 1.5 }
+                  ]
+                }
+              },
+              { "id": "color", "value": { "mode": "thresholds" } },
+              { "id": "unit", "value": "suffix:x" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Total Without OBDP (min)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Total With OBDP (min)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false }
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

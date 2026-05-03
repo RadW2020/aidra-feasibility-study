@@ -1,0 +1,322 @@
+{
+  "uid": "aidra-compression-bench",
+  "title": "AIDRA — Compression Benchmarks",
+  "description": "Comparison of model variants across size, latency, RAM and accuracy.",
+  "tags": ["aidra", "compression", "benchmark"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m", "15m"]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "profile",
+        "type": "query",
+        "label": "Constraint Profile",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT constraint_profile FROM execution_log ORDER BY constraint_profile",
+        "includeAll": false,
+        "current": {
+          "text": "ground",
+          "value": "ground"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Model Size by Variant (MB)",
+      "description": "Model file size per compression variant.",
+      "type": "barchart",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    model_size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version, model_size_mb\nORDER BY model_size_mb DESC",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1,
+            "axisCenteredZero": false
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Inference Latency by Variant (ms)",
+      "description": "Mean inference latency per model variant.",
+      "type": "barchart",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version\nORDER BY avg_inference_ms DESC",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Precision vs Latency (Trade-off)",
+      "description": "Scatter plot: mean confidence versus inference latency per variant.",
+      "type": "xychart",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    model_size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\nGROUP BY model_name, model_version, model_size_mb\nORDER BY avg_inference_ms",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "show": "points",
+            "pointSize": { "fixed": 10 }
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "dims": {
+          "x": "avg_inference_ms",
+          "frame": 0
+        },
+        "series": [
+          {
+            "x": "avg_inference_ms",
+            "y": "avg_confidence",
+            "name": "variant"
+          }
+        ],
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Peak RAM by Variant (MB)",
+      "description": "Peak RAM usage per model variant.",
+      "type": "barchart",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version\nORDER BY avg_peak_ram_mb DESC",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Benchmark Comparison Table",
+      "description": "Full comparison table: model × size × latency × RAM × accuracy.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    model_name,\n    model_version,\n    compression_technique,\n    model_size_mb,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    COUNT(*) AS num_runs\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version, compression_technique, model_size_mb\nORDER BY model_size_mb",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false,
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "model_size_mb" },
+            "properties": [
+              { "id": "unit", "value": "decmbytes" },
+              { "id": "displayName", "value": "Size (MB)" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_inference_ms" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              { "id": "displayName", "value": "Avg Latency (ms)" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_peak_ram_mb" },
+            "properties": [
+              { "id": "unit", "value": "decmbytes" },
+              { "id": "displayName", "value": "Avg Peak RAM (MB)" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_confidence" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" },
+              { "id": "displayName", "value": "Avg Confidence" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "compression_technique" },
+            "properties": [
+              { "id": "displayName", "value": "Compression" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "countRows": false
+        },
+        "sortBy": [
+          { "displayName": "Size (MB)", "desc": false }
+        ]
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

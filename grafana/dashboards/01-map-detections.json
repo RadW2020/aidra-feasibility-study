@@ -1,0 +1,658 @@
+{
+  "uid": "aidra-map-detections",
+  "title": "AIDRA — Detection Map",
+  "description": "GeoMap with vessel detections color-coded by confidence.",
+  "tags": ["aidra", "detections", "geomap"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"],
+    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "profile",
+        "type": "query",
+        "label": "Constraint Profile",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT constraint_profile FROM execution_log ORDER BY constraint_profile",
+        "includeAll": true,
+        "allValue": "all",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      },
+      {
+        "name": "model",
+        "type": "query",
+        "label": "Model",
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "query": "SELECT DISTINCT model_name || ' ' || model_version AS __text, model_name AS __value FROM execution_log ORDER BY model_name",
+        "includeAll": true,
+        "allValue": "all",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false
+      },
+      {
+        "name": "include_land",
+        "type": "custom",
+        "label": "Include on-land",
+        "description": "Exclude detections falling on land by default (invariant I-DET-2).",
+        "query": "false,true",
+        "current": {"text": "false", "value": "false"},
+        "options": [
+          {"text": "false", "value": "false", "selected": true},
+          {"text": "true", "value": "true", "selected": false}
+        ],
+        "multi": false
+      },
+      {
+        "name": "include_anomaly",
+        "type": "custom",
+        "label": "Include cluster anomalies",
+        "description": "Exclude detections inside abnormally dense clusters by default (invariant I-DET-3).",
+        "query": "false,true",
+        "current": {"text": "false", "value": "false"},
+        "options": [
+          {"text": "false", "value": "false", "selected": true},
+          {"text": "true", "value": "true", "selected": false}
+        ],
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "title": "Temporal coverage of the data shown",
+      "description": "Summary of WHEN the vessels on the map were captured and WHEN AIDRA processed them.\n\n• First scene / Last scene: timestamps at which the Sentinel-1 satellite acquired the SAR images (sensing date). This is the REAL moment the radar flew over the area. If a single scene is shown, both values match; if several passes are aggregated, they bound the temporal range.\n\n• Scenes: number of distinct satellite passes / images aggregated on the map under the active filters.\n\n• Last processed: when AIDRA downloaded and analysed the latest image (ran YOLO + CFAR, geocoded the detections and wrote them to the DB). This is pipeline time, not satellite time.\n\nThe gap between 'Last scene' and 'Last processed' is the END-TO-END LATENCY: how long the system takes from the satellite acquisition to the operator receiving actionable data. Key metric for maritime surveillance (SatCen tender criterion).\n\nAll values honour the active dashboard filters (profile, model, include on-land, include cluster anomalies, and the time range at the top right).",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 3 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    COALESCE(to_char(MIN(e.image_sensing_date) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"First scene\",\n    COALESCE(to_char(MAX(e.image_sensing_date) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"Last scene\",\n    COUNT(DISTINCT e.id)::text AS \"Scenes\",\n    COALESCE(to_char(MAX(e.created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"Last processed\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": { "type": "color-text" },
+            "filterable": false
+          },
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Scenes" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      }
+    },
+    {
+      "id": 1,
+      "title": "Vessel detections",
+      "description": "Map with detection points color-coded by confidence level: green > 0.8, yellow > 0.5, red < 0.5.",
+      "type": "geomap",
+      "gridPos": { "x": 0, "y": 3, "w": 24, "h": 18 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    ST_X(d.center_geo) AS longitude,\n    ST_Y(d.center_geo) AS latitude,\n    d.confidence,\n    d.source,\n    e.model_name,\n    e.model_version,\n    e.constraint_profile,\n    e.image_sensing_date AS sensing_date,\n    e.image_title,\n    e.created_at AS \"time\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\nORDER BY e.created_at DESC",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "view": {
+          "id": "coords",
+          "lat": 40,
+          "lon": 0,
+          "zoom": 3
+        },
+        "basemap": {
+          "type": "default",
+          "name": "OpenStreetMap"
+        },
+        "layers": [
+          {
+            "name": "Detections",
+            "type": "markers",
+            "config": {
+              "showLegend": true,
+              "style": {
+                "size": {
+                  "fixed": 8
+                },
+                "color": {
+                  "field": "confidence",
+                  "fixed": "green"
+                },
+                "opacity": 0.8,
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg"
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "tooltip": true
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showScale": true
+        }
+      },
+      "transformations": []
+    },
+    {
+      "id": 2,
+      "title": "Total detections",
+      "description": "Number of detections matching the active filters.",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 21, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT COUNT(*) AS total_detections\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Average confidence",
+      "description": "Mean detection confidence score across the active filters. Higher is better; YOLO scores between 0 and 1, CFAR is normalised to the same range.",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 21, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT ROUND(AVG(d.confidence)::numeric, 3) AS avg_confidence\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 0.8 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Detections by source",
+      "description": "Breakdown of detections by detector: 'cfar' (statistical SAR detector), 'yolo' (deep learning) and 'fused' (overlapping detection confirmed by both).",
+      "type": "piechart",
+      "gridPos": { "x": 12, "y": 21, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT d.source, COUNT(*) AS count\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\nGROUP BY d.source",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single"
+        },
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": true
+        },
+        "pieType": "pie"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Pipeline runs in range",
+      "description": "Number of successful AIDRA pipeline executions in the selected time range. Each run processes one Sentinel-1 scene end-to-end.",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 21, "w": 6, "h": 4 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT COUNT(DISTINCT e.id) AS total_executions\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND e.status = 'success'",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Detection gallery (top confidence)",
+      "description": "Visual evidence per detection: actual SAR crop centred on the bounding box (log-stretched, percentile-clipped). Useful for the GEOINT analyst (visual proof of the vessel) and the AI Act auditor (explainability). Sorted by confidence; honours all dashboard filters.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 25, "w": 24, "h": 12 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    'http://localhost:8000/api/detections/' || d.id || '/thumbnail.png' AS \"sar_crop\",\n    ROUND(d.confidence::numeric, 3)              AS \"confidence\",\n    d.source                                     AS \"source\",\n    ROUND(ST_Y(d.center_geo)::numeric, 4)        AS \"lat\",\n    ROUND(ST_X(d.center_geo)::numeric, 4)        AS \"lon\",\n    e.image_sensing_date                         AS \"sensed_at\",\n    e.model_name                                 AS \"model\",\n    e.constraint_profile                         AS \"profile\",\n    d.id::text                                   AS \"detection_id\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND d.thumbnail_path IS NOT NULL\nORDER BY d.confidence DESC\nLIMIT 60",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "sar_crop" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "image" } },
+              { "id": "custom.width", "value": 140 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "confidence" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" },
+              { "id": "custom.width", "value": 110 },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "gradient" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "yellow", "value": 0.5 },
+                    { "color": "green", "value": 0.8 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sensed_at" },
+            "properties": [
+              { "id": "unit", "value": "dateTimeAsIso" },
+              { "id": "custom.width", "value": 180 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "detection_id" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "lg",
+        "footer": { "show": false }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Scenes processed (most recent first)",
+      "description": "One row per pipeline run. 'sensing_date' is when the Sentinel-1 satellite captured the image; 'processed_at' is when AIDRA analysed it. Their gap is the end-to-end latency. 'dur_s' is the run duration in seconds.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 37, "w": 24, "h": 7 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    e.image_sensing_date AS \"sensing_date\",\n    e.created_at         AS \"processed_at\",\n    e.search_zone        AS \"zone\",\n    e.image_title        AS \"image\",\n    e.model_name         AS \"model\",\n    e.constraint_profile AS \"profile\",\n    e.num_detections     AS \"detections\",\n    ROUND(e.avg_confidence::numeric, 3) AS \"avg_conf\",\n    ROUND((e.total_duration_ms/1000.0)::numeric, 1) AS \"dur_s\",\n    e.status\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model'   = 'all' OR e.model_name        = '$model')\n    AND e.status = 'success'\nORDER BY e.image_sensing_date DESC NULLS LAST",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "sensing_date" },
+            "properties": [
+              { "id": "unit", "value": "dateTimeAsIso" },
+              { "id": "custom.width", "value": 180 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "processed_at" },
+            "properties": [
+              { "id": "unit", "value": "dateTimeAsIso" },
+              { "id": "custom.width", "value": 180 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "image" },
+            "properties": [
+              { "id": "custom.width", "value": 480 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_conf" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Tip & Cue chains (autonomous re-tasking)",
+      "description": "Each row is a re-tasking cue triggered by a previous low-confidence detection. The 'replay' link opens a side-by-side T0 → Cue → T1 visualisation with SAR thumbnails before/after and confidence uplift. This is the SatCen tender extra: shows how the satellite re-observes its own findings autonomously.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 44, "w": 24, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    'http://localhost:8000/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\nORDER BY t.created_at DESC\nLIMIT 50",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "replay" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "text", "wrapText": false }
+              },
+              { "id": "custom.width", "value": 130 },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open replay",
+                    "url": "${__value.text}",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "regex",
+                    "options": { "pattern": ".*", "result": { "text": "▶ Open replay" } }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "cue_at" },
+            "properties": [
+              { "id": "unit", "value": "dateTimeAsIso" },
+              { "id": "custom.width", "value": 180 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-text" }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": {
+                    "pending":   { "text": "pending",   "color": "yellow" },
+                    "executing": { "text": "executing", "color": "blue" },
+                    "completed": { "text": "completed", "color": "green" },
+                    "failed":    { "text": "failed",    "color": "red" }
+                  } }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "tasking_id" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

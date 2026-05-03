@@ -1,0 +1,345 @@
+{
+  "uid": "aidra-obdp-value",
+  "title": "AIDRA — OBDP Value (Downlink)",
+  "description": "On-board data processing value: compression ratio, bandwidth savings, daily capacity.",
+  "tags": ["aidra", "obdp", "downlink", "compression", "value"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m", "15m"]
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Data Compression Ratio",
+      "description": "Compression ratio: original image size versus resulting JSON size.",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    ROUND(AVG(\n        e.image_size_mb * 1024 / NULLIF(\n            LENGTH(json_build_object(\n                'detections', e.num_detections,\n                'avg_confidence', e.avg_confidence,\n                'execution_id', e.id\n            )::text) / 1024.0, 0\n        )\n    )::numeric, 0) AS compression_ratio\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "yellow", "value": null },
+              { "color": "green", "value": 1000 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "text": {
+          "titleSize": 16,
+          "valueSize": 48
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Total Bandwidth Saved (GB)",
+      "description": "Total bandwidth saved by transmitting only results instead of full images.",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    ROUND((\n        SUM(e.image_size_mb) -\n        SUM(LENGTH(json_build_object(\n            'detections', e.num_detections,\n            'avg_confidence', e.avg_confidence,\n            'execution_id', e.id\n        )::text) / (1024.0 * 1024.0))\n    )::numeric / 1024.0, 2) AS bandwidth_saved_gb\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "decgbytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Images Processed",
+      "description": "Total images processed with OBDP.",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT COUNT(*) AS total_processed\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "purple", "value": null }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Downlink Time: Without vs With OBDP",
+      "description": "Downlink time comparison by satellite/link profile: without OBDP (full image) vs with OBDP (results only).",
+      "type": "barchart",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG(LENGTH(json_build_object(\n            'detections', num_detections,\n            'avg_confidence', avg_confidence,\n            'execution_id', id\n        )::text) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_types AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5),\n        ('X-band (50 Mbps)', 50.0),\n        ('Ka-band (300 Mbps)', 300.0),\n        ('Laser (1800 Mbps)', 1800.0)\n    ) AS t(link_type, mbps)\n)\nSELECT\n    d.link_type,\n    ROUND((a.avg_image_mb * 8 / d.mbps)::numeric, 2) AS \"Without OBDP (sec)\",\n    ROUND((a.avg_result_mb * 8 / d.mbps)::numeric, 4) AS \"With OBDP (sec)\"\nFROM avg_sizes a\nCROSS JOIN downlink_types d\nORDER BY d.mbps",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          },
+          "color": { "mode": "palette-classic" },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Without OBDP (sec)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "With OBDP (sec)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": -45,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Daily Capacity (images/day) by Downlink Profile",
+      "description": "Daily image-processing capacity per downlink profile.",
+      "type": "table",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG(LENGTH(json_build_object(\n            'detections', num_detections,\n            'avg_confidence', avg_confidence,\n            'execution_id', id\n        )::text) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND(\n        FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0))::numeric\n        / NULLIF(FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 0),\n        0\n    ) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": { "type": "auto" },
+            "inspect": false,
+            "filterable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Improvement Factor" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "yellow", "value": null },
+                    { "color": "green", "value": 100 }
+                  ]
+                }
+              },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "md",
+        "footer": { "show": false }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Compression Ratio Over Time",
+      "description": "Time series of the compression ratio per execution.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND((\n        e.image_size_mb * 1024 / NULLIF(\n            LENGTH(json_build_object(\n                'detections', e.num_detections,\n                'avg_confidence', e.avg_confidence,\n                'execution_id', e.id\n            )::text) / 1024.0, 0\n        )\n    )::numeric, 0) AS compression_ratio\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": false
+          },
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}
