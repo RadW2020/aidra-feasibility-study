@@ -1,0 +1,31 @@
+# aidra-front: serves the landing page (with Open Graph / Twitter Card meta
+# tags) at /, and reverse-proxies everything else to Grafana so dashboards,
+# /api/*, /avatar/*, /public/* and Grafana's own assets keep working.
+
+:80 {
+    encode zstd gzip
+
+    handle /healthz {
+        respond "ok" 200
+    }
+
+    handle / {
+        root * /srv
+        try_files /index.html
+        file_server
+    }
+
+    handle /index.html {
+        root * /srv
+        file_server
+    }
+
+    handle /og-image.png {
+        root * /srv
+        file_server
+    }
+
+    handle {
+        reverse_proxy aidra-grafana:3000
+    }
+}
