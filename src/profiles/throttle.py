@@ -1,26 +1,35 @@
 """Soft CPU enforcement via wall-clock duty cycling.
 
-Provides :class:`CPUThrottle`, a tiny throttler used by sub-core
-constraint profiles (sat-low at 0.5 OCPU, sat-extreme at 0.25 OCPU)
-to emulate fractional-core hardware limits when real cgroup
-partitioning is not available — for example when AIDRA runs inside a
-shared Coolify-managed container without delegated cgroup write
-access.
+Provides :class:`CPUThrottle`, used by sub-core constraint profiles
+(sat-low at 0.5 OCPU, sat-extreme at 0.25 OCPU) to emulate
+fractional-core hardware limits when real cgroup partitioning is not
+available — for example when AIDRA runs inside a shared
+Coolify-managed container without delegated cgroup write access.
 
-The throttle is intentionally simple: after each work unit (e.g. a
-tile inference) the caller invokes :meth:`tick`, which compares the
-CPU time used so far against the wall-clock time and sleeps just long
-enough to keep the average ``cpu_time / wall_time`` close to the
-target fraction.
+The throttle is intentionally simple: each work unit (e.g. a tile
+inference) is bracketed by a :meth:`tick`, which measures the wall
+time consumed by the work and inserts a proportional sleep so the
+average ``work_time / total_time`` ratio converges to the target
+fraction.
 
-This is a SOFT limit:
-- It only converges over many ticks; a single tile burst is not
-  preempted.
-- It uses :func:`time.process_time`, which on Linux returns the sum
-  of CPU time across all threads of the process.  AIDRA's inference
-  loop is single-threaded today (see TECHNICAL_SPEC §detection), so
-  this matches the intended semantics.  If the loop is parallelised
-  later, the throttle should be re-evaluated.
+Why wall-time and not CPU time
+------------------------------
+An earlier implementation drove the throttle from
+:func:`time.process_time`.  That measures CPU time **summed across
+all threads** of the process.  PyTorch's OpenMP-parallelised
+operators dispatch work to several worker threads, so a tile that
+took 1.5 s of wall time appeared to consume 3-5 s of CPU.  The
+throttle then computed an over-large sleep — for ``target=0.25`` the
+factor ballooned to ~7.5x the expected slowdown (sat-low actually
+took 250 min on run #3 vs the expected 66 min).
+
+Wall-time work measurement removes that ambiguity entirely: whatever
+the work *actually* took on the host, the throttle adds a
+proportional pause.  In steady state the achievable duty cycle equals
+the target exactly:
+
+    target = work / (work + sleep)
+    sleep  = work * (1 / target - 1)
 
 The trade-off is documented in the relevant ``MODEL_CARD.md`` so the
 D3 / D4 evidence is honest about the enforcement mechanism.
@@ -34,14 +43,10 @@ import time
 logger = logging.getLogger(__name__)
 
 
-# Per-tick sleep cap.  Acts as a runaway safety net: even if the
-# throttle math demands a multi-minute sleep (e.g. a malformed
-# 30 s tile under target=0.25 would request 90 s of sleep), the
-# pause is bounded so the pipeline never appears hung.  10 s is
-# generous: under target=0.25 with 2-3 s tiles, expected per-tick
-# sleep is 6-9 s — well within the cap.  The previous 0.5 s value
-# clamped the achievable duty cycle to ~0.8 regardless of target,
-# defeating the throttle for sat-low / sat-extreme.
+# Per-tick sleep cap.  Acts as a runaway safety net.  10 s is generous
+# even for sat-extreme (target 0.25) with 2-3 s tiles, where the
+# expected sleep is 6-9 s; a runaway tile of 30 s would otherwise
+# request 90 s.
 _MAX_SLEEP_PER_TICK_S = 10.0
 
 # Lower bound on the target fraction to avoid division by zero and
@@ -51,19 +56,21 @@ _MIN_TARGET = 0.05
 
 
 class CPUThrottle:
-    """Maintain an average CPU utilisation around ``target_fraction``.
+    """Maintain an average ``work_time / wall_time`` close to ``target_fraction``.
 
     Args:
-        target_fraction: Desired ratio of CPU time to wall-clock time,
-            in ``(0, 1]``.  A value ``>= 1.0`` makes :meth:`tick` a
-            no-op (full speed).  Values below :data:`_MIN_TARGET` are
-            clamped up.
+        target_fraction: Desired ratio of work time to total wall
+            time, in ``(0, 1]``.  ``>= 1.0`` makes :meth:`tick` a
+            no-op (full speed).  Below :data:`_MIN_TARGET` is clamped
+            up.
 
-    Example:
-        >>> throttle = CPUThrottle(0.25)
-        >>> for tile in tiles:
-        ...     run_inference(tile)
-        ...     throttle.tick()
+    Usage::
+
+        throttle = CPUThrottle(0.25)
+        throttle.reset()
+        for tile in tiles:
+            run_inference(tile)
+            throttle.tick()
     """
 
     def __init__(self, target_fraction: float) -> None:
@@ -81,35 +88,45 @@ class CPUThrottle:
     def reset(self) -> None:
         """Re-anchor the throttle at the current instant.
 
-        Useful when the caller wants to start a fresh measurement
-        window — for example between the CFAR pass and the YOLO pass.
+        Useful between phases (e.g. between the CFAR and YOLO passes)
+        so that any one-off delay before the first tile is not counted
+        as work for the next phase.
         """
-        self._wall_start = time.monotonic()
-        self._cpu_start = time.process_time()
+        now = time.monotonic()
+        self._wall_start: float = now
+        self._last_tick: float = now
+        self._total_work_s: float = 0.0
         self._total_sleep_s: float = 0.0
 
     def tick(self) -> None:
-        """Sleep, if needed, to keep the cumulative duty cycle on target.
+        """Measure the work just completed and sleep proportionally.
 
-        No-op when ``target_fraction >= 1.0`` (i.e. ground / sat-high).
+        The work duration is the wall time elapsed since the previous
+        :meth:`tick` (or :meth:`reset`).  If the throttle is disabled
+        (``target_fraction >= 1.0``) the call is a no-op except for
+        bookkeeping.
         """
+        now = time.monotonic()
+        work_s = now - self._last_tick
+        if work_s < 0:  # clock skew safety
+            work_s = 0.0
+        self._total_work_s += work_s
+
         if not self._enabled:
+            self._last_tick = now
             return
 
-        wall_elapsed = time.monotonic() - self._wall_start
-        cpu_elapsed = time.process_time() - self._cpu_start
-
-        # Desired wall time so far: cpu_elapsed / target.
-        # If actual wall is shorter, we've been "too busy" — sleep
-        # the gap (capped per-tick).
-        target_wall = cpu_elapsed / self.target
-        sleep_for = target_wall - wall_elapsed
+        # In steady state: work / (work + sleep) = target  =>
+        # sleep = work * (1/target - 1)
+        sleep_for = work_s * (1.0 / self.target - 1.0)
         if sleep_for <= 0:
+            self._last_tick = now
             return
 
         sleep_for = min(sleep_for, _MAX_SLEEP_PER_TICK_S)
         time.sleep(sleep_for)
         self._total_sleep_s += sleep_for
+        self._last_tick = time.monotonic()
 
     # ------------------------------------------------------------------
     # Introspection
@@ -117,22 +134,27 @@ class CPUThrottle:
 
     @property
     def enabled(self) -> bool:
-        """Whether the throttle actually inserts sleeps."""
+        """Whether :meth:`tick` actually inserts sleeps."""
         return self._enabled
 
     @property
     def total_sleep_s(self) -> float:
-        """Cumulative sleep time injected since the last :meth:`reset`."""
+        """Cumulative sleep injected since the last :meth:`reset`."""
         return self._total_sleep_s
 
-    def observed_fraction(self) -> float:
-        """Current ``cpu_time / wall_time`` ratio since the last reset.
+    @property
+    def total_work_s(self) -> float:
+        """Cumulative wall-time work observed since the last :meth:`reset`."""
+        return self._total_work_s
 
-        Returns ``0.0`` if no wall time has elapsed yet (e.g. the
-        throttle was just constructed and never ticked).
+    def observed_fraction(self) -> float:
+        """Current ``work_time / wall_time`` ratio since the last reset.
+
+        Returns ``0.0`` when no wall time has elapsed yet (e.g. the
+        throttle was just reset).  In steady state this should be
+        close to :attr:`target`.
         """
         wall_elapsed = time.monotonic() - self._wall_start
         if wall_elapsed <= 0:
             return 0.0
-        cpu_elapsed = time.process_time() - self._cpu_start
-        return cpu_elapsed / wall_elapsed
+        return self._total_work_s / wall_elapsed
