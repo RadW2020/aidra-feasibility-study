@@ -88,6 +88,7 @@ class ProfiledResult:
     avg_confidence: float | None = None
     detections: list[Any] | None = None
     raw_result: Any = None
+    notes: str | None = None  # human-readable notes (e.g. budget exceedance)
 
 
 @dataclass
@@ -137,24 +138,32 @@ class ProfileManager:
 
     @staticmethod
     def _warn_if_platform_lacks_enforcement() -> None:
-        """Log a clear warning when the host cannot enforce profiles.
+        """Log a clear warning when the host cannot enforce CPU profiles.
 
-        Constraint enforcement (RAM via RLIMIT_AS, CPU via
-        sched_setaffinity, fractional CPU via cgroups v2) only works
-        reliably on Linux. On macOS / Windows the Python wrappers are
-        no-ops, so sat-low / sat-mid / sat-extreme runs will produce
-        IDENTICAL telemetry to a `ground` baseline. This is a known
-        limitation; the warning makes it visible to operators.
+        CPU enforcement uses ``sched_setaffinity`` (integer cores) plus
+        the soft :class:`CPUThrottle` (sub-core fractions). Both rely
+        on Linux primitives. On macOS / Windows the wrappers are
+        no-ops, so sat-* runs will produce IDENTICAL CPU telemetry to
+        a `ground` baseline.
+
+        Memory is no longer hard-enforced via ``RLIMIT_AS``: that
+        approach killed the entire FastAPI process on the first ML
+        allocation that pushed virtual address space past the budget,
+        because PyTorch + CUDA shared libraries map ~8-12 GB of
+        virtual memory regardless of resident set. Memory budgets are
+        now measured (peak RSS) and breaches are flagged in the run's
+        ``notes``, mirroring how :class:`CPUThrottle` handles
+        sub-core CPU fractions: soft enforcement, hard measurement.
         """
         import platform
         system = platform.system()
         if system != "Linux":
             logger.warning(
-                "ProfileManager: constraint enforcement is a NO-OP on "
-                "%s — sat-* profiles will not actually limit RAM or "
-                "CPU. Telemetry from sat-low / sat-mid / sat-extreme "
-                "will be indistinguishable from `ground`. Run on a "
-                "Linux container (Docker is fine) for real benchmarks.",
+                "ProfileManager: CPU constraint enforcement is a NO-OP "
+                "on %s — sat-* profiles will not actually limit CPU. "
+                "Telemetry from sat-low / sat-mid / sat-extreme will "
+                "be indistinguishable from `ground`. Run on a Linux "
+                "container (Docker is fine) for real benchmarks.",
                 system,
             )
 
@@ -195,13 +204,18 @@ class ProfileManager:
 
         result = ProfiledResult(profile=profile)
         collector = ResourceCollector(sample_interval_ms=100)
-        original_limits = self._get_memory_limits()
 
         original_affinity = self._get_cpu_affinity()
 
         try:
-            # 1. Apply resource limits (memory + CPU)
-            self._apply_memory_limit(profile.memory_limit_mb)
+            # 1. Apply CPU constraints. Memory is intentionally NOT
+            # enforced via RLIMIT_AS: that approach killed the host
+            # FastAPI process the moment a sat-* run started, because
+            # PyTorch + CUDA libs map ~8-12 GB of virtual address
+            # space regardless of resident set, and RLIMIT_AS guards
+            # virtual size, not RSS. Memory budgets are checked
+            # post-run against measured peak RSS and surfaced through
+            # ``result.notes`` when exceeded.
             self._apply_cpu_limit(profile.cpu_limit)
 
             # 1b. Soft sub-core throttle.  sched_setaffinity rounds
@@ -244,6 +258,29 @@ class ProfileManager:
 
             self._extract_detection_info(result, raw)
 
+            # 5b. Soft memory budget check.  Because RLIMIT_AS is no
+            # longer applied, a run can complete with peak_ram above
+            # the profile budget.  We mark the run successful (it did
+            # produce detections) but record the breach in notes for
+            # D3 / D4 evidence: in real on-orbit hardware the run
+            # would have OOM'd at the kernel level.
+            if (
+                metrics.peak_ram_mb is not None
+                and metrics.peak_ram_mb > profile.memory_limit_mb
+            ):
+                excess = metrics.peak_ram_mb - profile.memory_limit_mb
+                result.notes = (
+                    f"peak_ram={metrics.peak_ram_mb:.0f}MB exceeded "
+                    f"profile budget {profile.memory_limit_mb}MB by "
+                    f"{excess:.0f}MB; on real on-board hardware this "
+                    f"run would have been OOM-killed"
+                )
+                logger.warning(
+                    "Profile '%s' exceeded memory budget: %s",
+                    profile.name,
+                    result.notes,
+                )
+
             logger.info(
                 "Profile '%s' completed: %.0fms, peak_ram=%.1fMB, detections=%s",
                 profile.name,
@@ -274,8 +311,8 @@ class ProfileManager:
             logger.exception("Profile '%s' failed with error", profile.name)
 
         finally:
-            # Restore original resource limits
-            self._restore_memory_limits(original_limits)
+            # Restore CPU affinity. Memory limits are no longer
+            # applied (see comment above), so nothing to restore there.
             self._restore_cpu_affinity(original_affinity)
 
         return result

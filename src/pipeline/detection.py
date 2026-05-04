@@ -96,6 +96,7 @@ class DetectionResult(BaseModel):
     metrics: DetectionMetrics = Field(default_factory=DetectionMetrics)
     cfar_raw: list[dict[str, Any]] = Field(default_factory=list)
     yolo_raw: list[dict[str, Any]] = Field(default_factory=list)
+    notes: str | None = None  # constraint-profile observations (e.g. budget breach)
 
 
 # ====================================================================

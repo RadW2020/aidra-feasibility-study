@@ -77,7 +77,8 @@ UPDATE_EXECUTION_FIELDS = """
         num_tiles = COALESCE($14, num_tiles),
         output_hash = COALESCE($15, output_hash),
         status = COALESCE($16, status),
-        error_message = COALESCE($17, error_message)
+        error_message = COALESCE($17, error_message),
+        notes = COALESCE($18, notes)
     WHERE id = $1
 """
 
@@ -279,6 +280,7 @@ class ExecutionRecorder:
         output_hash: str | None = None,
         status: str | None = None,
         error_message: str | None = None,
+        notes: str | None = None,
     ) -> None:
         """Actualiza campos de resultado de una ejecucion existente.
 
@@ -341,6 +343,7 @@ class ExecutionRecorder:
             output_hash,        # $15
             status,             # $16
             error_message,      # $17
+            notes,              # $18
         )
 
         logger.debug("Execution %s updated", execution_id)

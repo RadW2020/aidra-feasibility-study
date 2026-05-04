@@ -519,6 +519,7 @@ class PipelineEngine:
                 num_tiles=num_tiles,
                 output_hash=output_hash,
                 status="success",
+                notes=detection_result.notes,
             )
 
             # ---- Step 11: Flag anomalies + thumbnails + save to PostGIS ----
@@ -769,6 +770,7 @@ class PipelineEngine:
                         num_tiles=num_tiles,
                         output_hash=output_hash,
                         status="success",
+                        notes=detection_result.notes,
                     )
 
                     await self._save_detections(
@@ -1150,14 +1152,19 @@ class PipelineEngine:
                         f"{profiled_result.error}"
                     )
 
-                # Extract DetectionResult from raw result
+                # Extract DetectionResult from raw result and carry
+                # any profile-level notes (e.g. memory budget breach)
+                # forward so the recorder can persist them.
                 raw = profiled_result.raw_result
                 if isinstance(raw, DetectionResult):
+                    if profiled_result.notes:
+                        raw.notes = profiled_result.notes
                     return raw
                 # The profiled run wraps the result; build a DetectionResult
                 return DetectionResult(
                     detections=getattr(raw, "detections", []),
                     metrics=getattr(raw, "metrics", DetectionMetrics()),
+                    notes=profiled_result.notes,
                 )
 
             else:
