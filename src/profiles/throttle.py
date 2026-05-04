@@ -34,11 +34,15 @@ import time
 logger = logging.getLogger(__name__)
 
 
-# Per-tick sleep cap.  Keeps a single oversized tile from translating
-# into a huge stall that would skew p95 latency reporting.  At 0.5 s
-# the throttle still converges within a few ticks for typical S1 GRD
-# tiles (CFAR ~50 ms, YOLO ~1-3 s on ARM CPU).
-_MAX_SLEEP_PER_TICK_S = 0.5
+# Per-tick sleep cap.  Acts as a runaway safety net: even if the
+# throttle math demands a multi-minute sleep (e.g. a malformed
+# 30 s tile under target=0.25 would request 90 s of sleep), the
+# pause is bounded so the pipeline never appears hung.  10 s is
+# generous: under target=0.25 with 2-3 s tiles, expected per-tick
+# sleep is 6-9 s — well within the cap.  The previous 0.5 s value
+# clamped the achievable duty cycle to ~0.8 regardless of target,
+# defeating the throttle for sat-low / sat-extreme.
+_MAX_SLEEP_PER_TICK_S = 10.0
 
 # Lower bound on the target fraction to avoid division by zero and
 # avalanche-style sleep amplification.  0.05 = 5% utilisation,
