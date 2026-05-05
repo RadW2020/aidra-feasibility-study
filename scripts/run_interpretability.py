@@ -98,10 +98,32 @@ async def main_async(
         picked = random.sample(candidates, min(n_samples, len(candidates)))
 
         # Load YOLO via ModelManager.
+        # Grad-CAM requires a PyTorch model (gradients). If the registry
+        # returns an ONNX variant (e.g. INT8), fall back to the PT baseline
+        # of the same name — architecture is identical so the heatmaps are
+        # equivalent (documented in INT8 MODEL_CARD §Interpretabilidad).
+        from ultralytics import YOLO as _YOLO
+
         manager = ModelManager(db=db, models_dir=Path(settings.models_dir))
-        detector = await manager.get_model(name=picked_model)
-        yolo = detector._model
-        logger.info("Loaded YOLO: %s", type(yolo).__name__)
+        detector = await manager.get_model(name=picked_model, version="v1.0")
+        if detector.model_format == "onnx":
+            pt_candidates = sorted(
+                [
+                    p for p in Path(settings.models_dir).glob(f"{picked_model}*.pt")
+                    if "int8" not in p.name and "pruned" not in p.name
+                ],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if pt_candidates:
+                logger.info("Grad-CAM: switching to PT baseline %s", pt_candidates[0])
+                yolo = _YOLO(str(pt_candidates[0]))
+            else:
+                logger.warning("No PT model found — Grad-CAM will be skipped")
+                yolo = None
+        else:
+            yolo = detector._model
+        logger.info("Loaded YOLO: %s (format=%s)", type(yolo).__name__ if yolo else "None", detector.model_format)
 
         # Output dir.
         run_id = f"{execution_id}_interp_{uuid4().hex[:8]}"

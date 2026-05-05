@@ -85,6 +85,14 @@ def gradcam_yolov8(
     import torch
     import torch.nn.functional as F
 
+    # Fail fast for ONNX models — they have no PyTorch autograd graph.
+    if hasattr(model, "model") and isinstance(model.model, str):
+        raise ValueError(
+            "gradcam_yolov8 requires a PyTorch YOLO model. "
+            f"Got ONNX session at '{model.model}'. "
+            "Load the .pt baseline instead."
+        )
+
     image_rgb = (
         np.repeat(image[..., None], 3, axis=-1) if image.ndim == 2 else image
     )
