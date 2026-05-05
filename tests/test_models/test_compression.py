@@ -306,13 +306,14 @@ class TestModelPrunerUnstructured:
         mock_yolo.model = model
         mock_yolo.overrides = {}
 
+        def _fake_save(ckpt, path: str) -> None:
+            Path(path).write_bytes(b"pruned-ckpt")
+
         with patch("src.models.compression.pruning.YOLO", return_value=mock_yolo):
             pruner = ModelPruner(src)
             out = tmp_path / "tiny-pruned.pt"
 
-            # Mock torch.save so we don't need a valid checkpoint format
-            with patch("src.models.compression.pruning.torch.save"):
-                src.write_bytes(b"x" * 1000)  # ensure output is writable
+            with patch("src.models.compression.pruning.torch.save", side_effect=_fake_save):
                 result = pruner.prune_unstructured(sparsity=0.3, output_path=out)
 
         assert result.sparsity_achieved >= 0.0
@@ -329,9 +330,12 @@ class TestModelPrunerUnstructured:
         mock_yolo.model = _tiny_model()
         mock_yolo.overrides = {}
 
+        def _fake_save(ckpt, path: str) -> None:
+            Path(path).write_bytes(b"pruned-ckpt")
+
         with patch("src.models.compression.pruning.YOLO", return_value=mock_yolo):
             pruner = ModelPruner(src)
-            with patch("src.models.compression.pruning.torch.save"):
+            with patch("src.models.compression.pruning.torch.save", side_effect=_fake_save):
                 result = pruner.prune_unstructured(sparsity=0.3)
 
         # Default path: {stem}-pruned30.pt next to source
