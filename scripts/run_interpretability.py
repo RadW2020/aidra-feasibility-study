@@ -56,7 +56,6 @@ async def main_async(
         save_grayscale_png,
         save_heatmap_png,
     )
-    from src.models.manager import ModelManager
     from src.traceability.hasher import get_commit_sha
 
     settings = Settings()
@@ -97,33 +96,28 @@ async def main_async(
         random.seed(42)
         picked = random.sample(candidates, min(n_samples, len(candidates)))
 
-        # Load YOLO via ModelManager.
-        # Grad-CAM requires a PyTorch model (gradients). If the registry
-        # returns an ONNX variant (e.g. INT8), fall back to the PT baseline
-        # of the same name — architecture is identical so the heatmaps are
-        # equivalent (documented in INT8 MODEL_CARD §Interpretabilidad).
+        # Grad-CAM requires a PyTorch model (autograd). Always load the PT
+        # baseline directly — bypassing the registry which may return the
+        # latest ONNX variant (INT8). Architecture is identical; heatmaps
+        # are transferable (documented in INT8 MODEL_CARD §Interpretabilidad).
         from ultralytics import YOLO as _YOLO
 
-        manager = ModelManager(db=db, models_dir=Path(settings.models_dir))
-        detector = await manager.get_model(name=picked_model, version="v1.0")
-        if detector.model_format == "onnx":
-            pt_candidates = sorted(
-                [
-                    p for p in Path(settings.models_dir).glob(f"{picked_model}*.pt")
-                    if "int8" not in p.name and "pruned" not in p.name
-                ],
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
-            )
-            if pt_candidates:
-                logger.info("Grad-CAM: switching to PT baseline %s", pt_candidates[0])
-                yolo = _YOLO(str(pt_candidates[0]))
-            else:
-                logger.warning("No PT model found — Grad-CAM will be skipped")
-                yolo = None
-        else:
-            yolo = detector._model
-        logger.info("Loaded YOLO: %s (format=%s)", type(yolo).__name__ if yolo else "None", detector.model_format)
+        models_dir = Path(settings.models_dir)
+        pt_candidates = sorted(
+            [
+                p for p in models_dir.glob(f"{picked_model}*.pt")
+                if "int8" not in p.name and "pruned" not in p.name
+            ],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if not pt_candidates:
+            logger.error("No .pt model found for %s — Grad-CAM impossible.", picked_model)
+            return 2
+        pt_path = pt_candidates[0]
+        logger.info("Grad-CAM: loading PT model directly: %s", pt_path)
+        yolo = _YOLO(str(pt_path))
+        logger.info("Loaded YOLO for Grad-CAM: %s", pt_path.name)
 
         # Output dir.
         run_id = f"{execution_id}_interp_{uuid4().hex[:8]}"
