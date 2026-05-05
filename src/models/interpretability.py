@@ -16,12 +16,15 @@ Cierra criterio AI Act / D4: explainability sobre muestreo del eval set.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID, uuid4
 
 import numpy as np
 
@@ -397,3 +400,174 @@ def run_interpretability(
         manifest_path,
     )
     return manifest_path
+
+
+# =====================================================================
+# High-level orchestrator (DB → tiles → Grad-CAM + CFAR → manifest)
+# =====================================================================
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    h.update(path.read_bytes())
+    return h.hexdigest()
+
+
+async def run_interpretability_for_execution(
+    db: Any,
+    models_dir: Path,
+    out_root: Path,
+    execution_id: UUID | None = None,
+    n_samples: int = 20,
+    model_name: str | None = None,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Generate Grad-CAM + CFAR heatmaps for sea-only detections of a run.
+
+    Single source of truth shared by the CLI script
+    (``scripts/run_interpretability.py``) and the HTTP endpoint
+    (``POST /api/interpretability/run``). Loads the FP32 PT baseline
+    directly from disk because Grad-CAM requires PyTorch autograd
+    (ONNX has no gradient graph; the registry may resolve to INT8).
+
+    Returns a summary dict with counts, manifest path, and run_id.
+    Raises ``RuntimeError`` for unrecoverable conditions (no execution
+    found, no thumbnails, no PT model on disk).
+    """
+    from PIL import Image
+    from ultralytics import YOLO as _YOLO
+
+    if execution_id is None:
+        row = await db.fetchrow(
+            "SELECT id FROM execution_log WHERE status='success' "
+            "AND num_detections > 0 ORDER BY created_at DESC LIMIT 1"
+        )
+        if row is None:
+            raise RuntimeError("No successful execution found.")
+        execution_id = row["id"]
+
+    meta = await db.fetchrow(
+        "SELECT model_name, model_hash FROM execution_log WHERE id=$1",
+        execution_id,
+    )
+    if meta is None:
+        raise RuntimeError(f"Execution {execution_id} not found")
+    picked_model = model_name or meta["model_name"]
+    model_hash = meta["model_hash"]
+
+    rows = await db.fetch(
+        "SELECT id, thumbnail_path, confidence, source "
+        "FROM detections WHERE execution_id=$1 "
+        "  AND thumbnail_path IS NOT NULL "
+        "  AND on_land = false AND cluster_anomaly = false "
+        "ORDER BY confidence DESC LIMIT $2",
+        execution_id,
+        n_samples * 3,
+    )
+    candidates = [dict(r) for r in rows]
+    if not candidates:
+        raise RuntimeError("No detections with thumbnails available.")
+
+    rng = random.Random(seed)
+    picked = rng.sample(candidates, min(n_samples, len(candidates)))
+
+    pt_candidates = sorted(
+        [
+            p for p in models_dir.glob(f"{picked_model}*.pt")
+            if "int8" not in p.name and "pruned" not in p.name
+        ],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not pt_candidates:
+        raise RuntimeError(
+            f"No .pt baseline for {picked_model} under {models_dir} — "
+            "Grad-CAM requires a PyTorch model."
+        )
+    pt_path = pt_candidates[0]
+    logger.info("Grad-CAM: loading PT model directly: %s", pt_path)
+    yolo = _YOLO(str(pt_path))
+
+    run_id = f"{execution_id}_interp_{uuid4().hex[:8]}"
+    out_dir = Path(out_root) / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest: dict[str, Any] = {
+        "run_id": run_id,
+        "execution_id": str(execution_id),
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "commit_sha": get_commit_sha(),
+        "model_name": picked_model,
+        "model_hash": model_hash,
+        "n_samples": len(picked),
+        "samples": [],
+    }
+
+    n_cam_ok = 0
+    n_cfar_ok = 0
+    for idx, det in enumerate(picked):
+        prefix = f"{idx:03d}"
+        in_path = out_dir / f"{prefix}_input.png"
+        cam_path = out_dir / f"{prefix}_gradcam.png"
+        cfar_path = out_dir / f"{prefix}_cfar_score.png"
+
+        try:
+            tile = np.asarray(Image.open(det["thumbnail_path"]))
+        except Exception:
+            logger.warning("Could not load %s", det["thumbnail_path"])
+            continue
+
+        save_grayscale_png(tile, in_path)
+
+        cam_ok = False
+        try:
+            cam = gradcam_yolov8(yolo, tile)
+            save_heatmap_png(tile, cam, cam_path)
+            cam_ok = True
+            n_cam_ok += 1
+        except Exception as exc:
+            logger.warning("Grad-CAM FAIL sample %d: %s", idx, exc, exc_info=True)
+
+        cfar_ok = False
+        try:
+            score = cfar_score_map(tile)
+            save_heatmap_png(tile, score, cfar_path)
+            cfar_ok = True
+            n_cfar_ok += 1
+        except Exception as exc:
+            logger.warning("CFAR FAIL sample %d: %s", idx, exc)
+
+        manifest["samples"].append({
+            "idx": idx,
+            "detection_id": str(det["id"]),
+            "confidence": float(det["confidence"]),
+            "source": det["source"],
+            "thumbnail_path": det["thumbnail_path"],
+            "input_png": in_path.name,
+            "input_sha256": _sha256_file(in_path),
+            "gradcam_png": cam_path.name if cam_ok else None,
+            "gradcam_sha256": _sha256_file(cam_path) if cam_ok else None,
+            "cfar_png": cfar_path.name if cfar_ok else None,
+            "cfar_sha256": _sha256_file(cfar_path) if cfar_ok else None,
+        })
+
+    manifest_path = out_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    logger.info(
+        "Interpretability run %s: gradcam_ok=%d/%d cfar_ok=%d/%d -> %s",
+        run_id, n_cam_ok, len(picked), n_cfar_ok, len(picked), manifest_path,
+    )
+
+    return {
+        "run_id": run_id,
+        "execution_id": str(execution_id),
+        "manifest_path": str(manifest_path),
+        "n_samples": len(picked),
+        "gradcam_ok": n_cam_ok,
+        "cfar_ok": n_cfar_ok,
+        "model_name": picked_model,
+        "model_hash": model_hash,
+    }

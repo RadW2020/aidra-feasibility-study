@@ -14,6 +14,7 @@ from src.api import (
     benchmarks,
     detections,
     health,
+    interpretability,
     metrics,
     models_api,
     ogc_features,
@@ -39,3 +40,4 @@ router.include_router(orbital.router)
 router.include_router(stac.router)
 router.include_router(ogc_features.router)
 router.include_router(tipcue_replay.router)
+router.include_router(interpretability.router)
