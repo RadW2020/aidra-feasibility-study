@@ -282,7 +282,7 @@
             "lineWidth": 2,
             "showPoints": "auto",
             "spanNulls": false,
-            "gradientMode": "scheme",
+            "gradientMode": "none",
             "thresholdsStyle": {
               "mode": "area"
             }

@@ -79,7 +79,7 @@
         "defaults": {
           "custom": {
             "fillOpacity": 80,
-            "gradientMode": "scheme",
+            "gradientMode": "none",
             "lineWidth": 1
           },
           "color": { "mode": "palette-classic" },
@@ -124,7 +124,7 @@
         "defaults": {
           "custom": {
             "fillOpacity": 80,
-            "gradientMode": "scheme",
+            "gradientMode": "none",
             "lineWidth": 1
           },
           "color": { "mode": "palette-classic" },
@@ -169,7 +169,7 @@
         "defaults": {
           "custom": {
             "fillOpacity": 80,
-            "gradientMode": "scheme",
+            "gradientMode": "none",
             "lineWidth": 1
           },
           "color": { "mode": "palette-classic" }
@@ -213,7 +213,7 @@
         "defaults": {
           "custom": {
             "fillOpacity": 80,
-            "gradientMode": "scheme",
+            "gradientMode": "none",
             "lineWidth": 1
           },
           "color": { "mode": "palette-classic" },
