@@ -70,7 +70,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -115,7 +115,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -160,7 +160,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -204,7 +204,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -249,7 +249,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,\n    SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failures,\n    CASE\n        WHEN SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) > 0 THEN 'FAIL'\n        WHEN AVG(avg_confidence) < 0.5 THEN 'DEGRADED'\n        ELSE 'PASS'\n    END AS verdict\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,\n    SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failures,\n    CASE\n        WHEN SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) > 0 THEN 'FAIL'\n        WHEN AVG(avg_confidence) < 0.5 THEN 'DEGRADED'\n        ELSE 'PASS'\n    END AS verdict\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
