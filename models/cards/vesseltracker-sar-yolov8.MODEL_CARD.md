@@ -204,7 +204,7 @@ etiquetado.
 - weights_sha256: `18aec1bb3caf7dd2c5ace8d397e241c485e917c28df248eefe794578c996d671`
 - training_seed: desconocido (no documentado upstream)
 - training_commit: desconocido (modelo externo)
-- onnx_sha256: no exportado todavía
+- onnx_sha256: N/A (modelo en formato PyTorch; la variante ONNX INT8 tiene ficha propia en `vesseltracker-sar-yolov8-int8-dynamic.MODEL_CARD.md`)
 - Origen verificado: descarga directa desde HuggingFace via
   `scripts/download-models.sh` (URL: `huggingface.co/hewitleo/sar-ship-detection-yolov8/resolve/main/weights_(model)/best.pt`).
 

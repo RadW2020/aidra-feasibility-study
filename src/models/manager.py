@@ -540,19 +540,23 @@ class ModelManager:
     def _require_model_card(self, name: str, model_path: Path) -> None:
         """Asegura que existe ``models/cards/<name>.MODEL_CARD.md``.
 
-        Lanza ``FileNotFoundError`` si no se encuentra ficha. Esta es
-        la unica via de registro: no hay fallback que use el peso sin
-        ficha asociada (eliminado ``_find_fallback_model``).
+        Busca en orden: ficha específica del stem del archivo (cubre
+        variantes comprimidas como vesseltracker-sar-yolov8-int8-dynamic),
+        luego ficha genérica por nombre de modelo. Lanza
+        ``FileNotFoundError`` si ninguna existe.
         """
         candidates = [
-            self._MODEL_CARDS_DIR / f"{name}.MODEL_CARD.md",
+            # Ficha específica de variante (stem del archivo de pesos)
             self._MODEL_CARDS_DIR / f"{model_path.stem}.MODEL_CARD.md",
+            # Ficha genérica por nombre de modelo (FP32 baseline)
+            self._MODEL_CARDS_DIR / f"{name}.MODEL_CARD.md",
         ]
         for c in candidates:
             if c.exists():
                 return
         raise FileNotFoundError(
-            f"AI Act gate (I-AIA-1): no MODEL_CARD.md for '{name}'. "
+            f"AI Act gate (I-AIA-1): no MODEL_CARD.md for '{name}' "
+            f"(stem={model_path.stem}). "
             f"Crea uno de: {', '.join(str(c) for c in candidates)} "
             "antes de registrar el modelo."
         )
