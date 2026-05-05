@@ -54,11 +54,22 @@
   },
   "panels": [
     {
+      "id": 100,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 3 },
+      "options": {
+        "mode": "html",
+        "content": "<div style='padding:10px 14px;border-radius:10px;background:#0e1620;border:1px solid #2b3645;color:#dde6f3'>\n  <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:4px'>HOW TO READ THIS DASHBOARD</div>\n  <div style='font-size:13px;line-height:1.55'>The <b>same Sentinel-1 scene</b> processed by the <b>same model</b> under five simulated hardware budgets (<i>ground → sat-extreme</i>). Pick a Model and Image ID above. Each panel includes a tooltip explaining what the numbers actually mean — including where the simulation is hard (cgroup-style) and where it is soft (duty cycling). The Pass/Fail table at the bottom is the canonical evidence row for each profile.</div>\n</div>"
+      }
+    },
+    {
       "id": 1,
-      "title": "Latency by Profile (ms)",
-      "description": "Inference latency comparison across profiles for the same image and model.",
+      "title": "Inference latency per profile",
+      "description": "Wall-clock inference time over the same Sentinel-1 scene under each hardware profile. ground / sat-high / sat-mid stay close because the inference loop is single-threaded and cannot benefit from extra cores. sat-low (target 0.5) and sat-extreme (target 0.25) take ~2x and ~4x ground respectively, driven by the soft duty-cycle CPUThrottle.",
       "type": "barchart",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 3, "w": 12, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -100,10 +111,10 @@
     },
     {
       "id": 2,
-      "title": "RAM Usage by Profile (MB)",
-      "description": "Peak RAM usage per constraint profile.",
+      "title": "Peak resident memory per profile",
+      "description": "Peak RSS observed during inference. NOT a hard limit: the previous setrlimit-based enforcement killed the host process when PyTorch + CUDA shared libraries mapped beyond the budget, so memory is now measured and budget breaches are recorded in execution_log.notes (see the Pass/Fail panel below). Counter-intuitive ordering (sat-low lower than sat-mid; sat-extreme highest) is real: the CPUThrottle pauses let GC run on the throttled profiles, while sat-extreme accumulates buffers during long sleeps.",
       "type": "barchart",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 3, "w": 12, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -146,9 +157,9 @@
     {
       "id": 3,
       "title": "Detections by Profile",
-      "description": "Average number of detections per profile, showing progressive degradation.",
+      "description": "Number of vessel detections per constraint profile. With a deterministic detector and the same image + model, this should be identical across all profiles — divergence here would indicate non-determinism (e.g. RAM-induced retries) and is a fail signal.",
       "type": "barchart",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -160,7 +171,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -189,10 +200,10 @@
     },
     {
       "id": 4,
-      "title": "CPU Usage by Profile (%)",
-      "description": "Average CPU usage per profile.",
+      "title": "Average CPU usage per profile",
+      "description": "Sum of CPU time across all process threads, expressed as a percentage of one core. ground / sat-high / sat-mid all show ~371% because the OpenMP worker threads PyTorch creates inherit affinity at thread-creation time — applying sched_setaffinity later does NOT migrate them to fewer cores. Only the soft CPUThrottle reduces effective utilisation, which is why sat-low (target 0.5) drops to ~186% and sat-extreme (target 0.25) to ~166%. Hard sub-core enforcement would require cgroup v2 delegation or a Docker side-car.",
       "type": "barchart",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 11, "w": 12, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -237,7 +248,7 @@
       "title": "Profile Pass/Fail Status",
       "description": "Traffic-light status per profile: green (OK), yellow (degraded), red (failure / OOM).",
       "type": "table",
-      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
