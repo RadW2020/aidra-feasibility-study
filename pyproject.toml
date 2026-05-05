@@ -85,6 +85,7 @@ filterwarnings = [
 ]
 markers = [
     "invariant: tests that enforce AIDRA domain invariants (I-SAR-*, I-DET-*, I-MOD-*, I-TRACE-*, I-EU-*, I-AIA-*)",
+    "slow: tests that load real YOLO models or run quantization/pruning (excluded from fast CI gate)",
 ]
 
 [tool.ruff]
