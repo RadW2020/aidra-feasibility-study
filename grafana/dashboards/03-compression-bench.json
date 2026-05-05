@@ -89,8 +89,8 @@
     },
     {
       "id": 2,
-      "title": "Inference Latency per Variant (ms)",
-      "description": "Mean inference latency per model variant.",
+      "title": "Total Inference Time per Variant",
+      "description": "Total wall-clock time to process the full scene (all tiles) per model variant. Grafana auto-scales the ms unit to minutes for large values — both variants take tens of minutes because this is full-scene time, not per-tile. What matters here is the relative ratio: INT8 should be ~1.5x faster than FP32.",
       "type": "barchart",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "datasource": {
@@ -168,7 +168,13 @@
             "matcher": { "id": "byName", "options": "avg_latency_ms" },
             "properties": [
               { "id": "unit", "value": "ms" },
-              { "id": "displayName", "value": "Avg Latency" }
+              { "id": "displayName", "value": "Total Time" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "variant" },
+            "properties": [
+              { "id": "custom.width", "value": 280 }
             ]
           },
           {
@@ -296,7 +302,7 @@
             "matcher": { "id": "byName", "options": "avg_inference_ms" },
             "properties": [
               { "id": "unit", "value": "ms" },
-              { "id": "displayName", "value": "Avg Latency (ms)" }
+              { "id": "displayName", "value": "Avg Total Time" }
             ]
           },
           {
