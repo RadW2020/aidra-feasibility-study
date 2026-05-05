@@ -9,9 +9,12 @@ all execution_log fields, associated detections, upstream trigger
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from src.db.connection import db
 from src.db.queries import SELECT_EXECUTION_BY_ID
@@ -138,3 +141,53 @@ async def get_traceability(execution_id: UUID) -> dict:
         "upstream_cue": upstream_cue,
         "downstream_cues": downstream_cues,
     }
+
+
+# ---------------------------------------------------------------------------
+# D3 evidence bundle endpoint
+# ---------------------------------------------------------------------------
+
+
+class BundleRequest(BaseModel):
+    out_dir: str = "/data/evidence"
+    date_from: str | None = None
+    date_to: str | None = None
+    zone: str | None = None
+    model: str | None = None
+    profile: str | None = None
+    archive: bool = True
+
+
+@router.post("/traceability/bundle")
+async def build_evidence_bundle(req: BundleRequest) -> dict:
+    """Build the D3 evidence bundle and return its path and manifest summary.
+
+    Runs ``EvidenceBundler.build()`` against the current DB, writing the
+    bundle under ``out_dir``.  Returns the bundle path and key counts so
+    the caller can verify completeness before download.
+    """
+    from src.config import Settings
+    from src.traceability.bundler import EvidenceBundler
+
+    def _parse(v: str | None) -> datetime | None:
+        if not v:
+            return None
+        return datetime.fromisoformat(v.replace("Z", "+00:00"))
+
+    try:
+        settings = Settings()
+        bundler = EvidenceBundler(db=db, settings=settings)
+        bundle_path = await bundler.build(
+            out_dir=Path(req.out_dir),
+            date_from=_parse(req.date_from),
+            date_to=_parse(req.date_to),
+            zone=req.zone,
+            model_name=req.model,
+            constraint_profile=req.profile,
+            archive=req.archive,
+        )
+    except Exception as exc:
+        logger.error("Bundle build failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {"bundle_path": str(bundle_path), "status": "ok"}
