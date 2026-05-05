@@ -89,8 +89,8 @@
     },
     {
       "id": 2,
-      "title": "Total Inference Time per Variant",
-      "description": "Total wall-clock time to process the full scene (all tiles) per model variant. Grafana auto-scales the ms unit to minutes for large values — both variants take tens of minutes because this is full-scene time, not per-tile. What matters here is the relative ratio: INT8 should be ~1.5x faster than FP32.",
+      "title": "Total Inference Time per Variant (minutes)",
+      "description": "Total wall-clock time (minutes) to process the full scene across all tiles. Both variants take tens of minutes because this is full-scene time, not per-tile latency. The key metric is the ratio: INT8 ÷ FP32 ≈ 1.5x speedup.",
       "type": "barchart",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "datasource": {
@@ -104,7 +104,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY compression_technique\nORDER BY avg_inference_ms DESC",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric / 60000.0, 1) AS avg_inference_min\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY compression_technique\nORDER BY avg_inference_min DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -117,7 +117,8 @@
             "lineWidth": 1
           },
           "color": { "mode": "palette-classic" },
-          "unit": "ms"
+          "unit": "none",
+          "decimals": 1
         },
         "overrides": []
       },
@@ -335,8 +336,8 @@
           {
             "matcher": { "id": "byName", "options": "model_version" },
             "properties": [
-              { "id": "custom.width", "value": 80 },
-              { "id": "displayName", "value": "Version" }
+              { "id": "custom.width", "value": 90 },
+              { "id": "displayName", "value": "Ver." }
             ]
           }
         ]
