@@ -353,6 +353,7 @@ class PipelineEngine:
                 input_params_hash=input_params_hash,
                 commit_sha=commit_sha,
                 execution_id=execution_id,
+                compression_technique=model_info.get("compression_technique", "none"),
             )
             await self.recorder.update_status(execution_id, "running")
 
@@ -736,6 +737,7 @@ class PipelineEngine:
                         trigger_type=request.trigger_type,
                         triggered_by=request.triggered_by,
                         execution_id=pre_id,
+                        compression_technique=det_info.get("compression_technique", "none"),
                     )
                     await self.recorder.update_status(execution_id, "running")
 

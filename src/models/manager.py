@@ -315,6 +315,21 @@ class ModelManager:
                 device=device,
             )
 
+        # Propagate compression_technique to the detector so the engine
+        # can persist it on every execution_log row (Q3 compresion
+        # benchmarks need the technique label, not just the model name).
+        # Source priority: models_registry row > filename suffix.
+        technique = "none"
+        if row is not None:
+            technique = (row.get("compression_technique") or "none").strip()
+        elif version:
+            for _sfx, vtag, t in _COMPRESSION_SUFFIXES:
+                if version == vtag:
+                    technique = t
+                    break
+        if hasattr(detector, "compression_technique"):
+            detector.compression_technique = technique
+
         self._cache[cache_key] = detector
         self._load_order.append(cache_key)
         return detector

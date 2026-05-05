@@ -86,6 +86,11 @@ class YOLODetector(BaseDetector):
         self.model_name: str = self.model_path.stem
         self.model_size_mb: float = self.model_path.stat().st_size / (1024 * 1024)
         self.model_hash: str = _sha256_file(self.model_path)
+        # Set by ModelManager after construction from models_registry row
+        # or from the filename version tag.  Default ``"none"`` for raw
+        # baselines.  Surfaced through :meth:`get_model_info` so the
+        # engine can persist it on every execution_log row.
+        self.compression_technique: str = "none"
 
         logger.info(
             "Loading YOLO model: %s (%.1f MB, format=%s, hash=%s…)",
@@ -340,6 +345,7 @@ class YOLODetector(BaseDetector):
             "num_layers": num_layers,
             "input_size": input_size,
             "classes": classes,
+            "compression_technique": self.compression_technique,
         }
 
     def benchmark(

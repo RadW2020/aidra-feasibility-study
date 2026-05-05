@@ -43,7 +43,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Model Size by Variant (MB)",
+      "title": "Model Size per Variant (MB)",
       "description": "Model file size per compression variant.",
       "type": "barchart",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
@@ -89,7 +89,7 @@
     },
     {
       "id": 2,
-      "title": "Inference Latency by Variant (ms)",
+      "title": "Inference Latency per Variant (ms)",
       "description": "Mean inference latency per model variant.",
       "type": "barchart",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
@@ -134,9 +134,9 @@
     },
     {
       "id": 3,
-      "title": "Precision vs Latency (Trade-off)",
-      "description": "Scatter plot: mean confidence versus inference latency per variant.",
-      "type": "xychart",
+      "title": "Confidence vs Latency Trade-off",
+      "description": "Accuracy-speed trade-off per model variant. Lower latency + higher confidence = better. The table is sorted by latency so the fastest variant is always at the top — use this alongside the size panel to judge whether compression cost is worth the gain.",
+      "type": "table",
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "datasource": {
         "type": "postgres",
@@ -149,7 +149,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    model_size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\nGROUP BY model_name, model_version, model_size_mb\nORDER BY avg_inference_ms",
+          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(model_size_mb::numeric, 1) AS size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\nGROUP BY model_name, model_version, model_size_mb\nORDER BY avg_latency_ms",
           "format": "table",
           "editorMode": "code"
         }
@@ -157,33 +157,62 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "show": "points",
-            "pointSize": { "fixed": 10 }
-          },
-          "color": { "mode": "palette-classic" }
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false,
+            "filterable": false
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "avg_latency_ms" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              { "id": "displayName", "value": "Avg Latency" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_confidence" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" },
+              { "id": "displayName", "value": "Avg Confidence" },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "basic" }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "yellow", "value": null },
+                    { "color": "green", "value": 0.5 }
+                  ]
+                }
+              },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "size_mb" },
+            "properties": [
+              { "id": "unit", "value": "decmbytes" },
+              { "id": "displayName", "value": "Size (MB)" }
+            ]
+          }
+        ]
       },
       "options": {
-        "dims": {
-          "x": "avg_inference_ms",
-          "frame": 0
-        },
-        "series": [
-          {
-            "x": "avg_inference_ms",
-            "y": "avg_confidence",
-            "name": "variant"
-          }
-        ],
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false },
+        "sortBy": [{ "displayName": "Avg Latency", "desc": false }]
       }
     },
     {
       "id": 4,
-      "title": "Peak RAM by Variant (MB)",
-      "description": "Peak RAM usage per model variant.",
+      "title": "Peak RAM per Variant (MB)",
+      "description": "Peak RSS during inference per model variant. NOT a hard limit — measured after removing RLIMIT_AS enforcement (which killed the host process). Budget breaches are recorded in execution_log.notes. Variation between variants is real: INT8 loads a smaller weight blob but ONNX Runtime allocates additional buffers.",
       "type": "barchart",
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "datasource": {
@@ -288,6 +317,20 @@
             "matcher": { "id": "byName", "options": "compression_technique" },
             "properties": [
               { "id": "displayName", "value": "Compression" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "model_name" },
+            "properties": [
+              { "id": "custom.width", "value": 180 },
+              { "id": "displayName", "value": "Model" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "model_version" },
+            "properties": [
+              { "id": "custom.width", "value": 80 },
+              { "id": "displayName", "value": "Version" }
             ]
           }
         ]

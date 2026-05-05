@@ -156,7 +156,7 @@
     },
     {
       "id": 3,
-      "title": "Detections by Profile",
+      "title": "Detections per Profile",
       "description": "Number of vessel detections per constraint profile. With a deterministic detector and the same image + model, this should be identical across all profiles — divergence here would indicate non-determinism (e.g. RAM-induced retries) and is a fail signal.",
       "type": "barchart",
       "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
@@ -183,7 +183,8 @@
             "gradientMode": "none",
             "lineWidth": 1
           },
-          "color": { "mode": "palette-classic" }
+          "color": { "mode": "palette-classic" },
+          "min": 0
         },
         "overrides": []
       },
