@@ -58,7 +58,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    model_size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version, model_size_mb\nORDER BY model_size_mb DESC",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    model_size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY compression_technique, model_size_mb\nORDER BY model_size_mb DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -104,7 +104,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version\nORDER BY avg_inference_ms DESC",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY compression_technique\nORDER BY avg_inference_ms DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -149,7 +149,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(model_size_mb::numeric, 1) AS size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\nGROUP BY model_name, model_version, model_size_mb\nORDER BY avg_latency_ms",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\nGROUP BY compression_technique\nORDER BY avg_latency_ms",
           "format": "table",
           "editorMode": "code"
         }
@@ -174,7 +174,7 @@
           {
             "matcher": { "id": "byName", "options": "variant" },
             "properties": [
-              { "id": "custom.width", "value": 280 }
+              { "id": "custom.width", "value": 160 }
             ]
           },
           {
@@ -232,7 +232,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name || ' ' || model_version AS variant,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version\nORDER BY avg_peak_ram_mb DESC",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY compression_technique\nORDER BY avg_peak_ram_mb DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -328,7 +328,7 @@
           {
             "matcher": { "id": "byName", "options": "model_name" },
             "properties": [
-              { "id": "custom.width", "value": 180 },
+              { "id": "custom.width", "value": 280 },
               { "id": "displayName", "value": "Model" }
             ]
           },
