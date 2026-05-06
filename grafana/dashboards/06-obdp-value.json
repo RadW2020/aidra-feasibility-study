@@ -303,7 +303,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        (e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        )\n    , 0) AS compression_ratio\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
+          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        ((e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        ))::numeric\n    , 0) AS compression_ratio\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
           "format": "time_series",
           "editorMode": "code"
         }
