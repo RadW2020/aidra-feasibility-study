@@ -36,7 +36,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.config import Settings
 from src.db.connection import db
-from src.db.queries import SELECT_PENDING_CUES, UPDATE_CUE_STATUS
+from src.db.queries import (
+    SELECT_PENDING_CUES,
+    UPDATE_CUE_AFTER_ERROR,
+    UPDATE_CUE_STATUS,
+)
 from src.observability.prometheus_metrics import ACTIVE_CUES, CUES_EXECUTED_TOTAL
 from src.pipeline.engine import PipelineEngine, PipelineRequest
 
@@ -273,12 +277,13 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
             )
 
         except Exception:
-            # Mark cue as failed but keep it for retry
+            # Mark for retry; once attempts hits max_attempts the SQL
+            # transitions the row to status='failed' so the dashboard
+            # doesn't show exhausted cues as still queued.
             try:
                 await db.execute(
-                    UPDATE_CUE_STATUS,
+                    UPDATE_CUE_AFTER_ERROR,
                     cue_id,
-                    "pending",
                     None,
                     "error",
                     None,

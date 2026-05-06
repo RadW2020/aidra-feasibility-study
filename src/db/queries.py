@@ -290,6 +290,23 @@ UPDATE_CUE_STATUS = """
     WHERE id = $1
 """
 
+# Same as UPDATE_CUE_STATUS but the status transitions automatically to
+# 'failed' once attempts+1 reaches max_attempts, so cues that exhausted
+# their retries don't sit in 'pending' forever (the dashboard would otherwise
+# show them as still-queued indefinitely).
+UPDATE_CUE_AFTER_ERROR = """
+    UPDATE tasking_queue
+    SET status = CASE
+            WHEN attempts + 1 >= max_attempts THEN 'failed'
+            ELSE 'pending'
+        END,
+        execution_id = $2,
+        result_status = $3,
+        confirmed_detections = $4,
+        attempts = attempts + 1
+    WHERE id = $1
+"""
+
 # ====================================================================
 # models_registry
 # ====================================================================
