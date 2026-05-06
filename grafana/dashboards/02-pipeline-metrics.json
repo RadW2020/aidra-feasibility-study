@@ -373,22 +373,16 @@
     {
       "id": 7,
       "title": "Pipeline Runs Total",
+      "description": "Total runs recorded in execution_log (success / total). Sourced from Postgres so the value persists across app restarts; the equivalent Prometheus counter resets on every redeploy.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 14, "w": 4, "h": 4 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum(aidra_pipeline_runs_total{profile=~\"$profile\", model_variant=~\"$model_variant\", status=\"success\"})",
-          "legendFormat": "Total Runs",
-          "editorMode": "code"
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE status = 'success')::int AS \"success\", COUNT(*)::int AS \"total\" FROM execution_log",
+          "format": "table"
         }
       ],
       "fieldConfig": {
@@ -406,10 +400,10 @@
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto",
-        "orientation": "auto"
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
       }
     },
     {
