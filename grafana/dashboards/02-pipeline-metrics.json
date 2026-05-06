@@ -122,42 +122,16 @@
     {
       "id": 2,
       "title": "Inference Duration (P50 / P95 / P99)",
+      "description": "Per-run inference latency, computed from execution_log.inference_ms. The previous Prometheus histogram_quantile() query relied on a counter that resets on every redeploy, so the panel was always empty.",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "histogram_quantile(0.50, sum(rate(aidra_inference_duration_seconds_bucket{profile=~\"$profile\", model_variant=~\"$model_variant\"}[5m])) by (le))",
-          "legendFormat": "P50",
-          "editorMode": "code"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate(aidra_inference_duration_seconds_bucket{profile=~\"$profile\", model_variant=~\"$model_variant\"}[5m])) by (le))",
-          "legendFormat": "P95",
-          "editorMode": "code"
-        },
-        {
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "histogram_quantile(0.99, sum(rate(aidra_inference_duration_seconds_bucket{profile=~\"$profile\", model_variant=~\"$model_variant\"}[5m])) by (le))",
-          "legendFormat": "P99",
-          "editorMode": "code"
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT date_trunc('hour', created_at) AS \"time\",\n       (PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P50\",\n       (PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P95\",\n       (PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P99\"\nFROM execution_log\nWHERE status = 'success' AND inference_ms IS NOT NULL\n  AND $__timeFilter(created_at)\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series"
         }
       ],
       "fieldConfig": {
@@ -167,8 +141,9 @@
             "lineInterpolation": "smooth",
             "fillOpacity": 10,
             "lineWidth": 2,
-            "showPoints": "auto",
-            "spanNulls": false
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": true
           },
           "color": { "mode": "palette-classic" },
           "unit": "s"
@@ -284,22 +259,16 @@
     {
       "id": 5,
       "title": "Detections per Execution",
+      "description": "Number of detections per pipeline run, broken down by detector source (yolo / cfar / fused). Sourced from the detections table joined to execution_log; the legacy Prometheus rate counter was always empty after redeploy.",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 8, "w": 6, "h": 6 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum(rate(aidra_detections_total{profile=~\"$profile\"}[5m])) by (source)",
-          "legendFormat": "{{source}}",
-          "editorMode": "code"
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT e.created_at AS \"time\",\n       d.source AS metric,\n       COUNT(*) AS detections\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE e.status = 'success'\n  AND $__timeFilter(e.created_at)\nGROUP BY e.created_at, d.source\nORDER BY e.created_at",
+          "format": "time_series"
         }
       ],
       "fieldConfig": {
