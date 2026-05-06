@@ -158,8 +158,8 @@
     },
     {
       "id": 3,
-      "title": "Detections per Profile",
-      "description": "Number of vessel detections per constraint profile. With a deterministic detector and the same image + model, this should be identical across all profiles — divergence here would indicate non-determinism (e.g. RAM-induced retries) and is a fail signal.",
+      "title": "Detections per Profile (must be identical — determinism check)",
+      "description": "Number of vessel detections per constraint profile. With a deterministic detector and the same image + model, this MUST be identical across all profiles. The flat bar chart is the success signal: it proves the constraint profiles only throttle CPU/RAM and never alter the model output. Any divergence here is a fail (non-determinism, e.g. RAM-induced retries).",
       "type": "barchart",
       "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
       "datasource": {

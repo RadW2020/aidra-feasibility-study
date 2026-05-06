@@ -134,6 +134,22 @@ def configure_scheduler(
         name="System health probe",
     )
 
+    # Job 5: Nightly resilience refresh (orbit-sim + drift)
+    # Mantiene poblado el dashboard 08 sin curl manual — la migración 006
+    # introduce una historia que se vacía con el tiempo si nadie ejecuta
+    # las simulaciones.  Ejecuta a las 02:30 AM para no chocar con la
+    # ventana de cleanup_images (03:00).  Bitflip se queda fuera del
+    # nightly por su coste (carga un .pt de 50 MB y corre varias
+    # inferencias); sigue disponible bajo demanda.
+    scheduler.add_job(
+        nightly_resilience_refresh,
+        trigger=CronTrigger(hour=2, minute=30),
+        id="resilience_refresh",
+        name="Nightly resilience refresh",
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+
     logger.info(
         "Scheduler configured with %d jobs",
         len(scheduler.get_jobs()),
@@ -411,3 +427,62 @@ async def health_probe(config: Settings) -> None:
         "Health probe: %s",
         ", ".join(f"{k}={v}" for k, v in results.items()),
     )
+
+
+async def nightly_resilience_refresh() -> None:
+    """Re-run the cheap orbital-resilience simulators so dashboard 08
+    stays populated.
+
+    Calls /api/orbital/resilience/simulate-orbit and /resilience/drift
+    via their underlying async handlers (no HTTP, no auth) and lets each
+    persist a row to ``orbit_sim_runs`` and ``drift_alerts``.  Bitflip is
+    intentionally NOT scheduled: its sweep loads a real .pt YOLO file
+    and runs multiple inferences, which is too heavy for a nightly cron
+    on the OCI ARM A1 free tier.
+
+    Failures in either simulator are logged but do not propagate, so a
+    transient DB blip never poisons the scheduler.
+    """
+    from src.api.orbital import (
+        OrbitSimulationRequest,
+        drift_status,
+        simulate_orbit,
+    )
+
+    logger.info("Nightly resilience refresh starting")
+
+    try:
+        result = await simulate_orbit(
+            OrbitSimulationRequest(satellite="small_sat", num_images=30)
+        )
+        if isinstance(result, dict) and "final_battery_wh" in result:
+            logger.info(
+                "Resilience refresh: orbit-sim final_battery_wh=%.2f, "
+                "processed=%d",
+                result["final_battery_wh"],
+                result.get("processed_images", 0),
+            )
+        else:
+            logger.warning(
+                "Resilience refresh: orbit-sim returned no battery data "
+                "(message=%s)",
+                (result or {}).get("message") if isinstance(result, dict) else "?",
+            )
+    except Exception:
+        logger.exception("Resilience refresh: orbit-sim failed")
+
+    try:
+        result = await drift_status(window_size=10)
+        if isinstance(result, dict) and "is_drifting" in result:
+            logger.info(
+                "Resilience refresh: drift is_drifting=%s metric=%s",
+                result["is_drifting"],
+                result.get("metric"),
+            )
+        else:
+            logger.info(
+                "Resilience refresh: drift status=%s",
+                (result or {}).get("status"),
+            )
+    except Exception:
+        logger.exception("Resilience refresh: drift check failed")
