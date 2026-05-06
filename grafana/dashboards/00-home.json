@@ -128,21 +128,22 @@
       "id": 13,
       "type": "stat",
       "title": "Last successful run",
-      "description": "Timestamp of the most recent end-to-end success.",
+      "description": "Time elapsed since the most recent end-to-end success.",
       "gridPos": { "x": 18, "y": 12, "w": 6, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT to_char(MAX(created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI \"UTC\"') AS \"value\" FROM execution_log WHERE status = 'success'",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS last_run_ms FROM execution_log WHERE status = 'success'",
           "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "fixed", "fixedColor": "#f3d76b" },
-          "unit": "none"
+          "unit": "dateTimeFromNow",
+          "noValue": "Never"
         }
       },
       "options": {
