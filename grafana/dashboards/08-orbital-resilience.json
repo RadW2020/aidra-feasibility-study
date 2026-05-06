@@ -187,48 +187,48 @@
     },
     {
       "id": 4,
-      "title": "Bit-Flip Degradation Curve",
-      "description": "Detection-degradation as a function of injected bit-flips. Each line is a sweep; sharp climbs identify the model's critical threshold for SEU events.",
-      "type": "timeseries",
+      "title": "Bit-Flip Degradation Curve (detections vs num_flips)",
+      "description": "Average detections per (model_variant, num_flips) cell across all bit-flip sweeps in the window. The X axis is num_flips (cosmic-ray-event proxy); a sharp drop identifies the model's critical SEU threshold.",
+      "type": "barchart",
       "gridPos": { "x": 0, "y": 10, "w": 12, "h": 8 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT\n  to_timestamp(num_flips) AS time,\n  degradation_pct * 100  AS degradation_pct,\n  model_variant\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND model_variant LIKE '$model_variant'\nORDER BY model_variant, num_flips",
-          "format": "time_series",
+          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND model_variant LIKE '$model_variant'\nGROUP BY num_flips\nORDER BY num_flips::int",
+          "format": "table",
           "editorMode": "code"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "always",
-            "pointSize": 6,
-            "spanNulls": false,
-            "thresholdsStyle": { "mode": "line" }
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisCenteredZero": false
           },
           "color": { "mode": "palette-classic" },
-          "unit": "percent",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 20 }
-            ]
-          },
           "noValue": "No bit-flip sweeps in window — POST /api/orbital/resilience/bitflip"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "avg_confidence" },
+            "properties": [{ "id": "unit", "value": "percentunit" }]
+          }
+        ]
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "orientation": "vertical",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "xField": "num_flips",
+        "showValue": "auto"
       }
     },
     {
