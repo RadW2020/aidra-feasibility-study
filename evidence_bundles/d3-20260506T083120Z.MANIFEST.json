@@ -1,22 +1,22 @@
 {
-  "bundle_id": "d3-20260506T080713Z",
-  "commit_sha": "92b2515",
+  "bundle_id": "d3-20260506T083120Z",
+  "commit_sha": "ed16ab780a68b002b432214a98460873c09a3aab",
   "counts": {
     "detections": 50985,
     "executions": 21,
     "model_cards": 2,
     "model_cards_by_hash_match": 2,
-    "prometheus_snapshot_bytes": 65464,
+    "prometheus_snapshot_bytes": 65151,
     "thumbnails": 22236
   },
-  "created_at": "2026-05-06T08:07:13.636755Z",
+  "created_at": "2026-05-06T08:31:20.780524Z",
   "files": {
     "detections.csv": "b6c76f7b892bcdca7acc5dfc4277541c524ca3963e2799623a8c95a711d400b9",
     "detections.geojson": "c06801a5630e3096e43b5d153dda0deda5408f99710d308600af61e0c5ab1131",
     "executions.csv": "016fab006e960bdaa14aa8d6f8c9f2287410d1c6a6b6919f7909727713303d26",
     "models/vesseltracker-sar-yolov8-int8-dynamic.MODEL_CARD.md": "07c4e3a8bbbb282d507057e855ce7cad55b84ef149287aedecaece29428b7348",
     "models/vesseltracker-sar-yolov8.MODEL_CARD.md": "fc158c0dad11c45b9429890809e996b3b89acb3ab7fa71f5d7b774f05be93220",
-    "prometheus_snapshot.txt": "e8b71090f747f0f70f480af5fa3248f06bb18fc9b80c2b600d9e8d07bb9712f3",
+    "prometheus_snapshot.txt": "0ffc2df1f7febf8c088f02d7d37c71c68630f4931a90cb90fcc6a77e2374260e",
     "settings.json": "7fa35dabf15ab0f56419de3b67231e8110588b90e26ad9a2fbb82e2c8bbd16a9",
     "thumbnails/0007429f-facb-4ef0-98db-6466a4f21dbc.png": "3220a4a38e2eef981bb77427fedfaef118535dc07d84abd833c739b7d3533b61",
     "thumbnails/0008833d-c4dd-4ccf-b784-c4df88e4655b.png": "2c0575ad21c4be52df62f695eef9f6eb0dfdaac27d6c34964c4c4ade0553e78b",

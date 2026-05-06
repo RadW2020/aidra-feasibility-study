@@ -5,37 +5,41 @@ points to (a) the canonical artifact (server-side), (b) what is mirrored
 into git for auditability without downloads, and (c) the verification
 command.
 
+> **Run history.** First production run on 2026-05-06 08:07Z surfaced
+> two annotation bugs in the manifests (stale `commit_sha` env var and
+> conflated `model_hash`). Fix landed in `ed16ab7` and the run below
+> (08:31Z) confirms both are resolved end-to-end. Old run is preserved
+> in git history (commit `9832060`) for diff-against-fix auditability.
+
 ---
 
 ## D3 — Evidence Bundle
 
 | | |
 |---|---|
-| Bundle ID | `d3-20260506T080713Z` |
-| Generated | 2026-05-06 08:07 UTC |
-| Trigger | `POST /api/interpretability/run` (deployed AIDRA, image `c268a61`) |
-| Manifest commit_sha (annotated) | `92b2515` *(see annotation bug below)* |
-| Actual code commit | `c268a61eb189dd6a90767adbe35ea6eeddbfcad7` (env `SOURCE_COMMIT`) |
-| Files in bundle | 22 243 |
+| Bundle ID | `d3-20260506T083120Z` |
+| Generated | 2026-05-06 08:31 UTC |
+| Trigger | `POST /api/traceability/bundle` (deployed AIDRA, image `ed16ab7`) |
+| Manifest `commit_sha` | `ed16ab780a68b002b432214a98460873c09a3aab` ✅ matches `SOURCE_COMMIT` and the running container image tag |
+| Counts | 21 executions, 50 985 detections, 22 236 thumbnails, 2 model cards |
 | Bundle archive size | 72 MB (gzip) |
-| Bundle root SHA256 | `68c22a684ab192d4a2cc7c505f76f1a575a0e8fb1465b3d72ee530efc2359bc9` |
-| MANIFEST.json SHA256 | `43c11b3625b34ce6836fdfd7981b46283679ce9f5d42c641c862bb882990ed91` |
-| Server path | `aidra.uliber.com:/data/interpretability/d3_bundles/d3-20260506T080713Z.tar.gz` (inside `aidra-app` container, mounted on host volume `aidra-interpretability`) |
-| Local download path | `evidence_bundles/d3-20260506T080713Z.tar.gz` *(gitignored)* |
+| Bundle root SHA256 | `6677d1a08d2ae89939d67007fec7048b4a62359c797e2f2fbc2a572750542f47` |
+| Server path | `aidra.uliber.com:/data/interpretability/d3_bundles/d3-20260506T083120Z.tar.gz` (Docker volume `aidra-interpretability` on host) |
+| Local download path | `evidence_bundles/d3-20260506T083120Z.tar.gz` *(gitignored)* |
 
 **Mirrored to git** (under `evidence_bundles/`):
-- `d3-20260506T080713Z.MANIFEST.json` — full file-by-file SHA256 inventory.
-- `d3-20260506T080713Z.MANIFEST.sha256` — root signature; one line, single auditor anchor.
-- `d3-20260506T080713Z.settings.json` — Settings snapshot at bundle build time.
-- `d3-20260506T080713Z.executions.csv` — flat dump of `execution_log` rows included in the bundle.
+- `d3-20260506T083120Z.MANIFEST.json` — full file-by-file SHA256 inventory.
+- `d3-20260506T083120Z.MANIFEST.sha256` — root signature; one line, single auditor anchor.
+- `d3-20260506T083120Z.settings.json` — Settings snapshot at bundle build time.
+- `d3-20260506T083120Z.executions.csv` — flat dump of `execution_log` rows included in the bundle.
 
 **Verify** (against the local tarball or extracted dir):
 ```bash
-shasum -a 256 evidence_bundles/d3-20260506T080713Z.tar.gz
-# expected: 68c22a684ab192d4a2cc7c505f76f1a575a0e8fb1465b3d72ee530efc2359bc9
+shasum -a 256 evidence_bundles/d3-20260506T083120Z.tar.gz
+# expected: 6677d1a08d2ae89939d67007fec7048b4a62359c797e2f2fbc2a572750542f47
 
-mkdir -p /tmp/d3 && tar -xzf evidence_bundles/d3-20260506T080713Z.tar.gz -C /tmp/d3
-.venv/bin/python -m src.traceability verify-bundle /tmp/d3/d3-20260506T080713Z
+mkdir -p /tmp/d3 && tar -xzf evidence_bundles/d3-20260506T083120Z.tar.gz -C /tmp/d3
+.venv/bin/python -m src.traceability verify-bundle /tmp/d3/d3-20260506T083120Z
 # expected: Result: PASS — 22243/22243 files OK, MANIFEST root OK
 ```
 
@@ -47,31 +51,33 @@ Last verification: **PASS** (22 243 files OK, 0 mismatches, 0 missing, 0 extras,
 
 | | |
 |---|---|
-| Run ID | `173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_bcfb083c` |
+| Run ID | `173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_227b8434` |
 | Source execution | `173bbdb5-aaf2-489d-8e34-cec4243705d4` |
-| Generated | 2026-05-06 08:06 UTC |
+| Generated | 2026-05-06 08:31 UTC |
 | Trigger | `POST /api/interpretability/run` (n_samples=20) |
-| Model used for explanations | `vesseltracker-sar-yolov8` (FP32 PT baseline, loaded directly per the I-AIA-2 fix in `a8dbfda`) |
-| Source-execution `model_hash` (annotated) | `ea0ee6dac…` *(INT8 ONNX — see annotation bug below)* |
+| Manifest `commit_sha` | `ed16ab780a68b002b432214a98460873c09a3aab` ✅ |
+| **Subject of explanation** (`execution_model_*`) | name `vesseltracker-sar-yolov8`, hash `ea0ee6da…` (= INT8 ONNX hash recorded in `execution_log`) |
+| **Renderer of heatmap** (`gradcam_model_*`) | name `vesseltracker-sar-yolov8`, hash `18aec1bb…` (= FP32 PT baseline; only variant exposing autograd) |
+| Two hashes differ | ✅ confirmed in manifest |
 | Grad-CAM success rate | **20 / 20** |
 | CFAR success rate | **20 / 20** |
 | Per-PNG SHA256 mismatches | 0 |
-| Server path | `aidra.uliber.com:/data/interpretability/173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_bcfb083c/` |
-| Local download path | `interpretability_runs/interp_run.tar.gz` *(gitignored)* |
+| Server path | `aidra.uliber.com:/data/interpretability/173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_227b8434/` |
+| Local download path | `interpretability_runs/interp_run_v2.tar.gz` *(gitignored)* |
 
 **Mirrored to git** (under `interpretability_runs/`):
-- `manifest.json` — full per-sample SHA256 + commit/model anchors.
+- `manifest.json` — full per-sample SHA256 + commit + dual model anchors.
 - `samples/000_*.png`, `samples/009_*.png`, `samples/019_*.png` — first / middle / last
   triplets (input SAR / Grad-CAM overlay / CFAR score map). Visual evidence
   of the explainability artifact without needing to extract the tarball.
 
 **Verify**:
 ```bash
-mkdir -p /tmp/d4 && tar -xzf interpretability_runs/interp_run.tar.gz -C /tmp/d4
+mkdir -p /tmp/d4 && tar -xzf interpretability_runs/interp_run_v2.tar.gz -C /tmp/d4
 .venv/bin/python -c "
 import json, hashlib
 from pathlib import Path
-d = Path('/tmp/d4/173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_bcfb083c')
+d = Path('/tmp/d4/173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_227b8434')
 m = json.load((d/'manifest.json').open())
 mismatches = sum(
     1
@@ -81,42 +87,19 @@ mismatches = sum(
     and hashlib.sha256((d/s[f'{kind}_png']).read_bytes()).hexdigest() != s[f'{kind}_sha256']
 )
 print(f'PNG SHA256 mismatches: {mismatches}')
+print(f'execution_model_hash: {m[\"execution_model_hash\"][:16]}...')
+print(f'gradcam_model_hash:   {m[\"gradcam_model_hash\"][:16]}...')
+print(f'commit_sha:           {m[\"commit_sha\"]}')
 "
-# expected: 0
+# expected: 0 mismatches, two distinct model hashes, commit_sha = ed16ab78...
 ```
-
----
-
-## Known annotation bugs (do not affect data integrity)
-
-Both deliverables verify cleanly. Two annotation-only issues worth noting
-to the auditor; fixes tracked separately:
-
-1. **`commit_sha` in MANIFEST is stale (`92b2515`).** The Coolify
-   environment defines `AIDRA_COMMIT_SHA` as a hardcoded build-arg that
-   was not refreshed on the latest deploys. The actually-running code is
-   commit `c268a61` (per `SOURCE_COMMIT`, container image tag, and
-   OpenAPI surface — both new endpoints `/api/interpretability/run` and
-   `/api/traceability/bundle` are present). Mitigation: `get_commit_sha()`
-   in `src/traceability/hasher.py` should prefer `SOURCE_COMMIT` over
-   `AIDRA_COMMIT_SHA`, or read from a baked-in version file at build
-   time.
-
-2. **D4 manifest reports the source-execution `model_hash` (INT8 ONNX),
-   not the FP32 PT actually used for Grad-CAM.** This is correct in spirit
-   — the explanations are *for* an INT8 ONNX detector run — but the
-   runtime artifact that produced the heatmaps is the architecturally-
-   identical FP32 baseline (Grad-CAM needs autograd; ONNX has no gradient
-   graph). Fix: extend the manifest schema to record both
-   `execution_model_hash` (subject of the explanation) and
-   `gradcam_model_hash` (provenance of the heatmap renderer).
 
 ---
 
 ## Reproduction (for the auditor)
 
-The whole chain is reproducible from outside the server given API token.
-Both endpoints are authenticated via `Authorization: Bearer
+The whole chain is reproducible from outside the server given an API
+token. Both endpoints require `Authorization: Bearer
 ${AIDRA_API_TOKEN}`:
 
 ```bash

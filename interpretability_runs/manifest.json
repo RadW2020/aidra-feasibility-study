@@ -1,11 +1,13 @@
 {
-  "commit_sha": "92b2515",
-  "created_at": "2026-05-06T08:06:31.596820Z",
+  "commit_sha": "ed16ab780a68b002b432214a98460873c09a3aab",
+  "created_at": "2026-05-06T08:31:21.747235Z",
   "execution_id": "173bbdb5-aaf2-489d-8e34-cec4243705d4",
-  "model_hash": "ea0ee6dacd5d389ab5a3778362061776cd52307f0978d6c7db0980935f21573b",
-  "model_name": "vesseltracker-sar-yolov8",
+  "execution_model_hash": "ea0ee6dacd5d389ab5a3778362061776cd52307f0978d6c7db0980935f21573b",
+  "execution_model_name": "vesseltracker-sar-yolov8",
+  "gradcam_model_hash": "18aec1bb3caf7dd2c5ace8d397e241c485e917c28df248eefe794578c996d671",
+  "gradcam_model_name": "vesseltracker-sar-yolov8",
   "n_samples": 20,
-  "run_id": "173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_bcfb083c",
+  "run_id": "173bbdb5-aaf2-489d-8e34-cec4243705d4_interp_227b8434",
   "samples": [
     {
       "cfar_png": "000_cfar_score.png",
