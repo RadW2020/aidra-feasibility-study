@@ -326,3 +326,42 @@ UPSERT_MODEL = """
 SELECT_ALL_MODELS = """
     SELECT * FROM models_registry ORDER BY name, version
 """
+
+# ====================================================================
+# resilience_runs (orbital resilience: bitflip, orbit-sim, drift)
+# ====================================================================
+
+INSERT_BITFLIP_RUN = """
+    INSERT INTO bitflip_runs (
+        sweep_id, model_variant, model_size_bytes, num_flips,
+        avg_detections, avg_confidence, std_detections, degradation_pct,
+        baseline_detections, baseline_confidence, critical_threshold
+    ) VALUES (
+        $1, $2, $3, $4,
+        $5, $6, $7, $8,
+        $9, $10, $11
+    )
+"""
+
+INSERT_ORBIT_SIM_RUN = """
+    INSERT INTO orbit_sim_runs (
+        satellite, total_images, processed_images, skipped_images,
+        cfar_fallback_count, process_count, fallback_cfar_count, skip_count,
+        models_used, battery_timeline, final_battery_wh, energy_efficiency
+    ) VALUES (
+        $1, $2, $3, $4,
+        $5, $6, $7, $8,
+        $9::jsonb, $10, $11, $12
+    )
+    RETURNING id
+"""
+
+INSERT_DRIFT_ALERT = """
+    INSERT INTO drift_alerts (
+        is_drifting, metric, z_score, recent_mean,
+        historical_mean, recommendation, window_size
+    ) VALUES (
+        $1, $2, $3, $4,
+        $5, $6, $7
+    )
+"""

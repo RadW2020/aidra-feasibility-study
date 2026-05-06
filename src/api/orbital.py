@@ -15,7 +15,12 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.db.connection import db
-from src.db.queries import SELECT_BENCHMARKS_BY_MODEL
+from src.db.queries import (
+    INSERT_BITFLIP_RUN,
+    INSERT_DRIFT_ALERT,
+    INSERT_ORBIT_SIM_RUN,
+    SELECT_BENCHMARKS_BY_MODEL,
+)
 
 logger = logging.getLogger("aidra.api.orbital")
 
@@ -316,13 +321,34 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
             model_name=request.model,
         )
 
-        # Emit BITFLIP_DEGRADATION metrics
+        # Emit BITFLIP_DEGRADATION metrics + persist sweep to Postgres so
+        # the resilience dashboard survives Prometheus counter resets.
+        from uuid import uuid4
+
         from src.observability.prometheus_metrics import BITFLIP_DEGRADATION
+        sweep_id = uuid4()
         for entry in result.results:
             BITFLIP_DEGRADATION.labels(
                 num_flips=str(entry["num_flips"]),
                 model_variant=request.model,
             ).set(entry.get("degradation_pct", 0.0))
+            try:
+                await db.execute(
+                    INSERT_BITFLIP_RUN,
+                    sweep_id,
+                    request.model,
+                    result.model_size_bytes,
+                    int(entry["num_flips"]),
+                    entry.get("avg_detections"),
+                    entry.get("avg_confidence"),
+                    entry.get("std_detections"),
+                    float(entry.get("degradation_pct", 0.0)),
+                    result.baseline_detections,
+                    result.baseline_confidence,
+                    result.critical_threshold,
+                )
+            except Exception:
+                logger.exception("Failed to persist bitflip run")
 
         return result.model_dump()
 
@@ -378,9 +404,38 @@ async def simulate_orbit(request: OrbitSimulationRequest) -> dict[str, Any]:
             orbit_period_min=sat["orbit_period_min"],
         )
 
-        # Emit battery metric
-        from src.observability.prometheus_metrics import BATTERY_LEVEL_WH
+        # Emit battery metric + persist sim summary so the dashboard has
+        # a historical timeline even after Prometheus counter resets.
+        from src.observability.prometheus_metrics import (
+            BATTERY_LEVEL_WH,
+            DECISION_ACTION,
+        )
         BATTERY_LEVEL_WH.set(result.final_battery_wh)
+
+        action_counts: dict[str, int] = {}
+        for d in result.decisions:
+            action_counts[d.action] = action_counts.get(d.action, 0) + 1
+            DECISION_ACTION.labels(action=d.action).inc()
+
+        try:
+            import json as _json
+            await db.execute(
+                INSERT_ORBIT_SIM_RUN,
+                request.satellite,
+                result.total_images,
+                result.processed_images,
+                result.skipped_images,
+                result.cfar_fallback_count,
+                action_counts.get("process", 0),
+                action_counts.get("fallback_cfar", 0),
+                action_counts.get("skip", 0),
+                _json.dumps(result.models_used),
+                list(result.battery_timeline),
+                result.final_battery_wh,
+                result.energy_efficiency,
+            )
+        except Exception:
+            logger.exception("Failed to persist orbit_sim run")
 
         return result.model_dump()
 
@@ -434,10 +489,25 @@ async def drift_status(
         engine = DecisionEngine(models=[], energy_profiler=None, config=config)
         result = engine.detect_drift(recent_executions=records, window_size=window_size)
 
-        # Emit Prometheus metric if drifting
+        # Emit Prometheus metric if drifting + always persist the check so
+        # the dashboard reflects historical drift behaviour.
         if result.is_drifting:
             from src.observability.prometheus_metrics import DRIFT_ALERTS
             DRIFT_ALERTS.labels(metric=result.metric).inc()
+
+        try:
+            await db.execute(
+                INSERT_DRIFT_ALERT,
+                result.is_drifting,
+                result.metric,
+                result.z_score,
+                result.recent_mean,
+                result.historical_mean,
+                result.recommendation,
+                window_size,
+            )
+        except Exception:
+            logger.exception("Failed to persist drift alert")
 
         return result.model_dump()
 

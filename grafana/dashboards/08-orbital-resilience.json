@@ -1,22 +1,22 @@
 {
   "uid": "aidra-orbital-resilience",
   "title": "AIDRA — Orbital Resilience",
-  "description": "Resilience: bit-flips, degradation, battery, autonomous decisions, drift detection.",
+  "description": "Resilience evidence: bit-flip degradation, autonomous decisions, drift detection, orbit battery simulation. All panels query PostgreSQL (resilience_runs / drift_alerts / orbit_sim_runs) so the dashboard survives Prometheus counter resets between deploys.",
   "tags": ["aidra", "orbital", "resilience", "bitflip", "autonomy"],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
   "fiscalYearStartMonth": 0,
   "liveNow": false,
-  "refresh": "15s",
+  "refresh": "30s",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "time": {
-    "from": "now-6h",
+    "from": "now-30d",
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["5s", "10s", "15s", "30s", "1m", "5m"]
+    "refresh_intervals": ["10s", "30s", "1m", "5m"]
   },
   "templating": {
     "list": [
@@ -24,43 +24,41 @@
         "name": "model_variant",
         "type": "query",
         "label": "Model Variant",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "Prometheus"
-        },
-        "query": "label_values(aidra_bitflip_degradation_pct, model_variant)",
+        "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+        "query": "SELECT DISTINCT model_variant FROM bitflip_runs ORDER BY model_variant",
         "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
+        "allValue": "%",
+        "current": { "text": "All", "value": "$__all" },
         "refresh": 2,
         "sort": 1,
-        "multi": true
+        "multi": false
       }
     ]
   },
   "panels": [
     {
+      "id": 100,
+      "title": "How to read this dashboard",
+      "type": "text",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Orbital resilience** quantifies how AIDRA behaves under spaceflight constraints: cosmic-ray bit-flips on model weights, finite battery during eclipse, drift across long missions, and autonomous fallback decisions when energy is scarce.\n\nPopulate this dashboard by triggering the simulators (each call writes a row to PostgreSQL):\n\n```bash\n# Bit-flip sweep\ncurl -X POST $AIDRA_API/api/orbital/resilience/bitflip \\\n  -H 'Authorization: Bearer $TOKEN' \\\n  -d '{\"model\":\"vesseltracker-sar-yolov8\",\"flip_counts\":[0,10,100,1000]}'\n\n# Orbit simulation (small_sat / cubesat_3u / cubesat_6u / medium_sat)\ncurl -X POST $AIDRA_API/api/orbital/resilience/simulate-orbit \\\n  -H 'Authorization: Bearer $TOKEN' \\\n  -d '{\"satellite\":\"small_sat\",\"num_images\":30}'\n\n# Drift check (no body, persists every call)\ncurl $AIDRA_API/api/orbital/resilience/drift?window_size=10 \\\n  -H 'Authorization: Bearer $TOKEN'\n```"
+      }
+    },
+    {
       "id": 1,
-      "title": "Bit-Flip Degradation",
-      "description": "Detection-degradation percentage under simulated bit-flips (SEU).",
+      "title": "Bit-Flip Degradation (max in window)",
+      "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU). Higher = more brittle.",
       "type": "gauge",
-      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "max(aidra_bitflip_degradation_pct{model_variant=~\"$model_variant\"})",
-          "legendFormat": "Max Degradation",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT COALESCE(MAX(degradation_pct) * 100, 0) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND model_variant LIKE '$model_variant'",
+          "format": "table",
           "editorMode": "code"
         }
       ],
@@ -78,7 +76,8 @@
           "color": { "mode": "thresholds" },
           "unit": "percent",
           "min": 0,
-          "max": 100
+          "max": 100,
+          "noValue": "No bit-flip runs in window"
         },
         "overrides": []
       },
@@ -91,23 +90,17 @@
     },
     {
       "id": 2,
-      "title": "Battery Level (Simulated)",
-      "description": "Simulated battery level over an orbit.",
+      "title": "Battery Level (last sim)",
+      "description": "Final battery level (Wh) at the end of the most recent orbit simulation. Coloured by remaining capacity vs. nominal 100 Wh.",
       "type": "gauge",
-      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "aidra_sim_battery_wh",
-          "legendFormat": "Battery (Wh)",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT final_battery_wh\nFROM orbit_sim_runs\nORDER BY created_at DESC\nLIMIT 1",
+          "format": "table",
           "editorMode": "code"
         }
       ],
@@ -123,9 +116,10 @@
             ]
           },
           "color": { "mode": "thresholds" },
-          "unit": "watt",
+          "unit": "watth",
           "min": 0,
-          "max": 120
+          "max": 100,
+          "noValue": "No orbit simulations recorded"
         },
         "overrides": []
       },
@@ -139,22 +133,16 @@
     {
       "id": 3,
       "title": "Decision Action Counters",
-      "description": "Counts of autonomous decisions: process, fallback_cfar, skip.",
+      "description": "Cumulative count of autonomous decisions across all orbit simulations: process (full inference), fallback_cfar (cheap detector), skip.",
       "type": "stat",
-      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum(aidra_decision_action_total) by (action)",
-          "legendFormat": "{{action}}",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT\n  COALESCE(SUM(process_count), 0)        AS process,\n  COALESCE(SUM(fallback_cfar_count), 0)  AS fallback_cfar,\n  COALESCE(SUM(skip_count), 0)           AS skip\nFROM orbit_sim_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()",
+          "format": "table",
           "editorMode": "code"
         }
       ],
@@ -162,11 +150,10 @@
         "defaults": {
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              { "color": "blue", "value": null }
-            ]
+            "steps": [{ "color": "blue", "value": null }]
           },
-          "color": { "mode": "palette-classic" }
+          "color": { "mode": "palette-classic" },
+          "noValue": "0"
         },
         "overrides": [
           {
@@ -192,7 +179,7 @@
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "textMode": "value_and_name",
         "orientation": "horizontal"
@@ -200,23 +187,17 @@
     },
     {
       "id": 4,
-      "title": "Bit-Flip Degradation Curve (Detections & Confidence)",
-      "description": "Degradation curve as a function of injected bit-flips: detection count and mean confidence.",
+      "title": "Bit-Flip Degradation Curve",
+      "description": "Detection-degradation as a function of injected bit-flips. Each line is a sweep; sharp climbs identify the model's critical threshold for SEU events.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "aidra_bitflip_degradation_pct{model_variant=~\"$model_variant\"}",
-          "legendFormat": "{{num_flips}} flips - {{model_variant}}",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT\n  to_timestamp(num_flips) AS time,\n  degradation_pct * 100  AS degradation_pct,\n  model_variant\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND model_variant LIKE '$model_variant'\nORDER BY model_variant, num_flips",
+          "format": "time_series",
           "editorMode": "code"
         }
       ],
@@ -230,9 +211,7 @@
             "showPoints": "always",
             "pointSize": 6,
             "spanNulls": false,
-            "thresholdsStyle": {
-              "mode": "line"
-            }
+            "thresholdsStyle": { "mode": "line" }
           },
           "color": { "mode": "palette-classic" },
           "unit": "percent",
@@ -242,7 +221,8 @@
               { "color": "green", "value": null },
               { "color": "red", "value": 20 }
             ]
-          }
+          },
+          "noValue": "No bit-flip sweeps in window — POST /api/orbital/resilience/bitflip"
         },
         "overrides": []
       },
@@ -253,23 +233,17 @@
     },
     {
       "id": 5,
-      "title": "Battery Level Over Time (Orbit Simulation)",
-      "description": "Battery-level timeline during orbit simulation with sun/eclipse cycles.",
+      "title": "Battery Timeline (most recent orbit sim)",
+      "description": "Battery level (Wh) at each decision step of the most recent simulated orbit. Drops mark eclipse / heavy inference; recoveries mark sun-lit recharge windows.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "aidra_sim_battery_wh",
-          "legendFormat": "Battery (Wh)",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "WITH latest AS (\n  SELECT id, created_at, battery_timeline\n  FROM orbit_sim_runs\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT\n  latest.created_at + (ord || ' minute')::interval AS time,\n  battery_wh\nFROM latest, unnest(latest.battery_timeline) WITH ORDINALITY AS t(battery_wh, ord)\nORDER BY ord",
+          "format": "time_series",
           "editorMode": "code"
         }
       ],
@@ -283,12 +257,10 @@
             "showPoints": "auto",
             "spanNulls": false,
             "gradientMode": "none",
-            "thresholdsStyle": {
-              "mode": "area"
-            }
+            "thresholdsStyle": { "mode": "area" }
           },
           "color": { "mode": "continuous-GrYlRd" },
-          "unit": "watt",
+          "unit": "watth",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -297,7 +269,8 @@
               { "color": "green", "value": 50 }
             ]
           },
-          "min": 0
+          "min": 0,
+          "noValue": "No orbit simulations recorded — POST /api/orbital/resilience/simulate-orbit"
         },
         "overrides": []
       },
@@ -308,23 +281,17 @@
     },
     {
       "id": 6,
-      "title": "Drift Detection Alerts",
-      "description": "Drift alerts detected: anomalies in detection counts, confidence and spatial distribution.",
+      "title": "Drift Detection Alerts (per-day, by metric)",
+      "description": "Daily count of drift checks that flagged a drifting metric. Bars are stacked by which signal drifted (detections / confidence / spatial).",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 6 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "gridPos": { "x": 0, "y": 18, "w": 12, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum(rate(aidra_drift_alerts_total[5m])) by (metric)",
-          "legendFormat": "{{metric}}",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT\n  date_trunc('day', created_at) AS time,\n  metric,\n  COUNT(*) FILTER (WHERE is_drifting) AS drifting_alerts\nFROM drift_alerts\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY 1, 2\nORDER BY 1",
+          "format": "time_series",
           "editorMode": "code"
         }
       ],
@@ -336,7 +303,8 @@
             "lineWidth": 1,
             "stacking": { "mode": "normal" }
           },
-          "color": { "mode": "palette-classic" }
+          "color": { "mode": "palette-classic" },
+          "noValue": "No drift checks recorded — GET /api/orbital/resilience/drift"
         },
         "overrides": [
           {
@@ -366,23 +334,17 @@
     },
     {
       "id": 7,
-      "title": "Autonomous Decision Rate",
-      "description": "Rate of autonomous decisions by action type.",
+      "title": "Autonomous Decision Mix Over Time",
+      "description": "Per-day counts of autonomous decisions across simulations.  process = full inference; fallback_cfar = lightweight detector; skip = save energy.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 6 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "gridPos": { "x": 12, "y": 18, "w": 12, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum(rate(aidra_decision_action_total[5m])) by (action)",
-          "legendFormat": "{{action}}",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT\n  date_trunc('day', created_at) AS time,\n  SUM(process_count)        AS process,\n  SUM(fallback_cfar_count)  AS fallback_cfar,\n  SUM(skip_count)           AS skip\nFROM orbit_sim_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series",
           "editorMode": "code"
         }
       ],
@@ -397,7 +359,8 @@
             "spanNulls": false,
             "stacking": { "mode": "normal" }
           },
-          "color": { "mode": "palette-classic" }
+          "color": { "mode": "palette-classic" },
+          "noValue": "No orbit simulations recorded"
         },
         "overrides": [
           {
@@ -427,34 +390,45 @@
     },
     {
       "id": 8,
-      "title": "Decision Log (Recent Actions)",
-      "description": "Recent autonomous decisions log with the chosen model and reason.",
-      "type": "logs",
-      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 6 },
-      "datasource": {
-        "type": "loki",
-        "uid": "Loki"
-      },
+      "title": "Drift Check Log (recent)",
+      "description": "Most recent drift checks: which metric was tested, the z-score against historical baseline, and the recommended action when drift was flagged.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 7 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "loki",
-            "uid": "Loki"
-          },
-          "expr": "{container=\"aidra-app\"} |= \"decision\" |= \"action\"",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT\n  created_at         AS \"When\",\n  metric             AS \"Metric\",\n  is_drifting        AS \"Drifting\",\n  ROUND(z_score::numeric, 2)         AS \"Z-score\",\n  ROUND(recent_mean::numeric, 1)     AS \"Recent\",\n  ROUND(historical_mean::numeric, 1) AS \"Baseline\",\n  recommendation     AS \"Recommended\",\n  window_size        AS \"Window\"\nFROM drift_alerts\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\nORDER BY created_at DESC\nLIMIT 50",
+          "format": "table",
           "editorMode": "code"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "left", "filterable": true },
+          "noValue": "No drift checks recorded"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Drifting" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "true":  { "text": "yes", "color": "red" } } },
+                  { "type": "value", "options": { "false": { "text": "no",  "color": "green" } } }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      },
       "options": {
-        "showTime": true,
-        "showLabels": true,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "sortOrder": "Descending",
-        "dedupStrategy": "none"
+        "showHeader": true,
+        "footer": { "show": false },
+        "sortBy": [{ "displayName": "When", "desc": true }]
       }
     }
   ],
