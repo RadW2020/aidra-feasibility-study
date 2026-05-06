@@ -299,11 +299,20 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
         simulator = BitFlipSimulator(model_weights=weights)
 
         # Generate test image.  generate_synthetic_sar_tile() returns a single
-        # SAR amplitude band; YOLO weights expect a 3-channel input, so we
-        # tile the band into RGB before feeding it to the detector and the
-        # bit-flip sweep.
+        # float32 SAR amplitude band roughly in [0, vessel_amplitude].  YOLO
+        # weights expect a 3-channel uint8 [0, 255] image, so we normalise the
+        # band to that range and tile it into RGB before feeding it to the
+        # detector and the bit-flip sweep.  Without this normalisation
+        # baseline_detections is always 0 (out-of-range float32 input) and
+        # the degradation_pct formula short-circuits to 0% for every flip
+        # count, hiding the SEU sensitivity we are trying to measure.
         import numpy as np
         test_image, _ = generate_synthetic_sar_tile(size=640, num_vessels=5, seed=42)
+        # 99th percentile clip to keep the few hottest pixels from collapsing
+        # the rest of the dynamic range; vessels stay bright after rescale.
+        clip_max = float(np.percentile(test_image, 99.5))
+        test_image = np.clip(test_image, 0.0, clip_max)
+        test_image = (test_image / max(clip_max, 1e-6) * 255.0).astype(np.uint8)
         if test_image.ndim == 2:
             test_image = np.stack([test_image] * 3, axis=-1)
 

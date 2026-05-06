@@ -363,11 +363,15 @@ class BitFlipSimulator:
             avg_det = float(np.mean(det_counts))
             avg_conf = float(np.mean(conf_values))
             std_det = float(np.std(det_counts))
-            degradation_pct = (
-                (1.0 - avg_det / baseline_detections) * 100.0
-                if baseline_detections > 0
-                else 0.0
-            )
+            # Symmetric divergence: |baseline - corrupted| / max(baseline, corrupted).
+            # Captures both missed vessels (baseline > corrupted) and spurious
+            # detections (corrupted > baseline, e.g. when bit-flips confuse the
+            # detector into firing on noise).  When baseline_detections == 0
+            # the previous formula short-circuited to 0%, hiding any spurious
+            # firings.  This version reports them as 100% divergence and only
+            # returns 0 when both ends agree on zero.
+            denom = max(avg_det, baseline_detections, 1.0)
+            degradation_pct = abs(avg_det - baseline_detections) / denom * 100.0
 
             results.append(
                 {
