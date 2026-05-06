@@ -298,8 +298,14 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
 
         simulator = BitFlipSimulator(model_weights=weights)
 
-        # Generate test image
+        # Generate test image.  generate_synthetic_sar_tile() returns a single
+        # SAR amplitude band; YOLO weights expect a 3-channel input, so we
+        # tile the band into RGB before feeding it to the detector and the
+        # bit-flip sweep.
+        import numpy as np
         test_image, _ = generate_synthetic_sar_tile(size=640, num_vessels=5, seed=42)
+        if test_image.ndim == 2:
+            test_image = np.stack([test_image] * 3, axis=-1)
 
         counts = request.flip_counts
 
