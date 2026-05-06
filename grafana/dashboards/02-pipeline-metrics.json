@@ -322,22 +322,16 @@
     {
       "id": 6,
       "title": "Error Rate",
+      "description": "Share of execution_log rows that finished with status != 'success'. Sourced from Postgres (the previous Prometheus rate query reset on every redeploy and inflated to 100% with a single failed run).",
       "type": "stat",
       "gridPos": { "x": 18, "y": 8, "w": 6, "h": 6 },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
-      },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "sum(rate(aidra_pipeline_runs_total{status=\"error\", profile=~\"$profile\", model_variant=~\"$model_variant\"}[1h])) / sum(rate(aidra_pipeline_runs_total{profile=~\"$profile\", model_variant=~\"$model_variant\"}[1h]))",
-          "legendFormat": "Error Rate",
-          "editorMode": "code"
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT COALESCE(COUNT(*) FILTER (WHERE status != 'success')::float / NULLIF(COUNT(*), 0), 0) AS error_rate FROM execution_log",
+          "format": "table"
         }
       ],
       "fieldConfig": {
@@ -347,13 +341,14 @@
             "steps": [
               { "color": "green", "value": null },
               { "color": "yellow", "value": 0.05 },
-              { "color": "red", "value": 0.1 }
+              { "color": "red", "value": 0.5 }
             ]
           },
           "color": { "mode": "thresholds" },
           "unit": "percentunit",
           "min": 0,
-          "max": 1
+          "max": 1,
+          "decimals": 1
         },
         "overrides": []
       },
@@ -364,9 +359,9 @@
           "values": false
         },
         "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
         "orientation": "auto"
       }
     },
