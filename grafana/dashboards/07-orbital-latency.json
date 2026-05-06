@@ -25,7 +25,7 @@
     {
       "id": 1,
       "title": "Speedup Factor (OBDP vs Traditional)",
-      "description": "Latency improvement factor: how many times faster the system is with OBDP.",
+      "description": "How many times faster the OBDP path delivers actionable detections vs. the traditional 'downlink-then-process' path. Assumes a typical LEO orbit:\n\n• Traditional path: wait for an X-band contact with capacity (~720 min between passes for a single ground station), downlink the full image (50 Mbps), and run ground processing (~30 min).\n\n• OBDP path: process onboard (real inference_ms from execution_log), wait for ANY contact since the result is ~30 KB (S-band/UHF passes ~every 90 min), downlink the JSON (negligible).\n\nThe previous formula used the same 360-min wait for both paths, which neutralised the architectural advantage and pinned the speedup at 1×.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
       "datasource": {
@@ -39,7 +39,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS avg_processing_min,\n        AVG(image_size_mb) AS avg_image_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND inference_ms IS NOT NULL\n        AND image_size_mb IS NOT NULL\n),\ntraditional AS (\n    -- Traditional: wait for ground station (avg 360 min) + downlink full image (X-band 50Mbps) + ground processing (30 min)\n    SELECT\n        360.0 + (l.avg_image_mb * 8.0 / 50.0 / 60.0) + 30.0 AS total_min_traditional\n    FROM latency_data l\n),\nobdp AS (\n    -- OBDP: process onboard (inference) + wait for ground station (avg 360 min) + downlink result JSON (~0.001 MB)\n    SELECT\n        l.avg_processing_min + 360.0 + (0.001 * 8.0 / 50.0 / 60.0) AS total_min_obdp\n    FROM latency_data l\n)\nSELECT ROUND((t.total_min_traditional / NULLIF(o.total_min_obdp, 0))::numeric, 1) AS speedup_factor\nFROM traditional t, obdp o",
+          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS onboard_proc_min,\n        AVG(image_size_mb) AS avg_image_mb\n    FROM execution_log\n    WHERE status = 'success'\n      AND inference_ms IS NOT NULL\n      AND image_size_mb IS NOT NULL\n),\ntraditional AS (\n    -- X-band contact with capacity ~ every 12h on a single ground station\n    SELECT 720.0\n           + (l.avg_image_mb * 8.0 / 50.0 / 60.0)\n           + 30.0 AS total_min\n    FROM latency_data l\n),\nobdp AS (\n    -- Any contact suffices for ~30 KB result; S-band/UHF passes typically ~ every 90 min\n    SELECT l.onboard_proc_min\n           + 90.0\n           + (0.03 * 8.0 / 0.5 / 60.0) AS total_min\n    FROM latency_data l\n)\nSELECT ROUND((t.total_min / NULLIF(o.total_min, 0))::numeric, 1) AS speedup_factor\nFROM traditional t, obdp o",
           "format": "table",
           "editorMode": "code"
         }
