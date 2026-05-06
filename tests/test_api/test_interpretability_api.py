@@ -20,8 +20,10 @@ async def test_post_run_returns_summary(client, mock_db, tmp_path):
         "n_samples": 20,
         "gradcam_ok": 20,
         "cfar_ok": 20,
-        "model_name": "vesseltracker-sar-yolov8",
-        "model_hash": "0" * 64,
+        "execution_model_name": "vesseltracker-sar-yolov8-int8-dynamic",
+        "execution_model_hash": "ea0ee6da" + "0" * 56,
+        "gradcam_model_name": "vesseltracker-sar-yolov8",
+        "gradcam_model_hash": "f" * 64,
     }
 
     with patch(
@@ -37,6 +39,10 @@ async def test_post_run_returns_summary(client, mock_db, tmp_path):
     body = resp.json()
     assert body["run_id"] == "abc_interp_deadbeef"
     assert body["gradcam_ok"] == 20
+    # Both model identities must surface — subject of explanation vs renderer.
+    assert body["execution_model_hash"].startswith("ea0ee6da")
+    assert body["gradcam_model_name"] == "vesseltracker-sar-yolov8"
+    assert body["gradcam_model_hash"] == "f" * 64
 
 
 async def test_post_run_propagates_runtime_error_as_400(client, mock_db, tmp_path):
@@ -76,8 +82,10 @@ async def test_post_run_passes_filters_through(client, mock_db, tmp_path):
         "n_samples": 5,
         "gradcam_ok": 5,
         "cfar_ok": 5,
-        "model_name": "m",
-        "model_hash": "h",
+        "execution_model_name": "m",
+        "execution_model_hash": "h",
+        "gradcam_model_name": "m",
+        "gradcam_model_hash": "h",
     }
     target = AsyncMock(return_value=fake_result)
 

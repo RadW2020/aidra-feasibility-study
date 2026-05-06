@@ -238,23 +238,39 @@ def compute_input_params_hash(params: dict[str, Any]) -> str:
 
 @functools.lru_cache(maxsize=1)
 def get_commit_sha() -> str:
-    """Devuelve el commit SHA del HEAD del repo (cacheado por proceso).
+    """Devuelve el commit SHA del codigo en ejecucion (cacheado por proceso).
 
-    Se cachea porque el SHA del codigo en ejecucion no cambia durante
-    la vida de un proceso. Si el repo no esta accesible (build sin
-    .git, contenedor minimal) devuelve la variable de entorno
-    ``AIDRA_COMMIT_SHA`` o ``"unknown"``.
+    Orden de resolucion (de mas a menos fiable):
+
+    1. ``SOURCE_COMMIT`` — env var auto-establecida por Coolify (y otros
+       PaaS tipo Heroku/Dokku) en cada deploy. Es la fuente de verdad
+       cuando hay CI/CD: refleja el SHA del build actual.
+    2. ``AIDRA_COMMIT_SHA`` — env var de override manual. Solo deberia
+       usarse si el operador necesita anclar el SHA a algo distinto del
+       build (raro). Si esta hardcoded en la config del PaaS, queda
+       desactualizada — por eso ``SOURCE_COMMIT`` tiene precedencia.
+    3. ``git rev-parse HEAD`` — fallback para entornos de desarrollo
+       local con .git accesible.
+    4. ``"unknown"`` — ultimo recurso (contenedor minimal sin .git, sin
+       envs, sin git binary).
+
+    Se cachea porque el SHA no cambia durante la vida del proceso.
+    Llamadas a ``get_commit_sha.cache_clear()`` son utiles en tests.
 
     Returns
     -------
     str
-        SHA hex (40 chars) o ``"unknown"``.
+        SHA hex (al menos 7 chars; tipicamente 40) o ``"unknown"``.
     """
     import os
 
-    env_sha = os.getenv("AIDRA_COMMIT_SHA")
-    if env_sha:
-        return env_sha.strip()
+    for env_name in ("SOURCE_COMMIT", "AIDRA_COMMIT_SHA"):
+        value = os.getenv(env_name)
+        if value:
+            stripped = value.strip()
+            if stripped:
+                return stripped
+
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],

@@ -235,10 +235,43 @@ class TestCommitSha:
         assert isinstance(sha, str)
         assert sha  # non-empty
 
-    def test_env_override(self, monkeypatch):
+    def test_aidra_commit_sha_override(self, monkeypatch):
         get_commit_sha.cache_clear()
+        monkeypatch.delenv("SOURCE_COMMIT", raising=False)
         monkeypatch.setenv("AIDRA_COMMIT_SHA", "deadbeef" * 5)
         try:
             assert get_commit_sha() == "deadbeef" * 5
+        finally:
+            get_commit_sha.cache_clear()
+
+    def test_source_commit_takes_precedence_over_aidra_commit_sha(self, monkeypatch):
+        """SOURCE_COMMIT (Coolify auto-set per deploy) wins over the legacy
+        AIDRA_COMMIT_SHA, which can be hardcoded and become stale."""
+        get_commit_sha.cache_clear()
+        monkeypatch.setenv("SOURCE_COMMIT", "c0ffee0" + "0" * 33)
+        monkeypatch.setenv("AIDRA_COMMIT_SHA", "92b2515")  # stale build-arg
+        try:
+            assert get_commit_sha() == "c0ffee0" + "0" * 33
+        finally:
+            get_commit_sha.cache_clear()
+
+    def test_empty_env_falls_through(self, monkeypatch):
+        """An env var set to empty/whitespace must not shadow git fallback."""
+        get_commit_sha.cache_clear()
+        monkeypatch.setenv("SOURCE_COMMIT", "   ")
+        monkeypatch.setenv("AIDRA_COMMIT_SHA", "")
+        try:
+            sha = get_commit_sha()
+            # Local dev env will resolve via git; CI without git returns "unknown".
+            assert sha == "unknown" or len(sha) >= 7
+        finally:
+            get_commit_sha.cache_clear()
+
+    def test_env_value_is_stripped(self, monkeypatch):
+        get_commit_sha.cache_clear()
+        monkeypatch.delenv("SOURCE_COMMIT", raising=False)
+        monkeypatch.setenv("AIDRA_COMMIT_SHA", "  abcdef1234  \n")
+        try:
+            assert get_commit_sha() == "abcdef1234"
         finally:
             get_commit_sha.cache_clear()

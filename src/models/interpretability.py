@@ -488,6 +488,14 @@ async def run_interpretability_for_execution(
     logger.info("Grad-CAM: loading PT model directly: %s", pt_path)
     yolo = _YOLO(str(pt_path))
 
+    # Distinguish the *subject* of the explanation (the model that ran the
+    # source execution — possibly INT8 ONNX) from the *renderer* of the
+    # heatmap (the FP32 PT baseline, the only variant that exposes a
+    # gradient graph). Conflating them was the documentation gap reported
+    # in EVIDENCE.md after the 2026-05-06 run.
+    gradcam_model_name = pt_path.stem
+    gradcam_model_hash = _sha256_file(pt_path)
+
     run_id = f"{execution_id}_interp_{uuid4().hex[:8]}"
     out_dir = Path(out_root) / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -497,8 +505,10 @@ async def run_interpretability_for_execution(
         "execution_id": str(execution_id),
         "created_at": datetime.utcnow().isoformat() + "Z",
         "commit_sha": get_commit_sha(),
-        "model_name": picked_model,
-        "model_hash": model_hash,
+        "execution_model_name": picked_model,
+        "execution_model_hash": model_hash,
+        "gradcam_model_name": gradcam_model_name,
+        "gradcam_model_hash": gradcam_model_hash,
         "n_samples": len(picked),
         "samples": [],
     }
@@ -568,6 +578,8 @@ async def run_interpretability_for_execution(
         "n_samples": len(picked),
         "gradcam_ok": n_cam_ok,
         "cfar_ok": n_cfar_ok,
-        "model_name": picked_model,
-        "model_hash": model_hash,
+        "execution_model_name": picked_model,
+        "execution_model_hash": model_hash,
+        "gradcam_model_name": gradcam_model_name,
+        "gradcam_model_hash": gradcam_model_hash,
     }
