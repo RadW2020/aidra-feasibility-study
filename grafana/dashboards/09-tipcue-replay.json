@@ -24,10 +24,10 @@
         "label": "Cue status",
         "description": "Filter cues by lifecycle status.",
         "query": "all,pending,executing,completed,failed",
-        "current": {"text": "all", "value": "all"},
+        "current": {"text": "pending", "value": "pending"},
         "options": [
-          {"text": "all",       "value": "all",       "selected": true},
-          {"text": "pending",   "value": "pending",   "selected": false},
+          {"text": "all",       "value": "all",       "selected": false},
+          {"text": "pending",   "value": "pending",   "selected": true},
           {"text": "executing", "value": "executing", "selected": false},
           {"text": "completed", "value": "completed", "selected": false},
           {"text": "failed",    "value": "failed",    "selected": false}

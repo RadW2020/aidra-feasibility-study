@@ -83,12 +83,29 @@ services:
       - GF_EXPLORE_ENABLED=false
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/dashboards/00-home.json
+      - GF_RENDERING_SERVER_URL=http://aidra-renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://aidra-grafana:3000/
       - DB_PASSWORD=${DB_PASSWORD}
     volumes:
       - aidra-grafana-data:/var/lib/grafana
     depends_on:
       - aidra-db
       - aidra-prom
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  aidra-renderer:
+    image: grafana/grafana-image-renderer:3.12.4
+    restart: unless-stopped
+    expose:
+      - "8081"
+    environment:
+      - ENABLE_METRICS=true
+      - BROWSER_TZ=Europe/Madrid
     deploy:
       resources:
         limits:
