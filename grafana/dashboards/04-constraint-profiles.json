@@ -81,7 +81,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND((AVG(inference_ms) / 60000.0)::numeric, 2) AS \"avg_latency_min\"\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -91,10 +91,12 @@
           "custom": {
             "fillOpacity": 80,
             "gradientMode": "none",
-            "lineWidth": 1
+            "lineWidth": 1,
+            "axisLabel": "minutes"
           },
           "color": { "mode": "palette-classic" },
-          "unit": "ms"
+          "unit": "short",
+          "decimals": 2
         },
         "overrides": []
       },

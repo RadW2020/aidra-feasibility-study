@@ -149,8 +149,9 @@
             "mode": "absolute",
             "steps": [
               { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.8 },
-              { "color": "green", "value": 0.95 }
+              { "color": "orange", "value": 0.5 },
+              { "color": "yellow", "value": 0.7 },
+              { "color": "green", "value": 0.9 }
             ]
           },
           "color": { "mode": "thresholds" },
@@ -437,7 +438,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    $__timeGroup(created_at, '1h') AS \"time\",\n    status,\n    COUNT(*) AS count\nFROM execution_log\nWHERE $__timeFilter(created_at)\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY 1, status\nORDER BY 1",
+          "rawSql": "SELECT\n    $__timeGroup(created_at, '1h') AS \"time\",\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::int AS success,\n    SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END)::int AS error\nFROM execution_log\nWHERE $__timeFilter(created_at)\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY 1\nORDER BY 1",
           "format": "time_series",
           "editorMode": "code"
         }
@@ -448,9 +449,11 @@
             "drawStyle": "bars",
             "fillOpacity": 80,
             "lineWidth": 1,
-            "stacking": { "mode": "normal" }
+            "stacking": { "mode": "normal" },
+            "axisLabel": "executions / hour"
           },
-          "color": { "mode": "palette-classic" }
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
         },
         "overrides": [
           {
