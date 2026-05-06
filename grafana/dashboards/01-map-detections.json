@@ -173,10 +173,13 @@
       },
       "options": {
         "view": {
-          "id": "coords",
-          "lat": 40,
-          "lon": 0,
-          "zoom": 3
+          "id": "fit",
+          "lat": 36.0,
+          "lon": -5.4,
+          "zoom": 9,
+          "padding": 30,
+          "allLayers": true,
+          "lastOnly": false
         },
         "basemap": {
           "type": "default",
@@ -190,13 +193,13 @@
               "showLegend": true,
               "style": {
                 "size": {
-                  "fixed": 8
+                  "fixed": 6
                 },
                 "color": {
                   "field": "confidence",
                   "fixed": "green"
                 },
-                "opacity": 0.8,
+                "opacity": 0.85,
                 "symbol": {
                   "fixed": "img/icons/marker/circle.svg"
                 }
