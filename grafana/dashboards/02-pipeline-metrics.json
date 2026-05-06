@@ -407,7 +407,7 @@
       "title": "Model Size (MB)",
       "description": "Disk size of each registered model variant. Sourced from models_registry (the equivalent Prometheus gauge aidra_model_size_mb is defined but never populated, so it always reads 0).",
       "type": "bargauge",
-      "gridPos": { "x": 4, "y": 14, "w": 8, "h": 4 },
+      "gridPos": { "x": 4, "y": 14, "w": 8, "h": 6 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
@@ -433,12 +433,14 @@
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^size_mb$/", "values": true },
         "orientation": "horizontal",
         "displayMode": "gradient",
         "showUnfilled": true,
         "minVizWidth": 0,
-        "minVizHeight": 10
+        "minVizHeight": 10,
+        "namePlacement": "auto",
+        "valueMode": "color"
       }
     },
     {
