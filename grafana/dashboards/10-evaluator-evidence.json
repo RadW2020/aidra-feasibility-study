@@ -17,9 +17,10 @@
         "type": "query",
         "label": "Model",
         "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-        "query": "SELECT DISTINCT model_name FROM execution_log ORDER BY 1",
+        "query": "SELECT DISTINCT model_name FROM execution_log ORDER BY model_name",
         "refresh": 1,
         "includeAll": true,
+        "allValue": "all",
         "multi": false,
         "current": {"text": "All", "value": "$__all"}
       },
@@ -28,9 +29,10 @@
         "type": "query",
         "label": "Profile",
         "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-        "query": "SELECT DISTINCT constraint_profile FROM execution_log ORDER BY CASE constraint_profile WHEN 'ground' THEN 1 WHEN 'sat-high' THEN 2 WHEN 'sat-mid' THEN 3 WHEN 'sat-low' THEN 4 WHEN 'sat-extreme' THEN 5 ELSE 9 END",
+        "query": "SELECT DISTINCT constraint_profile FROM execution_log ORDER BY constraint_profile",
         "refresh": 1,
         "includeAll": true,
+        "allValue": "all",
         "multi": false,
         "current": {"text": "All", "value": "$__all"}
       }
@@ -58,7 +60,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COUNT(*) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')",
+          "rawSql": "SELECT COUNT(*) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -76,7 +78,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND d.on_land = false\n  AND d.cluster_anomaly = false\n  AND ('$model' = '$__all' OR e.model_name = '$model')\n  AND ('$profile' = '$__all' OR e.constraint_profile = '$profile')",
+          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND d.on_land = false\n  AND d.cluster_anomaly = false\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -113,7 +115,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COALESCE(AVG(CASE WHEN status = 'success' THEN 0.0 ELSE 1.0 END), 0) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')",
+          "rawSql": "SELECT COALESCE(AVG(CASE WHEN status = 'success' THEN 0.0 ELSE 1.0 END), 0) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -131,7 +133,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS value\nFROM execution_log\nWHERE status = 'success'\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS value\nFROM execution_log\nWHERE status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -150,7 +152,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT\n  created_at AS run_at,\n  LEFT(id::text, 8) AS run_id,\n  model_name,\n  model_version,\n  constraint_profile AS profile,\n  LEFT(image_hash, 12) AS image_sha,\n  LEFT(model_hash, 12) AS model_sha,\n  LEFT(output_hash, 12) AS output_sha,\n  LEFT(input_params_hash, 12) AS settings_sha,\n  LEFT(commit_sha, 10) AS commit,\n  num_detections,\n  ROUND((inference_ms / 60000.0)::numeric, 1) AS inference_min\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')\nORDER BY created_at DESC\nLIMIT 10",
+          "rawSql": "SELECT\n  created_at AS run_at,\n  LEFT(id::text, 8) AS run_id,\n  model_name,\n  model_version,\n  constraint_profile AS profile,\n  LEFT(image_hash, 12) AS image_sha,\n  LEFT(model_hash, 12) AS model_sha,\n  LEFT(output_hash, 12) AS output_sha,\n  LEFT(input_params_hash, 12) AS settings_sha,\n  LEFT(commit_sha, 10) AS commit,\n  num_detections,\n  ROUND((inference_ms / 60000.0)::numeric, 1) AS inference_min\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')\nORDER BY created_at DESC\nLIMIT 10",
           "format": "table",
           "editorMode": "code"
         }
@@ -169,7 +171,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "WITH budgets(profile, cpu_budget, ram_budget_mb) AS (\n  VALUES\n    ('ground', 4.0, 24576),\n    ('sat-high', 2.0, 4096),\n    ('sat-mid', 1.0, 2048),\n    ('sat-low', 0.5, 1024),\n    ('sat-extreme', 0.25, 512)\n), runs AS (\n  SELECT constraint_profile AS profile,\n         COUNT(*) AS runs,\n         AVG(inference_ms) / 60000.0 AS avg_latency_min,\n         AVG(peak_ram_mb) AS avg_ram_mb,\n         AVG(cpu_usage_pct) AS avg_cpu_pct\n  FROM execution_log\n  WHERE $__timeFilter(created_at)\n    AND status = 'success'\n    AND ('$model' = '$__all' OR model_name = '$model')\n    AND ('$profile' = '$__all' OR constraint_profile = '$profile')\n  GROUP BY constraint_profile\n)\nSELECT b.profile,\n       b.ram_budget_mb,\n       ROUND(r.avg_ram_mb::numeric, 0) AS observed_ram_mb,\n       ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n       b.cpu_budget,\n       ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n       ROUND(r.avg_latency_min::numeric, 1) AS latency_min,\n       COALESCE(r.runs, 0) AS runs,\n       CASE\n         WHEN r.runs IS NULL THEN 'NO DATA'\n         WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n         WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget * 1.10) THEN 'WARN_CPU'\n         ELSE 'PASS'\n       END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile WHEN 'ground' THEN 1 WHEN 'sat-high' THEN 2 WHEN 'sat-mid' THEN 3 WHEN 'sat-low' THEN 4 WHEN 'sat-extreme' THEN 5 END",
+          "rawSql": "WITH budgets(profile, cpu_budget, ram_budget_mb) AS (\n  VALUES\n    ('ground', 4.0, 24576),\n    ('sat-high', 2.0, 4096),\n    ('sat-mid', 1.0, 2048),\n    ('sat-low', 0.5, 1024),\n    ('sat-extreme', 0.25, 512)\n), runs AS (\n  SELECT constraint_profile AS profile,\n         COUNT(*) AS runs,\n         AVG(inference_ms) / 60000.0 AS avg_latency_min,\n         AVG(peak_ram_mb) AS avg_ram_mb,\n         AVG(cpu_usage_pct) AS avg_cpu_pct\n  FROM execution_log\n  WHERE $__timeFilter(created_at)\n    AND status = 'success'\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n  GROUP BY constraint_profile\n)\nSELECT b.profile,\n       b.ram_budget_mb,\n       ROUND(r.avg_ram_mb::numeric, 0) AS observed_ram_mb,\n       ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n       b.cpu_budget,\n       ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n       ROUND(r.avg_latency_min::numeric, 1) AS latency_min,\n       COALESCE(r.runs, 0) AS runs,\n       CASE\n         WHEN r.runs IS NULL THEN 'NO DATA'\n         WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n         WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget * 1.10) THEN 'WARN_CPU'\n         ELSE 'PASS'\n       END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile WHEN 'ground' THEN 1 WHEN 'sat-high' THEN 2 WHEN 'sat-mid' THEN 3 WHEN 'sat-low' THEN 4 WHEN 'sat-extreme' THEN 5 END",
           "format": "table",
           "editorMode": "code"
         }
@@ -194,7 +196,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT\n  model_name,\n  model_version,\n  COALESCE(NULLIF(compression_technique, ''), 'none') AS compression,\n  ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n  COUNT(*) FILTER (WHERE status = 'success') AS success_runs,\n  ROUND((AVG(inference_ms) FILTER (WHERE status = 'success') / 60000.0)::numeric, 1) AS avg_latency_min,\n  ROUND(AVG(avg_confidence) FILTER (WHERE status = 'success')::numeric, 3) AS avg_confidence,\n  'NEEDS_DB_METRIC: mAP/Pd/FAR' AS accuracy_evidence\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')\nGROUP BY model_name, model_version, compression_technique\nORDER BY model_name, compression",
+          "rawSql": "SELECT\n  model_name,\n  model_version,\n  COALESCE(NULLIF(compression_technique, ''), 'none') AS compression,\n  ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n  COUNT(*) FILTER (WHERE status = 'success') AS success_runs,\n  ROUND((AVG(inference_ms) FILTER (WHERE status = 'success') / 60000.0)::numeric, 1) AS avg_latency_min,\n  ROUND(AVG(avg_confidence) FILTER (WHERE status = 'success')::numeric, 3) AS avg_confidence,\n  'NEEDS_DB_METRIC: mAP/Pd/FAR' AS accuracy_evidence\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY model_name, model_version, compression_technique\nORDER BY model_name, compression",
           "format": "table",
           "editorMode": "code"
         }
@@ -213,7 +215,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.on_land = false AND d.cluster_anomaly = false) AS vessels_at_sea,\n  COUNT(d.id) FILTER (WHERE d.on_land = true) AS on_land,\n  COUNT(d.id) FILTER (WHERE d.cluster_anomaly = true) AS cluster_anomaly,\n  ROUND(AVG(d.confidence)::numeric, 3) AS avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = '$__all' OR e.model_name = '$model')\n  AND ('$profile' = '$__all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
+          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.on_land = false AND d.cluster_anomaly = false) AS vessels_at_sea,\n  COUNT(d.id) FILTER (WHERE d.on_land = true) AS on_land,\n  COUNT(d.id) FILTER (WHERE d.cluster_anomaly = true) AS cluster_anomaly,\n  ROUND(AVG(d.confidence)::numeric, 3) AS avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
           "format": "table",
           "editorMode": "code"
         }
