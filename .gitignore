@@ -41,6 +41,7 @@ images/
 
 # Validation artefacts (regenerable via scripts/run_validation.py)
 reports/
+.tmp_dash_audit/
 
 # xView3-SAR raw labels + aria2 inputs (downloaded from iuu.xview.us
 # under research-only EULA — not redistributable, not in git).

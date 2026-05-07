@@ -135,8 +135,8 @@
     },
     {
       "id": 3,
-      "title": "Confidence vs Latency Trade-off",
-      "description": "Accuracy-speed trade-off per model variant. Lower latency + higher confidence = better. The table is sorted by latency so the fastest variant is always at the top — use this alongside the size panel to judge whether compression cost is worth the gain.",
+      "title": "Operational Proxy: Confidence vs Latency",
+      "description": "Runtime proxy only. Confidence is useful for operational drift, but compression acceptance still requires persisted validation metrics: mAP@0.5, Pd and FAR/km2.",
       "type": "table",
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "datasource": {
@@ -150,7 +150,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\nGROUP BY compression_technique\nORDER BY avg_latency_ms",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n    'NEEDS_DB_METRIC: mAP/Pd/FAR' AS validation_gap\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\nGROUP BY compression_technique\nORDER BY avg_latency_ms",
           "format": "table",
           "editorMode": "code"
         }
@@ -205,6 +205,14 @@
             "properties": [
               { "id": "unit", "value": "decmbytes" },
               { "id": "displayName", "value": "Size (MB)" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "validation_gap" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } },
+              { "id": "custom.width", "value": 210 }
             ]
           }
         ]
@@ -262,8 +270,8 @@
     },
     {
       "id": 5,
-      "title": "Benchmark Comparison Table",
-      "description": "Full comparison table: model × size × latency × RAM × accuracy.",
+      "title": "Benchmark Comparison Table (Runtime + Validation Gap)",
+      "description": "Full runtime comparison. The AIDRA invariant for compression also requires mAP@0.5, Pd and FAR/km2; those validation metrics are currently documented in model cards/offline artefacts and should be persisted for a fully self-contained dashboard.",
       "type": "table",
       "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
       "datasource": {
@@ -277,7 +285,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name,\n    model_version,\n    compression_technique,\n    model_size_mb,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    COUNT(*) AS num_runs\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version, compression_technique, model_size_mb\nORDER BY model_size_mb",
+          "rawSql": "SELECT\n    model_name,\n    model_version,\n    compression_technique,\n    model_size_mb,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    COUNT(*) AS num_runs,\n    'NEEDS_DB_METRIC: mAP/Pd/FAR' AS validation_gap\nFROM execution_log\nWHERE constraint_profile = '$profile'\n    AND status = 'success'\nGROUP BY model_name, model_version, compression_technique, model_size_mb\nORDER BY model_size_mb",
           "format": "table",
           "editorMode": "code"
         }
@@ -338,6 +346,14 @@
             "properties": [
               { "id": "custom.width", "value": 90 },
               { "id": "displayName", "value": "Ver." }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "validation_gap" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } },
+              { "id": "custom.width", "value": 220 }
             ]
           }
         ]

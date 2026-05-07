@@ -1,0 +1,225 @@
+{
+  "uid": "aidra-evaluator-evidence",
+  "title": "AIDRA - Evaluator Evidence",
+  "tags": ["aidra", "evaluator", "d3", "d4", "traceability", "satcen"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": false,
+  "graphTooltip": 0,
+  "time": {"from": "now-30d", "to": "now"},
+  "annotations": {"list": []},
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "label": "Model",
+        "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+        "query": "SELECT DISTINCT model_name FROM execution_log ORDER BY 1",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": false,
+        "current": {"text": "All", "value": "$__all"}
+      },
+      {
+        "name": "profile",
+        "type": "query",
+        "label": "Profile",
+        "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+        "query": "SELECT DISTINCT constraint_profile FROM execution_log ORDER BY CASE constraint_profile WHEN 'ground' THEN 1 WHEN 'sat-high' THEN 2 WHEN 'sat-mid' THEN 3 WHEN 'sat-low' THEN 4 WHEN 'sat-extreme' THEN 5 ELSE 9 END",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": false,
+        "current": {"text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 4},
+      "options": {
+        "mode": "html",
+        "content": "<div style='padding:18px 22px;border-radius:8px;background:#0f1924;border:1px solid #26384c;color:#dde6f3'>\n  <div style='font-size:11px;color:#84baef;letter-spacing:2px;font-weight:700;margin-bottom:8px'>EVALUATOR VIEW</div>\n  <div style='font-size:24px;font-weight:800;color:#f3f6fb;margin-bottom:6px'>Can the deployed AIDRA run produce auditable D3/D4 evidence?</div>\n  <div style='font-size:14px;line-height:1.55;max-width:1200px'>This dashboard is intentionally evidence-first: live operational status, GEOINT output, traceability completeness, hardware-profile budget fit, model registry and known validation gaps. Green means the deployed database contains the evidence; yellow/red means the evaluator should ask for the referenced offline artefact or a new run.</div>\n</div>"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Successful pipeline runs",
+      "gridPos": {"x": 0, "y": 4, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT COUNT(*) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "auto"}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Vessels at sea",
+      "gridPos": {"x": 4, "y": 4, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND d.on_land = false\n  AND d.cluster_anomaly = false\n  AND ('$model' = '$__all' OR e.model_name = '$model')\n  AND ('$profile' = '$__all' OR e.constraint_profile = '$profile')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "auto"}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Traceability completeness",
+      "description": "Share of runs with image_hash, model_hash, output_hash, input_params_hash and commit_sha populated.",
+      "gridPos": {"x": 8, "y": 4, "w": 5, "h": 4},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT COALESCE(AVG(CASE WHEN image_hash IS NOT NULL AND image_hash <> ''\n    AND model_hash IS NOT NULL AND model_hash <> ''\n    AND output_hash IS NOT NULL AND output_hash <> ''\n    AND input_params_hash IS NOT NULL AND input_params_hash <> ''\n    AND commit_sha IS NOT NULL AND commit_sha <> ''\nTHEN 1.0 ELSE 0.0 END), 0) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.95}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "auto"}
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Recent error rate",
+      "gridPos": {"x": 13, "y": 4, "w": 4, "h": 4},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT COALESCE(AVG(CASE WHEN status = 'success' THEN 0.0 ELSE 1.0 END), 0) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.05}, {"color": "red", "value": 0.2}]}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "auto"}
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Latest successful run",
+      "gridPos": {"x": 17, "y": 4, "w": 7, "h": 4},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS value\nFROM execution_log\nWHERE status = 'success'\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "dateTimeAsIso", "color": {"mode": "fixed", "fixedColor": "blue"}}, "overrides": []},
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "auto"}
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "D3 traceability chain - most recent successful runs",
+      "description": "Every row should be enough to reproduce lineage: input image, model, output, settings and git commit.",
+      "gridPos": {"x": 0, "y": 8, "w": 24, "h": 7},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT\n  created_at AS run_at,\n  LEFT(id::text, 8) AS run_id,\n  model_name,\n  model_version,\n  constraint_profile AS profile,\n  LEFT(image_hash, 12) AS image_sha,\n  LEFT(model_hash, 12) AS model_sha,\n  LEFT(output_hash, 12) AS output_sha,\n  LEFT(input_params_hash, 12) AS settings_sha,\n  LEFT(commit_sha, 10) AS commit,\n  num_detections,\n  ROUND((inference_ms / 60000.0)::numeric, 1) AS inference_min\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')\nORDER BY created_at DESC\nLIMIT 10",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": []},
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false, "reducer": ["sum"], "countRows": false}}
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Hardware-profile budget audit",
+      "description": "This is stricter than run success: observed RAM is compared to the declared profile budget.",
+      "gridPos": {"x": 0, "y": 15, "w": 12, "h": 8},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "WITH budgets(profile, cpu_budget, ram_budget_mb) AS (\n  VALUES\n    ('ground', 4.0, 24576),\n    ('sat-high', 2.0, 4096),\n    ('sat-mid', 1.0, 2048),\n    ('sat-low', 0.5, 1024),\n    ('sat-extreme', 0.25, 512)\n), runs AS (\n  SELECT constraint_profile AS profile,\n         COUNT(*) AS runs,\n         AVG(inference_ms) / 60000.0 AS avg_latency_min,\n         AVG(peak_ram_mb) AS avg_ram_mb,\n         AVG(cpu_usage_pct) AS avg_cpu_pct\n  FROM execution_log\n  WHERE $__timeFilter(created_at)\n    AND status = 'success'\n    AND ('$model' = '$__all' OR model_name = '$model')\n    AND ('$profile' = '$__all' OR constraint_profile = '$profile')\n  GROUP BY constraint_profile\n)\nSELECT b.profile,\n       b.ram_budget_mb,\n       ROUND(r.avg_ram_mb::numeric, 0) AS observed_ram_mb,\n       ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n       b.cpu_budget,\n       ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n       ROUND(r.avg_latency_min::numeric, 1) AS latency_min,\n       COALESCE(r.runs, 0) AS runs,\n       CASE\n         WHEN r.runs IS NULL THEN 'NO DATA'\n         WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n         WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget * 1.10) THEN 'WARN_CPU'\n         ELSE 'PASS'\n       END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile WHEN 'ground' THEN 1 WHEN 'sat-high' THEN 2 WHEN 'sat-mid' THEN 3 WHEN 'sat-low' THEN 4 WHEN 'sat-extreme' THEN 5 END",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "budget_verdict"}, "properties": [{"id": "custom.cellOptions", "value": {"type": "color-text"}}, {"id": "mappings", "value": [{"options": {"PASS": {"color": "green", "index": 0}, "WARN_CPU": {"color": "yellow", "index": 1}, "FAIL_RAM": {"color": "red", "index": 2}, "NO DATA": {"color": "gray", "index": 3}}, "type": "value"}]}]},
+          {"matcher": {"id": "byName", "options": "ram_budget_ratio"}, "properties": [{"id": "custom.cellOptions", "value": {"type": "color-background"}}, {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.8}, {"color": "red", "value": 1}]}}]}
+        ]
+      },
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false, "reducer": ["sum"], "countRows": false}}
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Model and compression evidence gaps",
+      "description": "Execution data is live. Accuracy metrics mAP/Pd/FAR are currently documented in model cards/validation artefacts, not persisted in execution_log.",
+      "gridPos": {"x": 12, "y": 15, "w": 12, "h": 8},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT\n  model_name,\n  model_version,\n  COALESCE(NULLIF(compression_technique, ''), 'none') AS compression,\n  ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n  COUNT(*) FILTER (WHERE status = 'success') AS success_runs,\n  ROUND((AVG(inference_ms) FILTER (WHERE status = 'success') / 60000.0)::numeric, 1) AS avg_latency_min,\n  ROUND(AVG(avg_confidence) FILTER (WHERE status = 'success')::numeric, 3) AS avg_confidence,\n  'NEEDS_DB_METRIC: mAP/Pd/FAR' AS accuracy_evidence\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = '$__all' OR model_name = '$model')\n  AND ('$profile' = '$__all' OR constraint_profile = '$profile')\nGROUP BY model_name, model_version, compression_technique\nORDER BY model_name, compression",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": [{"matcher": {"id": "byName", "options": "accuracy_evidence"}, "properties": [{"id": "custom.cellOptions", "value": {"type": "color-text"}}, {"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]}]},
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false, "reducer": ["sum"], "countRows": false}}
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "GEOINT scene coverage and quality flags",
+      "description": "Separates actionable sea detections from raw CFAR/Yolo output, land hits and cluster anomalies.",
+      "gridPos": {"x": 0, "y": 23, "w": 24, "h": 7},
+      "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.on_land = false AND d.cluster_anomaly = false) AS vessels_at_sea,\n  COUNT(d.id) FILTER (WHERE d.on_land = true) AS on_land,\n  COUNT(d.id) FILTER (WHERE d.cluster_anomaly = true) AS cluster_anomaly,\n  ROUND(AVG(d.confidence)::numeric, 3) AS avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = '$__all' OR e.model_name = '$model')\n  AND ('$profile' = '$__all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": []},
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false, "reducer": ["sum"], "countRows": false}}
+    }
+  ]
+}
