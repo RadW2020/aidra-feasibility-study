@@ -170,7 +170,7 @@
       "title": "Downlink Time: Without vs With OBDP",
       "description": "Downlink time comparison by satellite/link profile: without OBDP (full image) vs with OBDP (results only).",
       "type": "barchart",
-      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -228,7 +228,7 @@
       "title": "Daily Capacity (images/day) by Downlink Profile",
       "description": "Daily image-processing capacity per downlink profile.",
       "type": "table",
-      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 6 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -255,6 +255,24 @@
           }
         },
         "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Link Speed (Mbps)" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Without OBDP (img/day)" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "With OBDP (img/day)" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
           {
             "matcher": { "id": "byName", "options": "Improvement Factor" },
             "properties": [
@@ -291,7 +309,7 @@
       "title": "Compression Ratio Over Time",
       "description": "Time series of the compression ratio per execution.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
