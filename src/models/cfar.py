@@ -125,7 +125,11 @@ class CFARDetector:
     # Public API
     # ------------------------------------------------------------------
 
-    def detect(self, image: NDArray[np.floating]) -> list[dict[str, Any]]:
+    def detect(
+        self,
+        image: NDArray[np.floating],
+        valid_mask: NDArray[np.bool_] | None = None,
+    ) -> list[dict[str, Any]]:
         """Run CFAR detection on a calibrated SAR image.
 
         Parameters
@@ -133,6 +137,12 @@ class CFARDetector:
         image:
             2-D array of calibrated backscatter values (sigma-0 or intensity).
             Should already be in linear power scale (not dB).
+        valid_mask:
+            Optional 2-D boolean array (same shape as ``image``).  Pixels where
+            the mask is False are excluded from CFAR detection — typically used
+            to mask out land before CFAR runs (CFAR assumes a Rayleigh
+            sea-clutter background and fires aggressively on bright land
+            features).  ``None`` means no masking.
 
         Returns
         -------
@@ -162,6 +172,17 @@ class CFARDetector:
         detection_mask[-border:, :] = False
         detection_mask[:, :border] = False
         detection_mask[:, -border:] = False
+
+        # Exclude masked pixels (e.g. land) — CFAR's Rayleigh sea-clutter
+        # assumption breaks on land and would otherwise produce ~90% false
+        # positives on Strait-of-Gibraltar-style mixed-coverage scenes.
+        if valid_mask is not None:
+            mask = np.asarray(valid_mask, dtype=bool)
+            if mask.shape != image.shape:
+                raise ValueError(
+                    f"valid_mask shape {mask.shape} does not match image {image.shape}"
+                )
+            detection_mask &= mask
 
         det_ys, det_xs = np.nonzero(detection_mask)
         method_str = "ca-cfar" if self.method == "ca" else "os-cfar"
@@ -196,6 +217,7 @@ class CFARDetector:
         min_cluster_size: int = 3,
         eps: float = 2.0,
         min_mean_snr: float = 0.0,
+        valid_mask: NDArray[np.bool_] | None = None,
     ) -> list[dict[str, Any]]:
         """Run CFAR followed by DBSCAN clustering of adjacent detected pixels.
 
@@ -211,6 +233,10 @@ class CFARDetector:
         eps:
             Maximum distance (in pixels) between two detected pixels to be
             considered neighbours by DBSCAN.
+        valid_mask:
+            Optional 2-D boolean array forwarded to :meth:`detect` — pixels
+            where the mask is False are excluded from CFAR (used to mask
+            land before detection).
 
         Returns
         -------
@@ -218,7 +244,7 @@ class CFARDetector:
         ``num_pixels``, ``mean_intensity``, ``max_intensity``,
         ``mean_snr``, and ``method``.
         """
-        pixel_detections = self.detect(image)
+        pixel_detections = self.detect(image, valid_mask=valid_mask)
 
         if not pixel_detections:
             logger.info("No pixel detections to cluster")

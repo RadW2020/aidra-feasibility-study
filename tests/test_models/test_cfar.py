@@ -211,3 +211,51 @@ class TestCFARMinSnr:
 
         assert len(strict) <= len(loose)
         assert len(strict) == 0
+
+
+class TestCFARValidMask:
+    """Tests for the valid_mask parameter (sea-only masking)."""
+
+    def test_valid_mask_excludes_pixels(self, sample_sar_tile):
+        """Pixels where the mask is False must NOT generate detections.
+
+        Build a mask that hides the entire upper half of the tile and
+        verify no detection lands in y < height/2.  Use a high pfa so
+        we get plenty of detections to actually have something to mask.
+        """
+        image, _ = sample_sar_tile
+        detector = CFARDetector(guard_size=8, training_size=20, pfa=1e-3)
+
+        height = image.shape[0]
+        mask = np.ones_like(image, dtype=bool)
+        mask[: height // 2, :] = False  # mask out the upper half
+
+        masked = detector.detect(image, valid_mask=mask)
+        unmasked = detector.detect(image, valid_mask=None)
+
+        # No detection should land in the masked region.
+        assert all(d["y"] >= height // 2 for d in masked)
+        # Masking can only remove detections, never add new ones.
+        assert len(masked) <= len(unmasked)
+
+    def test_valid_mask_propagates_through_clustering(self, sample_sar_tile):
+        """detect_with_clustering must forward the mask to detect()."""
+        image, _ = sample_sar_tile
+        detector = CFARDetector(guard_size=8, training_size=20, pfa=1e-3)
+
+        # Mask out everything → no clusters at all.
+        mask = np.zeros_like(image, dtype=bool)
+        clusters = detector.detect_with_clustering(
+            image, min_cluster_size=3, eps=2.0, valid_mask=mask
+        )
+        assert clusters == []
+
+    def test_valid_mask_shape_mismatch_raises(self, sample_sar_tile):
+        """A mask with the wrong shape must raise rather than silently
+        miscount."""
+        image, _ = sample_sar_tile
+        detector = CFARDetector(guard_size=8, training_size=20, pfa=1e-5)
+
+        wrong_mask = np.ones((image.shape[0] - 1, image.shape[1]), dtype=bool)
+        with pytest.raises(ValueError, match="valid_mask shape"):
+            detector.detect(image, valid_mask=wrong_mask)

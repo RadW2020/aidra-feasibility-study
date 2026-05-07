@@ -206,3 +206,96 @@ class TestEdgeFilterEndToEnd:
         assert len(result.detections) == 1
         kept_bbox = result.detections[0].bbox_pixel
         assert kept_bbox == [50, 50, 60, 60]
+
+
+# ====================================================================
+# Sea-mask helper tests (CFAR land-bias engineering fix)
+# ====================================================================
+
+
+class TestSeaMaskHelper:
+    """Tests for ``_build_sea_mask``: per-tile sea-only mask construction."""
+
+    def test_sea_mask_returns_none_without_geocoding(self):
+        """Tiles without lat/lon bounds must return None so CFAR runs
+        unmasked rather than crashing."""
+        from src.pipeline.detection import _build_sea_mask
+
+        empty_bounds = {
+            "lon_min": None,
+            "lon_max": None,
+            "lat_min": None,
+            "lat_max": None,
+        }
+        assert _build_sea_mask(empty_bounds, (640, 640)) is None
+
+    def test_sea_mask_open_ocean_is_all_sea(self):
+        """A tile far from any coastline must yield an all-True mask
+        (every pixel is over sea, CFAR may run on the whole tile)."""
+
+        from src.pipeline.detection import _build_sea_mask, _get_globe
+
+        if _get_globe() is None:
+            import pytest as _p
+            _p.skip("global-land-mask not installed in this environment")
+
+        # Middle of the North Atlantic: ~40°N, -40°W, comfortably away
+        # from the British Isles, the Azores and the US East Coast.
+        bounds = {
+            "lon_min": -40.05,
+            "lon_max": -40.00,
+            "lat_min": 40.00,
+            "lat_max": 40.05,
+        }
+        mask = _build_sea_mask(bounds, (64, 64))
+        assert mask is not None
+        assert mask.shape == (64, 64)
+        assert mask.all(), "mid-ocean tile must be all sea"
+
+    def test_sea_mask_continental_interior_is_all_land(self):
+        """A tile deep inside a continent must yield an all-False mask
+        (CFAR would otherwise fire on terrain features)."""
+
+        from src.pipeline.detection import _build_sea_mask, _get_globe
+
+        if _get_globe() is None:
+            import pytest as _p
+            _p.skip("global-land-mask not installed in this environment")
+
+        # Near Madrid, Spain — well inland.
+        bounds = {
+            "lon_min": -3.75,
+            "lon_max": -3.70,
+            "lat_min": 40.40,
+            "lat_max": 40.45,
+        }
+        mask = _build_sea_mask(bounds, (64, 64))
+        assert mask is not None
+        assert mask.shape == (64, 64)
+        assert not mask.any(), "continental-interior tile must be all land"
+
+    def test_sea_mask_coastline_is_mixed(self):
+        """A tile straddling a coastline must contain both sea and land,
+        and the sea fraction must be reasonable (>1% and <99%)."""
+
+        from src.pipeline.detection import _build_sea_mask, _get_globe
+
+        if _get_globe() is None:
+            import pytest as _p
+            _p.skip("global-land-mask not installed in this environment")
+
+        # Strait of Gibraltar — straddles the Spain/Morocco coastline
+        # and the actual strait water.
+        bounds = {
+            "lon_min": -5.50,
+            "lon_max": -5.20,
+            "lat_min": 35.85,
+            "lat_max": 36.10,
+        }
+        mask = _build_sea_mask(bounds, (128, 128))
+        assert mask is not None
+        sea_fraction = mask.mean()
+        assert 0.05 < sea_fraction < 0.95, (
+            f"Strait of Gibraltar tile should be mixed sea/land, "
+            f"got sea_fraction={sea_fraction:.2%}"
+        )

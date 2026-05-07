@@ -32,6 +32,81 @@ from src.models.cfar import CFARDetector
 logger = logging.getLogger(__name__)
 
 
+# Lazy-imported global-land-mask cache.  None means "not yet attempted",
+# False means "import attempted and failed", an object means "ready".
+_GLOBE_LAND: Any = None
+
+
+def _get_globe() -> Any:
+    """Return the global_land_mask globe object, or None if unavailable.
+
+    Caches the import so repeat calls in the per-tile loop are free.
+    """
+    global _GLOBE_LAND
+    if _GLOBE_LAND is None:
+        try:
+            from global_land_mask import globe  # type: ignore[import-not-found]
+            _GLOBE_LAND = globe
+        except ImportError:
+            _GLOBE_LAND = False
+    return _GLOBE_LAND if _GLOBE_LAND is not False else None
+
+
+def _build_sea_mask(
+    geo_bounds: dict[str, float | None],
+    tile_shape: tuple[int, int],
+    coarse: int = 32,
+) -> NDArray[np.bool_] | None:
+    """Build a sea-only mask for a SAR tile from its lat/lon bounds.
+
+    The mask is True where the pixel falls on sea/ocean and False on land.
+    CFAR can use this to skip land pixels entirely — CFAR's Rayleigh
+    sea-clutter assumption breaks on land and produces ~90% false
+    positives on mixed-coverage scenes (e.g. Strait of Gibraltar).
+
+    The lookup uses a coarse grid (default 32×32, ~200 m per cell on a
+    640-pixel tile) and nearest-neighbour upsamples to the full tile
+    resolution.  global-land-mask's underlying NOAA dataset is ~1.85 km
+    so finer sampling gives no real precision gain.
+
+    Returns None when global-land-mask is not available or when the tile
+    has no geocoding info — callers should treat None as "no masking,
+    let CFAR run on the whole tile".
+    """
+    globe = _get_globe()
+    if globe is None:
+        return None
+
+    lon_min = geo_bounds.get("lon_min")
+    lon_max = geo_bounds.get("lon_max")
+    lat_min = geo_bounds.get("lat_min")
+    lat_max = geo_bounds.get("lat_max")
+    if None in (lon_min, lon_max, lat_min, lat_max):
+        return None
+
+    rows, cols = tile_shape
+    # Coarse lat/lon grid.  Note: global_land_mask expects (lat, lon).
+    coarse_lats = np.linspace(lat_min, lat_max, coarse)
+    coarse_lons = np.linspace(lon_min, lon_max, coarse)
+    lat_grid, lon_grid = np.meshgrid(coarse_lats, coarse_lons, indexing="ij")
+    try:
+        coarse_sea = np.asarray(globe.is_ocean(lat_grid, lon_grid), dtype=bool)
+    except Exception:
+        return None
+
+    # Nearest-neighbour upsample to tile resolution.  Image arrays use
+    # row=0 at the TOP, but lat increases northwards — flip the lat axis
+    # so row 0 corresponds to lat_max.
+    coarse_sea = np.flipud(coarse_sea)
+    row_idx = np.clip(
+        (np.arange(rows) * coarse / rows).astype(np.int64), 0, coarse - 1
+    )
+    col_idx = np.clip(
+        (np.arange(cols) * coarse / cols).astype(np.int64), 0, coarse - 1
+    )
+    return coarse_sea[np.ix_(row_idx, col_idx)]
+
+
 # ====================================================================
 # Pydantic models
 # ====================================================================
@@ -157,10 +232,21 @@ class DetectionEngine:
         t_cfar_start = time.perf_counter()
         if cpu_throttle is not None:
             cpu_throttle.reset()
+        cfar_land_masked_tiles = 0
         if cfar is not None:
             for tile in tiles:
                 tile_data: NDArray = tile.get("data", tile.get("array"))
                 tile_idx: int = tile.get("tile_index", 0)
+                # Build a sea-only mask from the tile's geocoded bounds so
+                # CFAR's Rayleigh sea-clutter assumption holds — without
+                # this, ~90% of CFAR detections fall on land features
+                # (buildings, terrain) on mixed-coverage scenes.
+                sea_mask = _build_sea_mask(
+                    tile.get("geo_bounds", {}),
+                    tile_data.shape,
+                )
+                if sea_mask is not None:
+                    cfar_land_masked_tiles += 1
                 # Tighter clustering + SNR gate suppresses sea/edge clutter.
                 # min_mean_snr=2.0 → ≥3 dB above local background (vessels are
                 # typically 10–30 dB brighter than calm sea).
@@ -169,6 +255,7 @@ class DetectionEngine:
                     min_cluster_size=5,
                     eps=1.5,
                     min_mean_snr=2.0,
+                    valid_mask=sea_mask,
                 )
                 for d in cfar_dets:
                     d["tile_index"] = tile_idx
@@ -176,6 +263,13 @@ class DetectionEngine:
                 ram_peak = max(ram_peak, process.memory_info().rss / (1024 * 1024))
                 if cpu_throttle is not None:
                     cpu_throttle.tick()
+            if cfar_land_masked_tiles > 0:
+                logger.info(
+                    "CFAR land-mask applied to %d/%d tiles "
+                    "(remaining tiles had no geocoding)",
+                    cfar_land_masked_tiles,
+                    len(tiles),
+                )
         t_cfar_end = time.perf_counter()
 
         # --- Primary Detector pass (YOLO/Custom) ----------------------
