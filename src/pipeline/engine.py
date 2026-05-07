@@ -32,6 +32,7 @@ import builtins
 import contextlib
 import json
 import logging
+import math
 import shutil
 import time
 from datetime import UTC, datetime, timedelta
@@ -59,7 +60,6 @@ from src.observability.prometheus_metrics import (
 )
 from src.pipeline.detection import Detection, DetectionEngine, DetectionMetrics, DetectionResult
 from src.pipeline.ingestion import SEARCH_ZONES, CopernicusSearchResult, ImageIngester
-from src.pipeline.postprocessing import compute_detection_stats
 from src.pipeline.preprocessing import preprocess_full
 from src.profiles.manager import ProfileManager
 from src.tipcue.evaluator import TipEvaluator, TipResult
@@ -493,37 +493,10 @@ class PipelineEngine:
 
             inference_ms = detection_result.metrics.total_inference_ms
 
-            # ---- Step 9: Hash the result ----
-            output_hash = compute_result_hash(
-                [d.model_dump() for d in detection_result.detections]
-            )
-
-            # ---- Step 10: Compute stats and update execution record ----
+            # ---- Step 9: Compute runtime duration ----
             total_ms = (time.monotonic() - start_time) * 1000.0
 
-            det_stats = compute_detection_stats(
-                [d.model_dump() for d in detection_result.detections]
-            )
-
-            await self.recorder.update(
-                execution_id=execution_id,
-                num_detections=len(detection_result.detections),
-                avg_confidence=det_stats.get("avg_confidence"),
-                max_confidence=det_stats.get("max_confidence"),
-                min_confidence=det_stats.get("min_confidence"),
-                total_duration_ms=total_ms,
-                download_ms=download_ms,
-                preprocessing_ms=preprocessing_ms,
-                inference_ms=inference_ms,
-                peak_ram_mb=detection_result.metrics.peak_ram_mb,
-                cpu_usage_pct=detection_result.metrics.cpu_percent,
-                num_tiles=num_tiles,
-                output_hash=output_hash,
-                status="success",
-                notes=detection_result.notes,
-            )
-
-            # ---- Step 11: Flag anomalies + thumbnails + save to PostGIS ----
+            # ---- Step 10: Flag anomalies + thumbnails + save to PostGIS ----
             from src.pipeline.postprocessing import flag_cluster_anomaly
             from src.pipeline.thumbnails import generate_thumbnails
 
@@ -548,7 +521,46 @@ class PipelineEngine:
                     extra={"execution_id": str(execution_id), "error": str(exc)},
                 )
 
-            await self._save_detections(execution_id, detection_result.detections)
+            save_stats = await self._save_detections(
+                execution_id, detection_result.detections
+            )
+            output_hash = compute_result_hash(
+                [d.model_dump() for d in detection_result.detections]
+            )
+
+            persisted_detections = save_stats["saved"]
+            persisted_confidences = save_stats["confidences"]
+            if persisted_confidences:
+                det_stats = {
+                    "avg_confidence": sum(persisted_confidences)
+                    / len(persisted_confidences),
+                    "max_confidence": max(persisted_confidences),
+                    "min_confidence": min(persisted_confidences),
+                }
+            else:
+                det_stats = {
+                    "avg_confidence": None,
+                    "max_confidence": None,
+                    "min_confidence": None,
+                }
+
+            await self.recorder.update(
+                execution_id=execution_id,
+                num_detections=persisted_detections,
+                avg_confidence=det_stats.get("avg_confidence"),
+                max_confidence=det_stats.get("max_confidence"),
+                min_confidence=det_stats.get("min_confidence"),
+                total_duration_ms=total_ms,
+                download_ms=download_ms,
+                preprocessing_ms=preprocessing_ms,
+                inference_ms=inference_ms,
+                peak_ram_mb=detection_result.metrics.peak_ram_mb,
+                cpu_usage_pct=detection_result.metrics.cpu_percent,
+                num_tiles=num_tiles,
+                output_hash=output_hash,
+                status="success",
+                notes=detection_result.notes,
+            )
 
             # ---- Step 12: Evaluate Tip & Cue ----
             if self.tip_evaluator and self.config.tipcue_enabled:
@@ -581,7 +593,8 @@ class PipelineEngine:
                 extra={
                     "execution_id": str(execution_id),
                     "profile": request.profile,
-                    "num_detections": len(detection_result.detections),
+                    "num_detections": persisted_detections,
+                    "raw_detections": len(detection_result.detections),
                     "total_ms": round(total_ms, 1),
                 },
             )
@@ -591,7 +604,7 @@ class PipelineEngine:
                 status="success",
                 detections=detection_result.detections,
                 metrics=detection_result.metrics,
-                num_detections=len(detection_result.detections),
+                num_detections=persisted_detections,
                 output_hash=output_hash,
                 total_duration_ms=total_ms,
             )
@@ -749,18 +762,36 @@ class PipelineEngine:
                         sensor=request.sensor,
                     )
 
+                    total_ms = (time.monotonic() - start_time) * 1000.0
+
+                    from src.pipeline.postprocessing import flag_cluster_anomaly
+
+                    flag_cluster_anomaly(detection_result.detections)
+                    save_stats = await self._save_detections(
+                        execution_id, detection_result.detections
+                    )
                     output_hash = compute_result_hash(
                         [d.model_dump() for d in detection_result.detections]
                     )
-                    total_ms = (time.monotonic() - start_time) * 1000.0
-
-                    det_stats = compute_detection_stats(
-                        [d.model_dump() for d in detection_result.detections]
-                    )
+                    persisted_detections = save_stats["saved"]
+                    persisted_confidences = save_stats["confidences"]
+                    if persisted_confidences:
+                        det_stats = {
+                            "avg_confidence": sum(persisted_confidences)
+                            / len(persisted_confidences),
+                            "max_confidence": max(persisted_confidences),
+                            "min_confidence": min(persisted_confidences),
+                        }
+                    else:
+                        det_stats = {
+                            "avg_confidence": None,
+                            "max_confidence": None,
+                            "min_confidence": None,
+                        }
 
                     await self.recorder.update(
                         execution_id=execution_id,
-                        num_detections=len(detection_result.detections),
+                        num_detections=persisted_detections,
                         avg_confidence=det_stats.get("avg_confidence"),
                         max_confidence=det_stats.get("max_confidence"),
                         min_confidence=det_stats.get("min_confidence"),
@@ -773,10 +804,6 @@ class PipelineEngine:
                         output_hash=output_hash,
                         status="success",
                         notes=detection_result.notes,
-                    )
-
-                    await self._save_detections(
-                        execution_id, detection_result.detections
                     )
 
                     self._emit_metrics(
@@ -792,7 +819,7 @@ class PipelineEngine:
                         status="success",
                         detections=detection_result.detections,
                         metrics=detection_result.metrics,
-                        num_detections=len(detection_result.detections),
+                        num_detections=persisted_detections,
                         output_hash=output_hash,
                         total_duration_ms=total_ms,
                     )
@@ -1210,7 +1237,7 @@ class PipelineEngine:
         self,
         execution_id: UUID,
         detections: list[Detection],
-    ) -> None:
+    ) -> dict[str, Any]:
         """Persist detections to the PostGIS database.
 
         Each detection is inserted individually using the
@@ -1270,6 +1297,8 @@ class PipelineEngine:
         saved = 0
         skipped_no_geo = 0
         skipped_edge = 0
+        saved_confidences: list[float] = []
+        verdict_counts: dict[str, int] = {}
         for det in detections:
             try:
                 # 1. Basic Geolocation Check
@@ -1312,7 +1341,18 @@ class PipelineEngine:
                     except Exception:
                         on_land = False
                 cluster_anomaly = bool(getattr(det, "cluster_anomaly", False))
+                det.on_land = on_land
+                det.cluster_anomaly = cluster_anomaly
                 thumbnail_path = getattr(det, "thumbnail_path", None) or None
+                quality_verdict = self._detection_quality_verdict(
+                    det.source,
+                    on_land=on_land,
+                    cluster_anomaly=cluster_anomaly,
+                )
+                det.quality_verdict = quality_verdict
+                verdict_counts[quality_verdict] = (
+                    verdict_counts.get(quality_verdict, 0) + 1
+                )
 
                 await db.execute(
                     INSERT_DETECTION,
@@ -1324,8 +1364,8 @@ class PipelineEngine:
                     det.bbox_pixel,
                     det.confidence,
                     det.source,
-                    det.cfar_snr,
-                    det.yolo_score,
+                    self._finite_or_none(det.cfar_snr),
+                    self._finite_or_none(det.yolo_score),
                     det.class_name,
                     det.tile_index,
                     0,  # tile_row_offset
@@ -1333,8 +1373,10 @@ class PipelineEngine:
                     on_land,           # I-DET-2
                     cluster_anomaly,   # I-DET-3
                     thumbnail_path,    # wow #1
+                    quality_verdict,
                 )
                 saved += 1
+                saved_confidences.append(float(det.confidence))
             except Exception as save_exc:
                 self._log.warning(
                     "Failed to save detection",
@@ -1362,8 +1404,43 @@ class PipelineEngine:
                 "total": len(detections),
                 "skipped_no_geo": skipped_no_geo,
                 "skipped_edge": skipped_edge,
+                "quality_verdicts": verdict_counts,
             },
         )
+        return {
+            "saved": saved,
+            "skipped_no_geo": skipped_no_geo,
+            "skipped_edge": skipped_edge,
+            "confidences": saved_confidences,
+            "quality_verdicts": verdict_counts,
+        }
+
+    @staticmethod
+    def _finite_or_none(value: float | None) -> float | None:
+        """Return a DB-safe finite float, dropping NaN/Infinity."""
+        if value is None:
+            return None
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric if math.isfinite(numeric) else None
+
+    @staticmethod
+    def _detection_quality_verdict(
+        source: str,
+        *,
+        on_land: bool,
+        cluster_anomaly: bool,
+    ) -> str:
+        """Classify a persisted detection without discarding raw evidence."""
+        if on_land:
+            return "land_artifact"
+        if cluster_anomaly:
+            return "cluster_artifact"
+        if source in {"yolo", "fused"}:
+            return "valid_sea_target"
+        return "candidate"
 
     async def _create_cue(self, tip: TipResult) -> None:
         """Create a cue entry in the tasking_queue from a tip.

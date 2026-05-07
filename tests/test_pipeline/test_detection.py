@@ -12,6 +12,7 @@ from src.pipeline.detection import (
     _dedup_geo_detections,
     _sar_linear_to_uint8_rgb,
 )
+from src.pipeline.engine import PipelineEngine
 
 
 class TestSarLinearToUint8Rgb:
@@ -68,6 +69,50 @@ class TestDedupGeoDetections:
 
     def test_empty_input(self):
         assert _dedup_geo_detections([]) == []
+
+
+class TestDetectionQualityHelpers:
+    """Quality labels keep raw detections but identify operational targets."""
+
+    def test_quality_verdict_prioritizes_artifacts(self):
+        assert (
+            PipelineEngine._detection_quality_verdict(
+                "fused", on_land=True, cluster_anomaly=False
+            )
+            == "land_artifact"
+        )
+        assert (
+            PipelineEngine._detection_quality_verdict(
+                "yolo", on_land=False, cluster_anomaly=True
+            )
+            == "cluster_artifact"
+        )
+
+    def test_quality_verdict_separates_targets_from_candidates(self):
+        assert (
+            PipelineEngine._detection_quality_verdict(
+                "fused", on_land=False, cluster_anomaly=False
+            )
+            == "valid_sea_target"
+        )
+        assert (
+            PipelineEngine._detection_quality_verdict(
+                "yolo", on_land=False, cluster_anomaly=False
+            )
+            == "valid_sea_target"
+        )
+        assert (
+            PipelineEngine._detection_quality_verdict(
+                "cfar", on_land=False, cluster_anomaly=False
+            )
+            == "candidate"
+        )
+
+    def test_non_finite_detector_scores_are_dropped_before_db(self):
+        assert PipelineEngine._finite_or_none(float("inf")) is None
+        assert PipelineEngine._finite_or_none(float("-inf")) is None
+        assert PipelineEngine._finite_or_none(float("nan")) is None
+        assert PipelineEngine._finite_or_none(12.5) == 12.5
 
 
 @pytest.mark.invariant

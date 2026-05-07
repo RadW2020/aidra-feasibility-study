@@ -78,7 +78,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND d.on_land = false\n  AND d.cluster_anomaly = false\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
+          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND d.quality_verdict = 'valid_sea_target'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -215,7 +215,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.on_land = false AND d.cluster_anomaly = false) AS vessels_at_sea,\n  COUNT(d.id) FILTER (WHERE d.on_land = true) AS on_land,\n  COUNT(d.id) FILTER (WHERE d.cluster_anomaly = true) AS cluster_anomaly,\n  ROUND(AVG(d.confidence)::numeric, 3) AS avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
+          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'valid_sea_target') AS valid_sea_targets,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'candidate') AS cfar_candidates,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'land_artifact') AS land_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'cluster_artifact') AS cluster_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'outside_footprint') AS outside_footprint,\n  ROUND(AVG(d.confidence) FILTER (WHERE d.quality_verdict = 'valid_sea_target')::numeric, 3) AS valid_avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
           "format": "table",
           "editorMode": "code"
         }

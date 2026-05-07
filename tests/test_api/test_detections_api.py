@@ -49,7 +49,8 @@ async def test_detections_list_pagination(client, mock_db):
 
     # Verify fetch was called with the right limit/offset.
     # Call signature: query, profile, model, min_conf, dt_from, dt_to,
-    # bbox, limit, offset, on_land, cluster_anomaly  →  args[7]/args[8].
+    # bbox, limit, offset, on_land, cluster_anomaly, quality_verdict
+    # -> args[7]/args[8].
     call_args = mock_db.fetch.call_args
     positional = call_args[0]
     assert positional[7] == 10   # limit
@@ -76,6 +77,7 @@ async def test_detections_list_with_results(client, mock_db, fake_detection_row)
     item = data["items"][0]
     assert item["confidence"] == 0.85
     assert item["source"] == "fused"
+    assert item["quality_verdict"] == "valid_sea_target"
     assert item["longitude"] == -5.5
     assert item["latitude"] == 36.0
 
@@ -144,6 +146,22 @@ async def test_detections_filter_by_min_confidence(client, mock_db):
     call_args = mock_db.fetch.call_args[0]
     # $3 position is min_confidence
     assert call_args[3] == 0.8
+
+
+async def test_detections_filter_by_quality_verdict(client, mock_db):
+    """quality_verdict query param is forwarded after anomaly flags."""
+    mock_db.fetch = AsyncMock(return_value=[])
+    mock_db.fetchval = AsyncMock(return_value=0)
+
+    resp = await client.get(
+        "/api/detections", params={"quality_verdict": "valid_sea_target"}
+    )
+    assert resp.status_code == 200
+
+    call_args = mock_db.fetch.call_args[0]
+    count_args = mock_db.fetchval.call_args[0]
+    assert call_args[11] == "valid_sea_target"
+    assert count_args[9] == "valid_sea_target"
 
 
 # ------------------------------------------------------------------

@@ -121,6 +121,7 @@ def fake_detection_row() -> FakeRecord:
         model_name="yolov8n-sar",
         model_version="v1.0",
         image_id="S1A_TEST_001",
+        quality_verdict="valid_sea_target",
     )
 
 

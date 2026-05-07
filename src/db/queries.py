@@ -75,7 +75,7 @@ INSERT_DETECTION = """
         center_geo, bbox_geo, bbox_pixel,
         confidence, source, cfar_snr, yolo_score, class_name,
         tile_index, tile_row_offset, tile_col_offset,
-        on_land, cluster_anomaly, thumbnail_path
+        on_land, cluster_anomaly, thumbnail_path, quality_verdict
     ) VALUES (
         $1, $2,
         ST_SetSRID(ST_MakePoint($3, $4), 4326),
@@ -83,7 +83,7 @@ INSERT_DETECTION = """
         $6,
         $7, $8, $9, $10, $11,
         $12, $13, $14,
-        $15, $16, $17
+        $15, $16, $17, $18
     )
 """
 
@@ -127,6 +127,7 @@ SELECT_DETECTIONS = """
       AND ($6::geometry IS NULL OR ST_Intersects(d.center_geo, $6))
       AND ($9::boolean IS NULL OR d.on_land = $9)
       AND ($10::boolean IS NULL OR d.cluster_anomaly = $10)
+      AND ($11::text IS NULL OR d.quality_verdict = $11)
     ORDER BY d.confidence DESC
     LIMIT $7 OFFSET $8
 """
@@ -144,6 +145,7 @@ SELECT_DETECTION_BY_ID = """
         d.class_name,
         d.on_land,
         d.cluster_anomaly,
+        d.quality_verdict,
         d.thumbnail_path,
         d.tile_index,
         d.tile_row_offset,

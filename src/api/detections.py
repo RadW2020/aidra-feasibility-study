@@ -43,6 +43,7 @@ COUNT_DETECTIONS = """
       AND ($6::geometry IS NULL OR ST_Intersects(d.center_geo, $6))
       AND ($7::boolean IS NULL OR d.on_land = $7)
       AND ($8::boolean IS NULL OR d.cluster_anomaly = $8)
+      AND ($9::text IS NULL OR d.quality_verdict = $9)
 """
 
 
@@ -110,6 +111,7 @@ def _row_to_detection(row) -> DetectionRecord:  # type: ignore[no-untyped-def]
         image_id=row.get("image_id"),
         on_land=bool(row.get("on_land", False)),
         cluster_anomaly=bool(row.get("cluster_anomaly", False)),
+        quality_verdict=row.get("quality_verdict", "candidate"),
         thumbnail_path=row.get("thumbnail_path"),
         has_thumbnail=row.get("thumbnail_path") is not None,
     )
@@ -154,6 +156,13 @@ async def list_detections(
         None,
         description="Filter by cluster_anomaly flag (I-DET-3). True keeps only anomalies, False excludes them.",
     ),
+    quality_verdict: str | None = Query(
+        None,
+        description=(
+            "Filter by quality verdict: valid_sea_target, candidate, "
+            "land_artifact, cluster_artifact, outside_footprint."
+        ),
+    ),
 ) -> PaginatedResponse:
     """List vessel detections with optional filters.
 
@@ -196,6 +205,7 @@ async def list_detections(
             offset,
             on_land,
             cluster_anomaly,
+            quality_verdict,
         )
 
         total = await db.fetchval(
@@ -208,6 +218,7 @@ async def list_detections(
             bbox_geojson,
             on_land,
             cluster_anomaly,
+            quality_verdict,
         )
 
         items = [_row_to_detection(r) for r in rows]
@@ -242,6 +253,13 @@ async def list_detections_geojson(
     cluster_anomaly: bool | None = Query(
         None, description="Filter cluster_anomaly flag (I-DET-3)"
     ),
+    quality_verdict: str | None = Query(
+        None,
+        description=(
+            "Filter by quality verdict: valid_sea_target, candidate, "
+            "land_artifact, cluster_artifact, outside_footprint."
+        ),
+    ),
     execution_id: UUID | None = Query(
         None,
         description="Restrict to detections from a single pipeline execution.",
@@ -270,7 +288,7 @@ async def list_detections_geojson(
         )
     rows = await db.fetch(
         select_q, profile, model, min_confidence, dt_from, dt_to,
-        bbox_geojson, limit, 0, on_land, cluster_anomaly,
+        bbox_geojson, limit, 0, on_land, cluster_anomaly, quality_verdict,
     )
     features_input: list[dict] = []
     for r in rows:
@@ -290,6 +308,9 @@ async def list_detections_geojson(
             "cfar_snr": r.get("cfar_snr"),
             "yolo_score": r.get("yolo_score"),
             "class_name": r.get("class_name", "vessel"),
+            "on_land": bool(r.get("on_land", False)),
+            "cluster_anomaly": bool(r.get("cluster_anomaly", False)),
+            "quality_verdict": r.get("quality_verdict", "candidate"),
             "model_name": r.get("model_name"),
             "constraint_profile": r.get("constraint_profile"),
             "image_id": str(r["image_id"]) if r.get("image_id") else None,

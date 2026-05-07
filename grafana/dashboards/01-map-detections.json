@@ -86,6 +86,23 @@
         "multi": false
       },
       {
+        "name": "quality",
+        "type": "custom",
+        "label": "Quality verdict",
+        "description": "Operational view defaults to valid sea targets. Use all/candidate/artifacts for audit.",
+        "query": "valid_sea_target,all,candidate,land_artifact,cluster_artifact,outside_footprint",
+        "current": {"text": "valid_sea_target", "value": "valid_sea_target"},
+        "options": [
+          {"text": "valid_sea_target", "value": "valid_sea_target", "selected": true},
+          {"text": "all", "value": "all", "selected": false},
+          {"text": "candidate", "value": "candidate", "selected": false},
+          {"text": "land_artifact", "value": "land_artifact", "selected": false},
+          {"text": "cluster_artifact", "value": "cluster_artifact", "selected": false},
+          {"text": "outside_footprint", "value": "outside_footprint", "selected": false}
+        ],
+        "multi": false
+      },
+      {
         "name": "api_base",
         "type": "constant",
         "label": "API base URL",
@@ -114,7 +131,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    COALESCE(to_char(MIN(e.image_sensing_date) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"First scene\",\n    COALESCE(to_char(MAX(e.image_sensing_date) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"Last scene\",\n    COUNT(DISTINCT e.id)::text AS \"Scenes\",\n    COALESCE(to_char(MAX(e.created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"Last processed\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)",
+          "rawSql": "SELECT\n    COALESCE(to_char(MIN(e.image_sensing_date) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"First scene\",\n    COALESCE(to_char(MAX(e.image_sensing_date) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"Last scene\",\n    COUNT(DISTINCT e.id)::text AS \"Scenes\",\n    COALESCE(to_char(MAX(e.created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI UTC'), '—') AS \"Last processed\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND ('$quality' = 'all' OR d.quality_verdict = '$quality')",
           "format": "table",
           "editorMode": "code"
         }
@@ -160,7 +177,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ST_X(d.center_geo) AS longitude,\n    ST_Y(d.center_geo) AS latitude,\n    d.confidence,\n    d.source,\n    e.model_name,\n    e.model_version,\n    e.constraint_profile,\n    e.image_sensing_date AS sensing_date,\n    e.image_title,\n    e.created_at AS \"time\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\nORDER BY e.created_at DESC",
+          "rawSql": "SELECT\n    ST_X(d.center_geo) AS longitude,\n    ST_Y(d.center_geo) AS latitude,\n    d.confidence,\n    d.source,\n    e.model_name,\n    e.model_version,\n    e.constraint_profile,\n    e.image_sensing_date AS sensing_date,\n    e.image_title,\n    e.created_at AS \"time\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND ('$quality' = 'all' OR d.quality_verdict = '$quality')\nORDER BY e.created_at DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -242,7 +259,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(*) AS total_detections\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)",
+          "rawSql": "SELECT COUNT(*) AS total_detections\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND ('$quality' = 'all' OR d.quality_verdict = '$quality')",
           "format": "table",
           "editorMode": "code"
         }
@@ -290,7 +307,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT ROUND(AVG(d.confidence)::numeric, 3) AS avg_confidence\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)",
+          "rawSql": "SELECT ROUND(AVG(d.confidence)::numeric, 3) AS avg_confidence\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND ('$quality' = 'all' OR d.quality_verdict = '$quality')",
           "format": "table",
           "editorMode": "code"
         }
@@ -340,7 +357,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT d.source, COUNT(*) AS count\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\nGROUP BY d.source",
+          "rawSql": "SELECT d.source, COUNT(*) AS count\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND ('$quality' = 'all' OR d.quality_verdict = '$quality')\nGROUP BY d.source",
           "format": "table",
           "editorMode": "code"
         }
@@ -429,7 +446,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    '${api_base}/api/detections/' || d.id || '/thumbnail.png' AS \"sar_crop\",\n    ROUND(d.confidence::numeric, 3)              AS \"confidence\",\n    d.source                                     AS \"source\",\n    ROUND(ST_Y(d.center_geo)::numeric, 4)        AS \"lat\",\n    ROUND(ST_X(d.center_geo)::numeric, 4)        AS \"lon\",\n    e.image_sensing_date                         AS \"sensed_at\",\n    e.model_name                                 AS \"model\",\n    e.constraint_profile                         AS \"profile\",\n    d.id::text                                   AS \"detection_id\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND d.thumbnail_path IS NOT NULL\nORDER BY d.confidence DESC\nLIMIT 60",
+          "rawSql": "SELECT\n    '${api_base}/api/detections/' || d.id || '/thumbnail.png' AS \"sar_crop\",\n    ROUND(d.confidence::numeric, 3)              AS \"confidence\",\n    d.source                                     AS \"source\",\n    ROUND(ST_Y(d.center_geo)::numeric, 4)        AS \"lat\",\n    ROUND(ST_X(d.center_geo)::numeric, 4)        AS \"lon\",\n    e.image_sensing_date                         AS \"sensed_at\",\n    e.model_name                                 AS \"model\",\n    e.constraint_profile                         AS \"profile\",\n    d.id::text                                   AS \"detection_id\"\nFROM detections d\nJOIN execution_log e ON d.execution_id = e.id\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$include_land' = 'true' OR d.on_land = false)\n    AND ('$include_anomaly' = 'true' OR d.cluster_anomaly = false)\n    AND ('$quality' = 'all' OR d.quality_verdict = '$quality')\n    AND d.thumbnail_path IS NOT NULL\nORDER BY d.confidence DESC\nLIMIT 60",
           "format": "table",
           "editorMode": "code"
         }

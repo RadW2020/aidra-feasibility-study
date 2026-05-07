@@ -94,6 +94,7 @@ class DetectionRecord(BaseModel):
     image_id: str | None = None
     on_land: bool = False
     cluster_anomaly: bool = False
+    quality_verdict: str = "candidate"
     thumbnail_path: str | None = None
     has_thumbnail: bool = False
 

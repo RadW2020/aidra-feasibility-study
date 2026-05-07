@@ -52,7 +52,7 @@ _CONFORMANCE_CLASSES = [
 # ---------------------------------------------------------------------------
 
 # We need model_hash, commit_sha, pipeline_version and incidence_angle from
-# execution_log, plus on_land/cluster_anomaly from detections. SELECT_DETECTIONS
+# execution_log, plus detection quality flags from detections. SELECT_DETECTIONS
 # already JOINs execution_log so we extend the projection with a small wrapper.
 _SELECT_OGC_ITEMS = """
     SELECT
@@ -71,6 +71,7 @@ _SELECT_OGC_ITEMS = """
         d.class_name,
         d.on_land,
         d.cluster_anomaly,
+        d.quality_verdict,
         e.image_id,
         e.image_title,
         e.image_sensing_date,
@@ -116,6 +117,7 @@ _SELECT_OGC_ITEM_BY_ID = """
         d.class_name,
         d.on_land,
         d.cluster_anomaly,
+        d.quality_verdict,
         e.image_id,
         e.image_title,
         e.image_sensing_date,
@@ -274,6 +276,7 @@ def _row_to_feature(row: Any, request: Request) -> dict[str, Any]:
         "incidence_angle": incidence_val,
         "on_land": bool(row.get("on_land", False)),
         "cluster_anomaly": bool(row.get("cluster_anomaly", False)),
+        "quality_verdict": row.get("quality_verdict", "candidate"),
         "bbox_pixel": bbox_pixel_list,
     }
 

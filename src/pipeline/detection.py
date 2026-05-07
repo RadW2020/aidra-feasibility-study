@@ -143,6 +143,10 @@ class Detection(BaseModel):
         default=False,
         description="True si forma parte de un cluster con densidad > umbral por km2 (I-DET-3). Probable artefacto.",
     )
+    quality_verdict: str = Field(
+        default="candidate",
+        description="Operational quality label used by APIs/dashboards; raw detections are still retained.",
+    )
     thumbnail_path: str | None = Field(
         default=None,
         description="Ruta absoluta al PNG con el crop SAR de la deteccion. Wow effect #1.",

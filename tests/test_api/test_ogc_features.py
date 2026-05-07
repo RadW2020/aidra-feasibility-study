@@ -49,6 +49,7 @@ def fake_ogc_row() -> FakeRecord:
         class_name="vessel",
         on_land=False,
         cluster_anomaly=False,
+        quality_verdict="valid_sea_target",
         image_id="S1A_TEST_001",
         image_title="S1A_IW_GRDH_TEST",
         image_sensing_date=datetime(2026, 4, 1, tzinfo=UTC),
@@ -165,6 +166,7 @@ async def test_ogc_items_returns_feature_collection(
         "incidence_angle",
         "on_land",
         "cluster_anomaly",
+        "quality_verdict",
         "execution_id",
         "confidence",
     ):

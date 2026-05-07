@@ -151,6 +151,7 @@ _SELECT_DETECTIONS_BUNDLE = """
         d.tile_index,
         d.on_land,
         d.cluster_anomaly,
+        d.quality_verdict,
         d.thumbnail_path,
         e.image_id,
         e.model_name,
@@ -411,6 +412,9 @@ class EvidenceBundler:
                         "on_land": bool(d.get("on_land", False)),
                         "cluster_anomaly": bool(
                             d.get("cluster_anomaly", False)
+                        ),
+                        "quality_verdict": d.get(
+                            "quality_verdict", "candidate"
                         ),
                         "detected_at": (
                             d["created_at"].isoformat()

@@ -144,6 +144,12 @@ class TipEvaluator:
             # Filter detections in this zone with sufficient confidence
             matching: list[dict[str, Any]] = []
             for det in detections:
+                if det.get("quality_verdict") not in (None, "valid_sea_target"):
+                    continue
+                if det.get("on_land") or det.get("cluster_anomaly"):
+                    continue
+                if det.get("source") not in (None, "yolo", "fused"):
+                    continue
                 lon = det.get("longitude", 0.0)
                 lat = det.get("latitude", 0.0)
                 conf = det.get("confidence", 0.0)
