@@ -119,7 +119,8 @@ SELECT_DETECTIONS = """
         e.image_id
     FROM detections d
     JOIN execution_log e ON d.execution_id = e.id
-    WHERE ($1::text IS NULL OR e.constraint_profile = $1)
+    WHERE e.status = 'success'
+      AND ($1::text IS NULL OR e.constraint_profile = $1)
       AND ($2::text IS NULL OR e.model_name = $2)
       AND ($3::real IS NULL OR d.confidence >= $3)
       AND ($4::timestamptz IS NULL OR d.created_at >= $4)
