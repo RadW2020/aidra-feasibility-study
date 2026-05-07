@@ -1,60 +1,91 @@
 {
   "uid": "aidra-home",
-  "title": "AIDRA — Overview",
-  "tags": ["aidra", "home"],
+  "title": "AIDRA \u2014 Overview",
+  "tags": [
+    "aidra",
+    "home"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
   "editable": false,
   "graphTooltip": 0,
   "refresh": "30s",
-  "time": { "from": "now-30d", "to": "now" },
-  "templating": { "list": [] },
-  "annotations": { "list": [] },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
   "panels": [
-
     {
       "id": 1,
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<div style='padding:24px 28px;border-radius:14px;background:linear-gradient(135deg,#0b1d3a 0%,#142d5c 45%,#1e4d8c 100%);color:#f3f6fb;border:1px solid rgba(255,255,255,0.08)'>\n  <div style='display:flex;align-items:baseline;gap:18px;flex-wrap:wrap'>\n    <h1 style='margin:0;font-size:38px;font-weight:800;letter-spacing:1px'>AIDRA</h1>\n    <span style='font-size:15px;color:#9ec1ff;font-weight:500'>Artificial Intelligence In-orbit Data pRocessing Assessment</span>\n  </div>\n  <p style='margin:10px 0 16px;font-size:16px;line-height:1.55;color:#dde6f3;max-width:980px'>\n    Feasibility study on running <b>AI-driven vessel detection</b> directly on-board a satellite, using <b>Sentinel-1 SAR</b> and the constraints of space-grade compute. End-to-end pipeline, hardware-profile benchmarking, full SHA256 traceability, AI Act conformance and autonomous re-tasking — all running on a single OCI ARM Free Tier instance in Frankfurt (EU).\n  </p>\n  <div style='display:flex;gap:8px;flex-wrap:wrap'>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(46,204,113,0.18);color:#7ee2a8;font-size:12px;font-weight:600;border:1px solid rgba(46,204,113,0.35)'>● LIVE</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(52,152,219,0.18);color:#84baef;font-size:12px;font-weight:600;border:1px solid rgba(52,152,219,0.35)'>EU-only data residency</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(155,89,182,0.18);color:#c293e0;font-size:12px;font-weight:600;border:1px solid rgba(155,89,182,0.35)'>Reg. (EU) 2024/1689 — AI Act</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(241,196,15,0.18);color:#f3d76b;font-size:12px;font-weight:600;border:1px solid rgba(241,196,15,0.35)'>SatCen tender SATCEN/2026/OP/0003</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(231,76,60,0.18);color:#f0907f;font-size:12px;font-weight:600;border:1px solid rgba(231,76,60,0.35)'>OCI ARM A1 · 4 OCPU · 24 GB</span>\n  </div>\n</div>"
+        "content": "<div style='padding:24px 28px;border-radius:14px;background:linear-gradient(135deg,#0b1d3a 0%,#142d5c 45%,#1e4d8c 100%);color:#f3f6fb;border:1px solid rgba(255,255,255,0.08)'>\n  <div style='display:flex;align-items:baseline;gap:18px;flex-wrap:wrap'>\n    <h1 style='margin:0;font-size:38px;font-weight:800;letter-spacing:1px'>AIDRA</h1>\n    <span style='font-size:15px;color:#9ec1ff;font-weight:500'>Artificial Intelligence In-orbit Data pRocessing Assessment</span>\n  </div>\n  <p style='margin:10px 0 16px;font-size:16px;line-height:1.55;color:#dde6f3;max-width:980px'>\n    Feasibility study on running <b>AI-driven vessel detection</b> directly on-board a satellite, using <b>Sentinel-1 SAR</b> and the constraints of space-grade compute. End-to-end pipeline, hardware-profile benchmarking, full SHA256 traceability, AI Act conformance and autonomous re-tasking \u2014 all running on a single OCI ARM Free Tier instance in Frankfurt (EU).\n  </p>\n  <div style='display:flex;gap:8px;flex-wrap:wrap'>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(46,204,113,0.18);color:#7ee2a8;font-size:12px;font-weight:600;border:1px solid rgba(46,204,113,0.35)'>\u25cf LIVE</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(52,152,219,0.18);color:#84baef;font-size:12px;font-weight:600;border:1px solid rgba(52,152,219,0.35)'>EU-only data residency</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(155,89,182,0.18);color:#c293e0;font-size:12px;font-weight:600;border:1px solid rgba(155,89,182,0.35)'>Reg. (EU) 2024/1689 \u2014 AI Act</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(241,196,15,0.18);color:#f3d76b;font-size:12px;font-weight:600;border:1px solid rgba(241,196,15,0.35)'>SatCen tender SATCEN/2026/OP/0003</span>\n    <span style='padding:5px 11px;border-radius:999px;background:rgba(231,76,60,0.18);color:#f0907f;font-size:12px;font-weight:600;border:1px solid rgba(231,76,60,0.35)'>OCI ARM A1 \u00b7 4 OCPU \u00b7 24 GB</span>\n  </div>\n</div>"
       }
     },
-
     {
       "id": 2,
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:4px 2px'>\n  <div style='padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645'>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>WHAT</div>\n    <div style='font-size:14px;line-height:1.55;color:#dde6f3'>\n      A working proof-of-concept that runs <b>YOLOv8 + CFAR ensemble</b> on Sentinel-1 GRD scenes, geolocates each vessel, and persists every artifact with a SHA256 chain — under five hardware constraint profiles that simulate real on-orbit compute.\n    </div>\n  </div>\n  <div style='padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645'>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>WHY</div>\n    <div style='font-size:14px;line-height:1.55;color:#dde6f3'>\n      Earth-observation downlink is the choke point of maritime surveillance. Doing inference <b>before</b> the bits leave orbit cuts latency from hours to minutes and bandwidth by orders of magnitude — but only if the model still fits on space-grade silicon.\n    </div>\n  </div>\n  <div style='padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645'>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>HOW</div>\n    <div style='font-size:14px;line-height:1.55;color:#dde6f3'>\n      Quantization, pruning and knowledge distillation, evaluated as <b>{baseline, variant, profile}</b> triplets. Every run is reproducible from a pinned seed, an image hash, a model hash and an input-params hash — bundled into the D3 evidence package the tender expects.\n    </div>\n  </div>\n</div>"
+        "content": "<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:4px 2px'>\n  <div style='padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645'>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>WHAT</div>\n    <div style='font-size:14px;line-height:1.55;color:#dde6f3'>\n      A working proof-of-concept that runs <b>YOLOv8 + CFAR ensemble</b> on Sentinel-1 GRD scenes, geolocates each vessel, and persists every artifact with a SHA256 chain \u2014 under five hardware constraint profiles that simulate real on-orbit compute.\n    </div>\n  </div>\n  <div style='padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645'>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>WHY</div>\n    <div style='font-size:14px;line-height:1.55;color:#dde6f3'>\n      Earth-observation downlink is the choke point of maritime surveillance. Doing inference <b>before</b> the bits leave orbit cuts latency from hours to minutes and bandwidth by orders of magnitude \u2014 but only if the model still fits on space-grade silicon.\n    </div>\n  </div>\n  <div style='padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645'>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>HOW</div>\n    <div style='font-size:14px;line-height:1.55;color:#dde6f3'>\n      Quantization, pruning and knowledge distillation, evaluated as <b>{baseline, variant, profile}</b> triplets. Every run is reproducible from a pinned seed, an image hash, a model hash and an input-params hash \u2014 bundled into the D3 evidence package the tender expects.\n    </div>\n  </div>\n</div>"
       }
     },
-
     {
       "id": 10,
       "type": "stat",
       "title": "Pipeline executions",
       "description": "Total runs recorded in the execution_log.",
-      "gridPos": { "x": 0, "y": 12, "w": 6, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT COUNT(*)::int AS \"value\" FROM execution_log",
           "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#84baef" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#84baef"
+          },
           "unit": "none"
         }
       },
@@ -63,36 +94,127 @@
         "colorMode": "value",
         "textMode": "value",
         "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       }
     },
     {
       "id": 11,
       "type": "stat",
-      "title": "Vessel detections",
-      "description": "Detections persisted across every run.",
-      "gridPos": { "x": 6, "y": 12, "w": 6, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "title": "Vessels at sea",
+      "description": "Detections after the on_land and cluster_anomaly post-filters (operationally meaningful count). Raw detections \u2014 which include CFAR firings on land features \u2014 are roughly 9\u00d7 higher; the breakdown is shown in the note below the stats row.",
+      "gridPos": {
+        "x": 6,
+        "y": 12,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "SELECT COUNT(*)::int AS \"value\" FROM detections WHERE on_land = false AND cluster_anomaly = false",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#7ee2a8"
+          },
+          "unit": "none"
+        }
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Raw detections (incl. land)",
+      "description": "All persisted detections including CFAR firings on land features and detections inside abnormally dense clusters. The gap to 'Vessels at sea' is dominated by CFAR's known land bias \u2014 see breakdown below.",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 6,
+        "h": 3
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT COUNT(*)::int AS \"value\" FROM detections",
           "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#7ee2a8" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#9aa6b8"
+          },
           "unit": "none"
         }
       },
       "options": {
         "graphMode": "none",
         "colorMode": "value",
-        "textMode": "value",
+        "textMode": "value_and_name",
         "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "x": 6,
+        "y": 16,
+        "w": 18,
+        "h": 3
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style='padding:6px 10px;background:#1f2733;border-left:3px solid #f3d76b;border-radius:4px;font-size:12px;color:#cfd8e3;line-height:1.5'>\n  <strong style='color:#f3d76b'>About the gap between raw and filtered counts.</strong>\n  Sentinel-1 IW scenes over the Strait of Gibraltar cover ~50,000 km\u00b2, of which less than 5% is sea. CFAR is a statistical outlier detector that assumes a Rayleigh sea-clutter background; on land it fires on every bright building, terrain edge or vehicle. The <code>on_land</code> post-flag (NOAA 1.85 km coastline mask) drops ~88% of CFAR detections, leaving the operationally meaningful count under 'Vessels at sea'. YOLO is not affected \u2014 it is trained to discriminate vessels visually. Production deployment should mask land <em>before</em> CFAR runs to remove this overhead.\n</div>"
       }
     },
     {
@@ -100,19 +222,33 @@
       "type": "stat",
       "title": "Models registered",
       "description": "Distinct model artifacts with SHA256 fingerprint and a MODEL_CARD.",
-      "gridPos": { "x": 12, "y": 12, "w": 6, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT COUNT(*)::int AS \"value\" FROM models_registry",
           "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#c293e0" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#c293e0"
+          },
           "unit": "none"
         }
       },
@@ -121,7 +257,13 @@
         "colorMode": "value",
         "textMode": "value",
         "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       }
     },
     {
@@ -129,19 +271,33 @@
       "type": "stat",
       "title": "Last successful run",
       "description": "Time elapsed since the most recent end-to-end success.",
-      "gridPos": { "x": 18, "y": 12, "w": 6, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 18,
+        "y": 12,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS last_run_ms FROM execution_log WHERE status = 'success'",
           "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "#f3d76b" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#f3d76b"
+          },
           "unit": "dateTimeFromNow",
           "noValue": "Never"
         }
@@ -151,19 +307,29 @@
         "colorMode": "value",
         "textMode": "value",
         "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       }
     },
-
     {
       "id": 20,
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 2 },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 24,
+        "h": 2
+      },
       "options": {
         "mode": "html",
-        "content": "<div style='padding:8px 4px;border-bottom:1px solid #2b3645'>\n  <span style='font-size:11px;color:#7ea0c4;letter-spacing:3px;font-weight:700'>SECTION 1 / 3</span>\n  <h2 style='margin:2px 0 0;font-size:22px;color:#f3f6fb;font-weight:700'>Mission operations</h2>\n  <div style='font-size:13px;color:#9ec1ff;margin-top:2px'>What the operator sees · live SAR detections, pipeline health, autonomous re-tasking</div>\n</div>"
+        "content": "<div style='padding:8px 4px;border-bottom:1px solid #2b3645'>\n  <span style='font-size:11px;color:#7ea0c4;letter-spacing:3px;font-weight:700'>SECTION 1 / 3</span>\n  <h2 style='margin:2px 0 0;font-size:22px;color:#f3f6fb;font-weight:700'>Mission operations</h2>\n  <div style='font-size:13px;color:#9ec1ff;margin-top:2px'>What the operator sees \u00b7 live SAR detections, pipeline health, autonomous re-tasking</div>\n</div>"
       }
     },
     {
@@ -171,10 +337,15 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 18, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-map-detections' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>01 · DETECTION MAP</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Where the vessels are</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Geo-map of every detection, color-coded by confidence, with the SAR thumbnail of each contact. Filterable by profile, model, and on-land / cluster-anomaly flags.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-map-detections' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>01 \u00b7 DETECTION MAP</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Where the vessels are</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Geo-map of every detection, color-coded by confidence, with the SAR thumbnail of each contact. Filterable by profile, model, and on-land / cluster-anomaly flags.</div>\n  </div>\n</a>"
       }
     },
     {
@@ -182,10 +353,15 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 8, "y": 18, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 8,
+        "y": 21,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-pipeline-metrics' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>02 · PIPELINE METRICS</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Is the system healthy?</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Run rate, inference latency, peak RAM, CPU, error rate and structured logs. Sourced from Prometheus and Loki, scoped to the AIDRA service.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-pipeline-metrics' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>02 \u00b7 PIPELINE METRICS</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Is the system healthy?</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Run rate, inference latency, peak RAM, CPU, error rate and structured logs. Sourced from Prometheus and Loki, scoped to the AIDRA service.</div>\n  </div>\n</a>"
       }
     },
     {
@@ -193,22 +369,31 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 16, "y": 18, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 16,
+        "y": 21,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-tipcue-replay' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>09 · TIP &amp; CUE REPLAY</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>The satellite chasing its own findings</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Autonomous re-tasking: when AIDRA spots a low-confidence cluster, it queues a re-observation (T0 → Cue → T1) and you can replay the before / after with confidence uplift. SatCen tender extra.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-tipcue-replay' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>09 \u00b7 TIP &amp; CUE REPLAY</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>The satellite chasing its own findings</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Autonomous re-tasking: when AIDRA spots a low-confidence cluster, it queues a re-observation (T0 \u2192 Cue \u2192 T1) and you can replay the before / after with confidence uplift. SatCen tender extra.</div>\n  </div>\n</a>"
       }
     },
-
     {
       "id": 30,
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 2 },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 2
+      },
       "options": {
         "mode": "html",
-        "content": "<div style='padding:8px 4px;border-bottom:1px solid #2b3645'>\n  <span style='font-size:11px;color:#7ea0c4;letter-spacing:3px;font-weight:700'>SECTION 2 / 3</span>\n  <h2 style='margin:2px 0 0;font-size:22px;color:#f3f6fb;font-weight:700'>AI methodology &amp; compliance</h2>\n  <div style='font-size:13px;color:#9ec1ff;margin-top:2px'>How the models behave under pressure · how the chain of evidence holds up</div>\n</div>"
+        "content": "<div style='padding:8px 4px;border-bottom:1px solid #2b3645'>\n  <span style='font-size:11px;color:#7ea0c4;letter-spacing:3px;font-weight:700'>SECTION 2 / 3</span>\n  <h2 style='margin:2px 0 0;font-size:22px;color:#f3f6fb;font-weight:700'>AI methodology &amp; compliance</h2>\n  <div style='font-size:13px;color:#9ec1ff;margin-top:2px'>How the models behave under pressure \u00b7 how the chain of evidence holds up</div>\n</div>"
       }
     },
     {
@@ -216,10 +401,15 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 26, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-compression-bench' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#c293e0;letter-spacing:2px;font-weight:700'>03 · COMPRESSION BENCH</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Quantization, pruning, KD</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Every variant evaluated as a {baseline, variant, profile} triplet. Trade-offs in mAP, Pd / FAR, latency p50/p95, RAM and disk size — measured, not estimated.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-compression-bench' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#c293e0;letter-spacing:2px;font-weight:700'>03 \u00b7 COMPRESSION BENCH</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Quantization, pruning, KD</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Every variant evaluated as a {baseline, variant, profile} triplet. Trade-offs in mAP, Pd / FAR, latency p50/p95, RAM and disk size \u2014 measured, not estimated.</div>\n  </div>\n</a>"
       }
     },
     {
@@ -227,10 +417,15 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 8, "y": 26, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 8,
+        "y": 29,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-constraint-profiles' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#c293e0;letter-spacing:2px;font-weight:700'>04 · CONSTRAINT PROFILES</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Five hardware budgets, one model</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>From <i>ground</i> (4 OCPU / 24 GB) down to <i>sat-extreme</i> (0.25 OCPU / 512 MB). The same scene, the same model, four orders of magnitude of compute — and where the pipeline starts to break.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-constraint-profiles' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#c293e0;letter-spacing:2px;font-weight:700'>04 \u00b7 CONSTRAINT PROFILES</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Five hardware budgets, one model</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>From <i>ground</i> (4 OCPU / 24 GB) down to <i>sat-extreme</i> (0.25 OCPU / 512 MB). The same scene, the same model, four orders of magnitude of compute \u2014 and where the pipeline starts to break.</div>\n  </div>\n</a>"
       }
     },
     {
@@ -238,22 +433,31 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 16, "y": 26, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 16,
+        "y": 29,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-traceability' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#c293e0;letter-spacing:2px;font-weight:700'>05 · TRACEABILITY</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Provable lineage, every artifact</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Image hash → model hash → input-params hash → output hash, plus the git commit SHA — all persisted at run start, not just on success. The backbone of the D3 evidence bundle.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-traceability' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#c293e0;letter-spacing:2px;font-weight:700'>05 \u00b7 TRACEABILITY</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Provable lineage, every artifact</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Image hash \u2192 model hash \u2192 input-params hash \u2192 output hash, plus the git commit SHA \u2014 all persisted at run start, not just on success. The backbone of the D3 evidence bundle.</div>\n  </div>\n</a>"
       }
     },
-
     {
       "id": 40,
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 2 },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 2
+      },
       "options": {
         "mode": "html",
-        "content": "<div style='padding:8px 4px;border-bottom:1px solid #2b3645'>\n  <span style='font-size:11px;color:#7ea0c4;letter-spacing:3px;font-weight:700'>SECTION 3 / 3</span>\n  <h2 style='margin:2px 0 0;font-size:22px;color:#f3f6fb;font-weight:700'>Space hardware simulation</h2>\n  <div style='font-size:13px;color:#9ec1ff;margin-top:2px'>The story for the spacecraft systems engineer · downlink savings, latency, resilience</div>\n</div>"
+        "content": "<div style='padding:8px 4px;border-bottom:1px solid #2b3645'>\n  <span style='font-size:11px;color:#7ea0c4;letter-spacing:3px;font-weight:700'>SECTION 3 / 3</span>\n  <h2 style='margin:2px 0 0;font-size:22px;color:#f3f6fb;font-weight:700'>Space hardware simulation</h2>\n  <div style='font-size:13px;color:#9ec1ff;margin-top:2px'>The story for the spacecraft systems engineer \u00b7 downlink savings, latency, resilience</div>\n</div>"
       }
     },
     {
@@ -261,10 +465,15 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 34, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-obdp-value' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#f3d76b;letter-spacing:2px;font-weight:700'>06 · OBDP VALUE</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Why bother processing on-board</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Compression ratio, downlink bandwidth saved, daily acquisition capacity. Translates the abstract benefit of OBDP into euros and pass minutes.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-obdp-value' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#f3d76b;letter-spacing:2px;font-weight:700'>06 \u00b7 OBDP VALUE</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Why bother processing on-board</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Compression ratio, downlink bandwidth saved, daily acquisition capacity. Translates the abstract benefit of OBDP into euros and pass minutes.</div>\n  </div>\n</a>"
       }
     },
     {
@@ -272,10 +481,15 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 8, "y": 34, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 8,
+        "y": 37,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-orbital-latency' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#f3d76b;letter-spacing:2px;font-weight:700'>07 · ORBITAL LATENCY</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Sensor → operator, end to end</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Acquisition, processing, downlink, ground latency — with and without OBDP, broken down per profile. The one chart that justifies the whole project.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-orbital-latency' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#f3d76b;letter-spacing:2px;font-weight:700'>07 \u00b7 ORBITAL LATENCY</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Sensor \u2192 operator, end to end</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Acquisition, processing, downlink, ground latency \u2014 with and without OBDP, broken down per profile. The one chart that justifies the whole project.</div>\n  </div>\n</a>"
       }
     },
     {
@@ -283,22 +497,31 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 16, "y": 34, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 16,
+        "y": 37,
+        "w": 8,
+        "h": 6
+      },
       "options": {
         "mode": "html",
-        "content": "<a href='/d/aidra-orbital-resilience' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#f3d76b;letter-spacing:2px;font-weight:700'>08 · ORBITAL RESILIENCE</div>\n      <div style='font-size:13px;color:#84baef'>open →</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>What breaks first when space gets ugly</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Bit-flip injection, model drift detection, battery budget, autonomous mode decisions. The pipeline measured against the failure modes that actually happen in LEO.</div>\n  </div>\n</a>"
+        "content": "<a href='/d/aidra-orbital-resilience' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#f3d76b;letter-spacing:2px;font-weight:700'>08 \u00b7 ORBITAL RESILIENCE</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>What breaks first when space gets ugly</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Bit-flip injection, model drift detection, battery budget, autonomous mode decisions. The pipeline measured against the failure modes that actually happen in LEO.</div>\n  </div>\n</a>"
       }
     },
-
     {
       "id": 99,
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 5 },
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 24,
+        "h": 5
+      },
       "options": {
         "mode": "html",
-        "content": "<div style='padding:18px 22px;border-radius:12px;background:#0e1620;border:1px solid #2b3645;display:grid;grid-template-columns:2fr 1fr 1fr;gap:24px'>\n  <div>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>STACK</div>\n    <div style='font-size:13px;line-height:1.7;color:#dde6f3'>\n      Python 3.11 · FastAPI · PyTorch / Ultralytics YOLOv8 · ONNX Runtime ·\n      rasterio / GDAL · scikit-learn · APScheduler<br/>\n      PostgreSQL 16 + PostGIS 3.6 · Prometheus · Loki · Grafana 11 · Docker Compose · Coolify on OCI ARM A1\n    </div>\n  </div>\n  <div>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>DATA</div>\n    <div style='font-size:13px;line-height:1.7;color:#dde6f3'>\n      Sentinel-1 GRD via Copernicus Data Space (EU)<br/>\n      Reference datasets: xView3-SAR, HRSID, OpenSARShip<br/>\n      All storage and compute kept inside the EU\n    </div>\n  </div>\n  <div>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>BUILT BY</div>\n    <div style='font-size:13px;line-height:1.7;color:#dde6f3'>\n      Independent feasibility study<br/>\n      <a href='https://github.com/RadW2020/aidra-feasibility-study' style='color:#84baef;text-decoration:none' target='_blank'>github.com/RadW2020/aidra-feasibility-study →</a><br/>\n      <span style='color:#7ea0c4;font-size:12px'>MIT License · No personal data processed</span>\n    </div>\n  </div>\n</div>"
+        "content": "<div style='padding:18px 22px;border-radius:12px;background:#0e1620;border:1px solid #2b3645;display:grid;grid-template-columns:2fr 1fr 1fr;gap:24px'>\n  <div>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>STACK</div>\n    <div style='font-size:13px;line-height:1.7;color:#dde6f3'>\n      Python 3.11 \u00b7 FastAPI \u00b7 PyTorch / Ultralytics YOLOv8 \u00b7 ONNX Runtime \u00b7\n      rasterio / GDAL \u00b7 scikit-learn \u00b7 APScheduler<br/>\n      PostgreSQL 16 + PostGIS 3.6 \u00b7 Prometheus \u00b7 Loki \u00b7 Grafana 11 \u00b7 Docker Compose \u00b7 Coolify on OCI ARM A1\n    </div>\n  </div>\n  <div>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>DATA</div>\n    <div style='font-size:13px;line-height:1.7;color:#dde6f3'>\n      Sentinel-1 GRD via Copernicus Data Space (EU)<br/>\n      Reference datasets: xView3-SAR, HRSID, OpenSARShip<br/>\n      All storage and compute kept inside the EU\n    </div>\n  </div>\n  <div>\n    <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:8px'>BUILT BY</div>\n    <div style='font-size:13px;line-height:1.7;color:#dde6f3'>\n      Independent feasibility study<br/>\n      <a href='https://github.com/RadW2020/aidra-feasibility-study' style='color:#84baef;text-decoration:none' target='_blank'>github.com/RadW2020/aidra-feasibility-study \u2192</a><br/>\n      <span style='color:#7ea0c4;font-size:12px'>MIT License \u00b7 No personal data processed</span>\n    </div>\n  </div>\n</div>"
       }
     }
   ]
