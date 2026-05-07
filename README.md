@@ -126,6 +126,7 @@ psql "$DATABASE_URL" -f src/db/migrations/006_resilience.sql
 psql "$DATABASE_URL" -f src/db/migrations/007_normalize_compression.sql
 psql "$DATABASE_URL" -f src/db/migrations/008_detection_quality.sql
 psql "$DATABASE_URL" -f src/db/migrations/009_sanitize_detection_scores.sql
+psql "$DATABASE_URL" -f src/db/migrations/010_reconcile_execution_detection_stats.sql
 ./scripts/download-models.sh                   # pulls vesseltracker-sar-yolov8.pt
 python -m src.main                             # FastAPI on :8000
 ```
