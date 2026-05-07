@@ -168,7 +168,7 @@ class PipelineTriggerRequest(BaseModel):
     """Solicitud para iniciar una ejecucion del pipeline."""
 
     zone: str = "gibraltar"
-    model: str = "yolov8n-sar"
+    model: str | None = None
     profile: str = "ground"
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None

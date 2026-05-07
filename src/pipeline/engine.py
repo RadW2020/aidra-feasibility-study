@@ -169,7 +169,7 @@ class PipelineRequest(BaseModel):
     """
 
     zone: str = "gibraltar"
-    model: str = "yolov8n-sar"
+    model: str | None = None
     profile: str = "ground"
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None
@@ -1100,6 +1100,15 @@ class PipelineEngine:
                 # Use the rotation-aware global affine directly; detection
                 # adds (col_offset, row_offset) to the bbox before applying.
                 formatted_tile["geo_transform"] = tuple(global_gt)
+                # Derive geo_bounds so the CFAR sea-mask helper can use it
+                # without re-implementing the affine projection.
+                from src.pipeline.preprocessing import _tile_geo_corners
+                formatted_tile["geo_bounds"] = _tile_geo_corners(
+                    tuple(global_gt),
+                    tile.get("col_offset", 0),
+                    tile.get("row_offset", 0),
+                    formatted_tile["data"].shape[0],
+                )
             elif "geo_bounds" in tile:
                 gb = tile["geo_bounds"]
                 if gb.get("lon_min") is not None and gb.get("lat_max") is not None:
