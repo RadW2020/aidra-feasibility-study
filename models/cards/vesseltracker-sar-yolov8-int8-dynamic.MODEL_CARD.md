@@ -39,21 +39,44 @@ dataset, sesgos geográficos y domain shift.
 
 # Métricas de rendimiento bajo constraint profiles
 
-Medidas sobre producción AIDRA (escena Sentinel-1 IW GRD Mediterráneo,
-3 runs por perfil). Comparativa INT8 vs FP32 baseline bajo perfil `ground`:
+Medidas sobre producción AIDRA (escenas Sentinel-1 IW GRD del
+Estrecho de Gibraltar y zona oeste mediterránea). Comparativa head-to-
+head bajo perfil `ground` para aislar el efecto de la cuantización del
+efecto de las restricciones de hardware:
 
-| Métrica | FP32 (baseline) | INT8 (esta variante) | Δ |
+| Métrica | FP32 (3 runs) | INT8 (5 runs) | Δ |
 |---|---:|---:|---:|
 | Tamaño en disco | 49.6 MB | **25.1 MB** | **−49.4% (1.97×)** |
-| Tiempo total escena | 52.7 min | **34.6 min** | **−34% (1.52×)** |
-| Peak RAM (RSS) | 3.50 GB | 5.01 GB | **+43%** (ver nota) |
-| Detecciones medias | 2 454 | 2 868 | +17% (ver nota) |
-| Avg confidence | 53.9% | 53.5% | −0.4 pp |
-| Runs evaluados | 3 | 3 | — |
+| Inference time / escena | 52.66 min | **34.01 min** | **−35.4% (1.55×)** |
+| Peak RAM (RSS) | 3.42 GB | 4.26 GB | **+24.6%** (ver nota) |
+| Detecciones medias | 2 454 | 5 562 | **+126.7%** (ver nota) |
+| Avg confidence | 53.9% | 53.6% | −0.3 pp |
+
+Datos extraídos de `execution_log` el 2026-05-07 (commit `42585be`),
+queryable directamente en el dashboard `aidra-compression-bench`.
+
+## Comportamiento bajo perfiles más restrictivos
+
+| Profile | FP32 latency | INT8 latency | INT8/FP32 |
+|---|---:|---:|---:|
+| ground       | 52.66 min | 34.01 min | 0.65× |
+| sat-high     | 52.20 min | 33.18 min | 0.64× |
+| sat-mid      | 52.26 min | 33.11 min | 0.63× |
+| sat-low      | 63.79 min | 66.35 min | **1.04×** |
+| sat-extreme  | 64.23 min | **148.53 min** | **2.31×** |
+
+**Hallazgo importante**: la ganancia de latencia del INT8 sólo se
+mantiene cuando el CPU no está throttled. Bajo `sat-extreme` (≈0.25
+OCPU equivalente), el INT8 es **2.3× MÁS LENTO** que el FP32. Causa
+probable: ONNX Runtime spawnea threads internos que el CPUThrottle
+penaliza más agresivamente que el lazo de inferencia mono-thread del
+FP32 PyTorch. **Para deployment en hardware muy restrictivo, INT8
+dinámico de ONNX puede ser contraproducente** — se recomienda repetir
+con static INT8 o con un runtime de inferencia mono-thread.
 
 ## Notas sobre resultados contraintuitivos
 
-**Peak RAM INT8 > FP32 (+43%)**: la cuantización dinámica reduce el
+**Peak RAM INT8 > FP32 (+24.6%)**: la cuantización dinámica reduce el
 tamaño de los pesos en disco pero ONNX Runtime crea buffers de
 dequantización en tiempo de ejecución (FP32 en memoria) para cada
 operador cuantificado. Adicionalmente, los perfiles sat-low/sat-extreme
@@ -62,26 +85,58 @@ en FP32 pero no en INT8 (buffers ONNX Runtime no gestionados por el GC
 de Python). Para hardware con restricción de RAM estricta, INT8 dinámico
 **no es la técnica adecuada** — considerar static INT8 o pruning.
 
-**Detecciones INT8 > FP32 (+17%)**: la cuantización introduce ruido
-de redondeo que en algunos tiles activa detecciones que el modelo FP32
-filtrada por estar bajo el umbral de confianza (0.25). Esto es un
-artefacto de la cuantización dinámica, no una mejora de recall. Pd real
-sobre ground truth etiquetado no ha sido medido para esta variante —
-**pendiente validación formal**.
+**Detecciones INT8 > FP32 (+126.7%) — material crítico para D4**: la
+INT8 produce más del doble de detecciones que el FP32 con un Δ de
+confianza media despreciable (−0.3 pp). Sin ground-truth etiquetado no
+podemos atribuir el incremento a:
+  (a) **mejor recall** (la cuantización dispara detecciones débiles
+       que el FP32 perdía), o
+  (b) **falsos positivos** (el ruido de cuantización activa detecciones
+       espurias bajo el threshold operativo de 0.25).
+
+Pruebas circunstanciales sugieren (b):
+  - El avg_confidence cae 0.3 pp pero el conteo se duplica → consistente
+    con detecciones extra de baja confianza (no de alta confianza
+    "rescatadas").
+  - El dashboard `aidra-map-detections` muestra que ~88% de las
+    detecciones CFAR caen sobre tierra (efecto independiente del modelo
+    pero que multiplica el coste del incremento INT8).
+  - La distribución espacial de las detecciones INT8 vs FP32 sobre las
+    mismas escenas muestra mayor densidad cerca de costas y bordes
+    de swath, zonas típicas de falsos positivos por speckle.
+
+**Hasta validación con xView3-SAR test split etiquetado, esta variante
+NO debe usarse como detector primario en producción**. La diferencia
+de +126% en conteo bruto puede invalidar las métricas de Pd/FAR del
+modelo base si se asume equivalencia funcional.
 
 ## Degradación declarada vs límite AI Act
 
 - ΔmAP@0.5 declarado: **no medido** (requiere split etiquetado xView3).
-  Proxy: Δavg_confidence = −0.4 pp (dentro del umbral operativo AIDRA ≤ 5 pp).
-- Límite tolerable (I-MOD-3): ΔmAP ≤ 5 pts. Proxy aceptado para esta
-  evaluación.
-- Estado: **CONDITIONALLY ACCEPTED** — pendiente validación mAP formal.
+- Δavg_confidence: −0.3 pp (dentro del umbral operativo AIDRA ≤ 5 pp).
+- Δconteo de detecciones: **+126.7%** sobre el mismo set de escenas →
+  proxy de confianza ya **no es suficiente** para asegurar equivalencia
+  operativa. La duplicación del conteo bruto puede reflejar incremento
+  de FAR (false alarm rate), no mejora de Pd.
+- Límite tolerable (I-MOD-3): ΔmAP ≤ 5 pts. **Sin validación mAP el
+  proxy de confianza es insuficiente**.
+- Estado: **CONDITIONALLY REJECTED** para uso operativo — sólo apto
+  para evaluación de viabilidad de compresión en el contexto del
+  pliego SatCen. El uso operativo requiere validación mAP/Pd/FAR
+  sobre split etiquetado.
 
 # Limitaciones
 
-- La cuantización dinámica reduce latencia de CPU bound pero **aumenta
-  pico de RAM** en esta implementación — desfavorable para hardware
+- **+126.7% en conteo de detecciones**: sin ground-truth etiquetado
+  no se puede distinguir si es mejora de recall o aumento de FAR.
+  Hipótesis predominante: aumento de FAR por ruido de cuantización
+  (ver Notas sobre resultados contraintuitivos).
+- **+24.6% en peak RAM**: la cuantización dinámica con ONNX Runtime
+  crea buffers FP32 de dequantización — desfavorable para hardware
   espacial con RAM < 4 GB.
+- **Latencia degradada bajo throttling agresivo**: bajo `sat-extreme`
+  (~0.25 OCPU) el INT8 es 2.3× más lento que el FP32. La ganancia de
+  speed sólo aplica cuando el CPU no está throttled.
 - Sin re-validación sobre ground truth etiquetado: las métricas
   reportadas son operacionales (producción AIDRA), no de validación formal.
 - Todas las limitaciones del modelo base aplican (domain shift, sesgo
