@@ -228,7 +228,7 @@
       "title": "Daily Capacity (images/day) by Downlink Profile",
       "description": "Daily image-processing capacity per downlink profile.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 6 },
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -309,7 +309,7 @@
       "title": "Compression Ratio Over Time",
       "description": "Time series of the compression ratio per execution.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 8 },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
