@@ -24,10 +24,10 @@
         "label": "Cue status",
         "description": "Filter cues by lifecycle status.",
         "query": "all,pending,executing,completed,failed",
-        "current": {"text": "pending", "value": "pending"},
+        "current": {"text": "all", "value": "all"},
         "options": [
-          {"text": "all",       "value": "all",       "selected": false},
-          {"text": "pending",   "value": "pending",   "selected": true},
+          {"text": "all",       "value": "all",       "selected": true},
+          {"text": "pending",   "value": "pending",   "selected": false},
           {"text": "executing", "value": "executing", "selected": false},
           {"text": "completed", "value": "completed", "selected": false},
           {"text": "failed",    "value": "failed",    "selected": false}
@@ -58,10 +58,10 @@
     },
     {
       "id": 1,
-      "title": "Cues queued",
-      "description": "Total cues created in the selected time range with the current status filter.",
+      "title": "Cues in window",
+      "description": "Total cues created in the selected time range, filtered by the Cue status variable above (default 'all' shows full history).",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 },
+      "gridPos": { "x": 0, "y": 4, "w": 5, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
@@ -92,11 +92,49 @@
       }
     },
     {
+      "id": 11,
+      "title": "Pending now (live backlog)",
+      "description": "Cues currently waiting to be executed — ignores the time range and the status filter so the operator always sees the live re-tasking backlog.",
+      "type": "stat",
+      "gridPos": { "x": 5, "y": 4, "w": 5, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "rawSql": "SELECT COUNT(*) AS pending\nFROM tasking_queue\nWHERE status = 'pending'\n  AND attempts < max_attempts\n  AND (cooldown_until IS NULL OR cooldown_until < NOW())",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
       "id": 2,
       "title": "Completed (re-observed)",
       "description": "Cues whose re-observation has been executed.",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 4, "w": 6, "h": 4 },
+      "gridPos": { "x": 10, "y": 4, "w": 4, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
@@ -126,7 +164,7 @@
       "title": "Avg triggering detections",
       "description": "Mean number of detections per cue (the cluster size that fired the re-tasking).",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 4, "w": 6, "h": 4 },
+      "gridPos": { "x": 14, "y": 4, "w": 5, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
@@ -155,7 +193,7 @@
       "title": "Top zones by cues",
       "description": "Which zones of interest fire the most re-tasking events.",
       "type": "piechart",
-      "gridPos": { "x": 18, "y": 4, "w": 6, "h": 4 },
+      "gridPos": { "x": 19, "y": 4, "w": 5, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
