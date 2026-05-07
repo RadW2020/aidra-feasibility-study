@@ -11,9 +11,9 @@
 UPDATE detections
 SET cfar_snr = NULL
 WHERE cfar_snr IS NOT NULL
-  AND NOT isfinite(cfar_snr::double precision);
+  AND cfar_snr::text IN ('Infinity', '-Infinity', 'NaN');
 
 UPDATE detections
 SET yolo_score = NULL
 WHERE yolo_score IS NOT NULL
-  AND NOT isfinite(yolo_score::double precision);
+  AND yolo_score::text IN ('Infinity', '-Infinity', 'NaN');
