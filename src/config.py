@@ -82,6 +82,26 @@ class Settings(BaseSettings):
     # local development and tests keep the unauthenticated behavior.
     aidra_api_token: str = ""
 
+    # ---- CORS ----
+    # Comma-separated list of origins allowed to call the API. Default
+    # covers local development; production must override via
+    # AIDRA_CORS_ORIGINS so dashboards/clients hosted on other domains
+    # can reach the service without modifying source.
+    aidra_cors_origins: str = (
+        "http://localhost,http://localhost:3000,http://localhost:8000"
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse the comma-separated CORS origins into a list, stripping
+        whitespace and dropping empty entries.
+        """
+        return [
+            o.strip()
+            for o in self.aidra_cors_origins.split(",")
+            if o.strip()
+        ]
+
     # ---- Limites ----
     max_image_size_gb: float = 2.0
     max_concurrent_pipelines: int = 1
