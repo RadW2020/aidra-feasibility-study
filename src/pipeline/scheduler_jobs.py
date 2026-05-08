@@ -23,10 +23,12 @@ Usage:
 
 from __future__ import annotations
 
+import functools
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import httpx
@@ -48,6 +50,52 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger("aidra.scheduler")
+
+
+# ====================================================================
+# Multi-replica safety: PostgreSQL advisory locks
+# ====================================================================
+
+
+def with_advisory_lock(
+    key: str,
+) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
+    """Decorator that wraps an async job behind a Postgres advisory lock.
+
+    APScheduler runs in-process, so when AIDRA scales to multiple
+    replicas every replica fires every job. ``max_instances=1`` prevents
+    concurrent runs *inside* a process but does nothing across replicas.
+    The advisory lock turns Postgres into the leader-election authority:
+    only the replica that wins the lock executes the job; the others
+    log and return.
+
+    Lock keys must be stable across deploys (we hash them to bigint in
+    ``_key_to_lock_id``). DB outages are swallowed so the scheduler never
+    poisons itself; the missed run will be retried at the next tick.
+    """
+
+    def decorator(fn: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+        @functools.wraps(fn)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                async with db.try_advisory_lock(key) as acquired:
+                    if not acquired:
+                        logger.info(
+                            "Job '%s' skipped: another replica holds the lock",
+                            key,
+                        )
+                        return None
+                    return await fn(*args, **kwargs)
+            except Exception:
+                logger.exception(
+                    "Advisory lock acquisition failed for job '%s'; running unguarded",
+                    key,
+                )
+                return await fn(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 # ====================================================================
@@ -87,10 +135,15 @@ def configure_scheduler(
         },
     )
 
+    # Every job (except the read-only health probe) is wrapped in a
+    # Postgres advisory lock so multi-replica deploys do not double-fire.
+    # The lock key is "aidra:job:<id>"; lost-lock means another replica
+    # already won this tick.
+
     # Job 1: Scheduled zone scan (requires engine)
     if engine is not None:
         scheduler.add_job(
-            scheduled_scan,
+            with_advisory_lock("aidra:job:scheduled_scan")(scheduled_scan),
             trigger=IntervalTrigger(hours=config.scheduler_interval_hours),
             kwargs={"engine": engine, "zone": config.default_zone},
             id="scheduled_scan",
@@ -104,7 +157,7 @@ def configure_scheduler(
     # Job 2: Tip & Cue processor (requires engine)
     if config.tipcue_enabled and engine is not None:
         scheduler.add_job(
-            process_pending_cues,
+            with_advisory_lock("aidra:job:cue_processor")(process_pending_cues),
             trigger=IntervalTrigger(minutes=15),
             kwargs={"engine": engine},
             id="cue_processor",
@@ -117,15 +170,16 @@ def configure_scheduler(
     # Job 3: Cleanup old images
     # Borra imagenes descargadas hace mas de 24h (ejecuta a las 3:00 AM)
     scheduler.add_job(
-        cleanup_old_images,
+        with_advisory_lock("aidra:job:cleanup_images")(cleanup_old_images),
         trigger=CronTrigger(hour=3, minute=0),
         kwargs={"images_dir": config.images_dir, "max_age_hours": 24},
         id="cleanup_images",
         name="Image cleanup",
     )
 
-    # Job 4: Health probe
-    # Verifica Copernicus + DB cada 30 minutos
+    # Job 4: Health probe — intentionally NOT lock-guarded. Each replica
+    # should independently report its own connectivity to Copernicus +
+    # DB; the probe is read-only and cheap.
     scheduler.add_job(
         health_probe,
         trigger=IntervalTrigger(minutes=30),
@@ -140,7 +194,7 @@ def configure_scheduler(
     # are auto-marked 'failed' so dashboards and reconciliation queries
     # don't treat half-finished work as in-flight.
     scheduler.add_job(
-        reap_orphan_executions,
+        with_advisory_lock("aidra:job:orphan_reaper")(reap_orphan_executions),
         trigger=IntervalTrigger(minutes=config.orphan_reaper_interval_minutes),
         kwargs={"threshold_minutes": config.orphan_reaper_threshold_minutes},
         id="orphan_reaper",
@@ -157,7 +211,7 @@ def configure_scheduler(
     # nightly por su coste (carga un .pt de 50 MB y corre varias
     # inferencias); sigue disponible bajo demanda.
     scheduler.add_job(
-        nightly_resilience_refresh,
+        with_advisory_lock("aidra:job:resilience_refresh")(nightly_resilience_refresh),
         trigger=CronTrigger(hour=2, minute=30),
         id="resilience_refresh",
         name="Nightly resilience refresh",

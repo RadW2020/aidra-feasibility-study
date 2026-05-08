@@ -7,13 +7,29 @@ y control sobre las queries SQL.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 import asyncpg
 
 logger = logging.getLogger(__name__)
+
+
+def _key_to_lock_id(key: str) -> int:
+    """Map a string key to a stable signed 64-bit integer.
+
+    PostgreSQL advisory locks take a bigint argument. Using the first 8
+    bytes of SHA-256 keeps collisions astronomically unlikely while
+    being deterministic across runs and Python versions (str.__hash__
+    is randomised, so we cannot rely on it).
+    """
+    return int.from_bytes(
+        hashlib.sha256(key.encode()).digest()[:8], "big", signed=True
+    )
 
 
 class Database:
@@ -148,6 +164,53 @@ class Database:
         except asyncpg.PostgresError as exc:
             logger.error("fetchrow() failed: %s | query=%s", exc, query[:200])
             raise
+
+    @asynccontextmanager
+    async def try_advisory_lock(self, key: str) -> AsyncIterator[bool]:
+        """Try to acquire a non-blocking session-scoped advisory lock.
+
+        Used by the scheduler so that a job cannot run on two replicas
+        simultaneously: the second caller sees ``acquired=False`` and
+        skips. The lock is held only while the context is active and is
+        released either explicitly on exit or by the connection going
+        away (asyncpg session-scoped advisory locks auto-release on
+        connection close).
+
+        Parameters
+        ----------
+        key:
+            Stable identifier of the protected resource (e.g.
+            ``"job:scheduled_scan"``). Mapped to a signed 64-bit
+            integer via SHA-256 so different keys collide only with
+            negligible probability.
+
+        Yields
+        ------
+        bool
+            ``True`` if the lock was acquired (caller proceeds);
+            ``False`` if another session already holds it.
+        """
+        lock_id = _key_to_lock_id(key)
+        pool = self._ensure_pool()
+        async with pool.acquire() as conn:
+            acquired = bool(
+                await conn.fetchval("SELECT pg_try_advisory_lock($1)", lock_id)
+            )
+            try:
+                yield acquired
+            finally:
+                if acquired:
+                    try:
+                        await conn.fetchval(
+                            "SELECT pg_advisory_unlock($1)", lock_id
+                        )
+                    except asyncpg.PostgresError as exc:
+                        # Best-effort: the connection may already be
+                        # tearing down; the session-scoped lock will be
+                        # released by Postgres anyway.
+                        logger.warning(
+                            "advisory_unlock failed (key=%s): %s", key, exc
+                        )
 
     async def fetchval(self, query: str, *args: Any) -> Any:
         """
