@@ -75,7 +75,13 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_ANONYMOUS_ENABLED:-true}
+      # Anonymous Viewer is OFF by default: Grafana Viewer can call
+      # /api/ds/query, which exposes ad-hoc SELECT against the
+      # PostgreSQL datasource (operational schema, error_messages,
+      # internal hashes). Evaluators get a named login; flip
+      # GRAFANA_ANONYMOUS_ENABLED=true only for short-lived demo
+      # deployments that do not contain real production data.
+      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_ANONYMOUS_ENABLED:-false}
       - GF_AUTH_ANONYMOUS_ORG_NAME=${GRAFANA_ANONYMOUS_ORG_NAME:-Main Org.}
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
