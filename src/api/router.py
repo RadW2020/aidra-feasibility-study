@@ -24,6 +24,7 @@ from src.api import (
     tasking,
     tipcue_replay,
     traceability,
+    validation,
 )
 
 router = APIRouter(prefix="/api")
@@ -41,3 +42,4 @@ router.include_router(stac.router)
 router.include_router(ogc_features.router)
 router.include_router(tipcue_replay.router)
 router.include_router(interpretability.router)
+router.include_router(validation.router)
