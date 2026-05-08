@@ -194,16 +194,29 @@ class DetectionEngine:
         self,
         fusion_iou_threshold: float = 0.3,
         edge_buffer_px: int = 0,
+        cfar_min_cluster_size: int = 5,
+        cfar_cluster_eps: float = 1.5,
+        cfar_min_mean_snr: float = 2.0,
     ) -> None:
         self.fusion_iou_threshold = fusion_iou_threshold
         # I-SAR-2: pixel buffer around scene edges. Detections whose
         # pixel center falls inside the buffer are dropped before
         # geolocation. ``0`` disables the filter (legacy behaviour).
         self.edge_buffer_px = max(0, int(edge_buffer_px))
+        # CFAR clustering thresholds — promoted from hardcoded literals
+        # to constructor args so input_params_hash captures the values
+        # actually used by a run (I-TRACE-4 / I-DET-4).
+        self.cfar_min_cluster_size = int(cfar_min_cluster_size)
+        self.cfar_cluster_eps = float(cfar_cluster_eps)
+        self.cfar_min_mean_snr = float(cfar_min_mean_snr)
         logger.info(
-            "DetectionEngine initialised (fusion IoU=%.2f, edge_buffer_px=%d)",
+            "DetectionEngine initialised (fusion IoU=%.2f, edge_buffer_px=%d, "
+            "cfar_min_cluster_size=%d, cfar_cluster_eps=%.2f, cfar_min_mean_snr=%.2f)",
             fusion_iou_threshold,
             self.edge_buffer_px,
+            self.cfar_min_cluster_size,
+            self.cfar_cluster_eps,
+            self.cfar_min_mean_snr,
         )
 
     def run(
@@ -252,13 +265,13 @@ class DetectionEngine:
                 if sea_mask is not None:
                     cfar_land_masked_tiles += 1
                 # Tighter clustering + SNR gate suppresses sea/edge clutter.
-                # min_mean_snr=2.0 → ≥3 dB above local background (vessels are
-                # typically 10–30 dB brighter than calm sea).
+                # Defaults: min_mean_snr=2.0 → ≥3 dB above local background
+                # (vessels are typically 10–30 dB brighter than calm sea).
                 cfar_dets = cfar.detect_with_clustering(
                     tile_data,
-                    min_cluster_size=5,
-                    eps=1.5,
-                    min_mean_snr=2.0,
+                    min_cluster_size=self.cfar_min_cluster_size,
+                    eps=self.cfar_cluster_eps,
+                    min_mean_snr=self.cfar_min_mean_snr,
                     valid_mask=sea_mask,
                 )
                 for d in cfar_dets:

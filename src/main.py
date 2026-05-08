@@ -120,7 +120,11 @@ def _build_engine(settings: Settings):
         from src.models.manager import ModelManager
 
         detector_engine = DetectionEngine(
+            fusion_iou_threshold=settings.fusion_iou_threshold,
             edge_buffer_px=settings.edge_buffer_px,
+            cfar_min_cluster_size=settings.cfar_min_cluster_size,
+            cfar_cluster_eps=settings.cfar_cluster_eps,
+            cfar_min_mean_snr=settings.cfar_min_mean_snr,
         )
         model_manager_instance = ModelManager(
             models_dir=Path(settings.models_dir),

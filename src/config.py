@@ -50,6 +50,28 @@ class Settings(BaseSettings):
     cfar_guard_size: int = 3
     cfar_training_size: int = 15
     cfar_pfa: float = 1e-5
+    # Per-tile DBSCAN clustering of raw CFAR pixel hits. Defaults match
+    # the previously hardcoded values in detection.py: a single bright
+    # speckle pixel is not a vessel (min_cluster_size=5), pixels within
+    # 1.5 px of each other belong to the same vessel (eps), and the
+    # cluster's mean SNR has to exceed 2.0 (~3 dB above clutter) to
+    # gate sea-state false positives.
+    cfar_min_cluster_size: int = 5
+    cfar_cluster_eps: float = 1.5
+    cfar_min_mean_snr: float = 2.0
+
+    # ---- Detection fusion / postprocessing ----
+    # IoU threshold above which a CFAR detection is matched to a YOLO
+    # detection in the same tile and fused into a single Detection
+    # with source='fused'. Below the threshold both survive separately.
+    fusion_iou_threshold: float = 0.3
+    # I-DET-3: cluster_anomaly heuristic. A detection is flagged if at
+    # least ``cluster_anomaly_min_neighbours`` other detections sit
+    # within ``cluster_anomaly_radius_deg`` (great-circle approximation
+    # over lon/lat). High densities are typically swath edge artefacts,
+    # speckle bursts or unfiltered land returns.
+    cluster_anomaly_radius_deg: float = 0.01
+    cluster_anomaly_min_neighbours: int = 8
 
     # ---- Tile defaults ----
     tile_size: int = 640

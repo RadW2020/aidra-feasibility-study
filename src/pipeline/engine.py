@@ -500,7 +500,11 @@ class PipelineEngine:
             from src.pipeline.postprocessing import flag_cluster_anomaly
             from src.pipeline.thumbnails import generate_thumbnails
 
-            flag_cluster_anomaly(detection_result.detections)
+            flag_cluster_anomaly(
+                detection_result.detections,
+                radius_deg=self.config.cluster_anomaly_radius_deg,
+                min_neighbours=self.config.cluster_anomaly_min_neighbours,
+            )
 
             # Wow effect #1: SAR crop per detection. Skipea detecciones
             # filtradas por anomaly/land si configurado, para no inflar
@@ -766,7 +770,11 @@ class PipelineEngine:
 
                     from src.pipeline.postprocessing import flag_cluster_anomaly
 
-                    flag_cluster_anomaly(detection_result.detections)
+                    flag_cluster_anomaly(
+                        detection_result.detections,
+                        radius_deg=self.config.cluster_anomaly_radius_deg,
+                        min_neighbours=self.config.cluster_anomaly_min_neighbours,
+                    )
                     save_stats = await self._save_detections(
                         execution_id, detection_result.detections
                     )
@@ -906,6 +914,13 @@ class PipelineEngine:
                 "cfar_guard_size": self.config.cfar_guard_size,
                 "cfar_training_size": self.config.cfar_training_size,
                 "cfar_pfa": self.config.cfar_pfa,
+                "cfar_min_cluster_size": self.config.cfar_min_cluster_size,
+                "cfar_cluster_eps": self.config.cfar_cluster_eps,
+                "cfar_min_mean_snr": self.config.cfar_min_mean_snr,
+                "fusion_iou_threshold": self.config.fusion_iou_threshold,
+                "edge_buffer_px": self.config.edge_buffer_px,
+                "cluster_anomaly_radius_deg": self.config.cluster_anomaly_radius_deg,
+                "cluster_anomaly_min_neighbours": self.config.cluster_anomaly_min_neighbours,
                 "pipeline_version": "1.0.0",
             },
             "model": {
