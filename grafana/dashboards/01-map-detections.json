@@ -104,12 +104,12 @@
       },
       {
         "name": "api_base",
-        "type": "constant",
+        "type": "textbox",
         "label": "API base URL",
-        "description": "Public base URL of the AIDRA API. Override per deployment via ?var-api_base=... in the dashboard URL.",
+        "description": "Base URL of the AIDRA REST API used for thumbnails and replay links. Edit in the toolbar (or override via ?var-api_base=...) when running this dashboard against a non-production deployment.",
         "query": "https://aidra-api.uliber.com",
         "current": {"text": "https://aidra-api.uliber.com", "value": "https://aidra-api.uliber.com"},
-        "hide": 2
+        "hide": 0
       }
     ]
   },
