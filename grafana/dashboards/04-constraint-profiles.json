@@ -81,7 +81,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND((AVG(inference_ms) / 60000.0)::numeric, 2) AS \"avg_latency_min\"\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND((AVG(inference_ms) / 60000.0)::numeric, 2) AS \"avg_latency_min\"\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -128,7 +128,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -173,7 +173,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -218,7 +218,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct\nFROM execution_log\nWHERE image_id = '$image_id'\n    AND model_name = '$model'\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -263,7 +263,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), runs AS (\n    SELECT\n        constraint_profile AS profile,\n        ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n        ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb,\n        ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct,\n        ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n        ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,\n        SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failures\n    FROM execution_log\n    WHERE image_id = '$image_id'\n        AND model_name = '$model'\n    GROUP BY constraint_profile\n)\nSELECT\n    b.profile,\n    b.ram_budget_mb,\n    r.avg_ram_mb,\n    ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n    b.cpu_budget_cores,\n    ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n    r.avg_latency_ms,\n    r.avg_detections,\n    r.avg_confidence,\n    COALESCE(r.successes, 0) AS successes,\n    COALESCE(r.failures, 0) AS failures,\n    CASE\n        WHEN r.profile IS NULL THEN 'NO DATA'\n        WHEN r.failures > 0 THEN 'FAIL_RUN'\n        WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n        WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget_cores * 1.10) THEN 'WARN_CPU'\n        WHEN r.avg_confidence < 0.5 THEN 'DEGRADED'\n        ELSE 'PASS'\n    END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), runs AS (\n    SELECT\n        constraint_profile AS profile,\n        ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n        ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb,\n        ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct,\n        ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n        ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,\n        SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failures\n    FROM execution_log\n    WHERE image_id = '$image_id'\n        AND model_name = '$model'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\n    GROUP BY constraint_profile\n)\nSELECT\n    b.profile,\n    b.ram_budget_mb,\n    r.avg_ram_mb,\n    ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n    b.cpu_budget_cores,\n    ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n    r.avg_latency_ms,\n    r.avg_detections,\n    r.avg_confidence,\n    COALESCE(r.successes, 0) AS successes,\n    COALESCE(r.failures, 0) AS failures,\n    CASE\n        WHEN r.profile IS NULL THEN 'NO DATA'\n        WHEN r.failures > 0 THEN 'FAIL_RUN'\n        WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n        WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget_cores * 1.10) THEN 'WARN_CPU'\n        WHEN r.avg_confidence < 0.5 THEN 'DEGRADED'\n        ELSE 'PASS'\n    END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
