@@ -106,6 +106,20 @@ def compute_array_hash(array: np.ndarray) -> str:
     return sha256.hexdigest()
 
 
+# Fields whose values are non-deterministic across re-runs of the same
+# input (per-detection UUIDs, paths that include the execution_id,
+# database-assigned timestamps). Stripped before hashing so two runs
+# with identical SAR inputs and identical model produce the same
+# output_hash, restoring the gate:reproducibility claim in CLAUDE.md §6.
+NON_CONTENT_FIELDS: frozenset[str] = frozenset({
+    "id",
+    "thumbnail_path",
+    "execution_id",
+    "created_at",
+    "updated_at",
+})
+
+
 def compute_result_hash(detections: list[dict[str, Any]]) -> str:
     """Calcula un hash determinista de una lista de detecciones.
 
@@ -118,6 +132,14 @@ def compute_result_hash(detections: list[dict[str, Any]]) -> str:
     Las detecciones se ordenan por una clave compuesta de
     ``(longitude, latitude, confidence)`` antes de serializar,
     de modo que el orden de la lista tambien es determinista.
+
+    Antes del hash se eliminan los campos en ``NON_CONTENT_FIELDS``
+    (UUIDs por-deteccion, ``thumbnail_path`` que incluye el
+    ``execution_id``, timestamps insertados por la BD). Sin esa
+    purga el ``output_hash`` cambiaba en cada re-ejecucion del mismo
+    input — la auditoria contra prod del 2026-05-08 detecto 12 hashes
+    distintos sobre 12 runs identicas, rompiendo el invariante
+    I-TRACE / gate:reproducibility.
 
     Parameters
     ----------
@@ -132,9 +154,14 @@ def compute_result_hash(detections: list[dict[str, Any]]) -> str:
     str
         Hex digest SHA256 de las detecciones serializadas.
     """
+    cleaned = [
+        {k: v for k, v in det.items() if k not in NON_CONTENT_FIELDS}
+        for det in detections
+    ]
+
     # Sort detections deterministically
     sorted_detections = sorted(
-        detections,
+        cleaned,
         key=_detection_sort_key,
     )
 

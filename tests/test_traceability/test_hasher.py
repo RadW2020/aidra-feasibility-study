@@ -195,6 +195,83 @@ class TestResultHash:
 
         assert compute_result_hash(dets_a) != compute_result_hash(dets_b)
 
+    def test_result_hash_ignores_per_run_uuid(self):
+        """Detection dicts with identical content but different per-run
+        UUIDs must produce the same hash.
+
+        This is the production bug audited on 2026-05-08: each Detection
+        carries a fresh ``id: uuid.UUID`` (default_factory=uuid.uuid4),
+        so ``model_dump()`` injected non-deterministic data into the
+        result. The hash now strips ``id`` and other per-execution
+        fields (see NON_CONTENT_FIELDS) before serializing.
+        """
+        common = {
+            "longitude": 1.234567,
+            "latitude": 2.345678,
+            "confidence": 0.91,
+            "source": "fused",
+            "bbox_pixel": [10.0, 20.0, 30.0, 40.0],
+            "tile_index": 5,
+        }
+        # Two "different" detections that should be the same content-wise.
+        det_a = {**common, "id": "11111111-1111-1111-1111-111111111111"}
+        det_b = {**common, "id": "22222222-2222-2222-2222-222222222222"}
+
+        assert compute_result_hash([det_a]) == compute_result_hash([det_b])
+
+    def test_result_hash_ignores_thumbnail_path(self):
+        """``thumbnail_path`` is derived from execution_id and therefore
+        non-deterministic across re-runs of the same input. It must not
+        affect the result hash."""
+        common = {
+            "longitude": 1.0,
+            "latitude": 2.0,
+            "confidence": 0.5,
+            "source": "cfar",
+        }
+        a = {**common, "thumbnail_path": "/data/thumbnails/exec-A/det-1.png"}
+        b = {**common, "thumbnail_path": "/data/thumbnails/exec-B/det-1.png"}
+        assert compute_result_hash([a]) == compute_result_hash([b])
+
+    def test_result_hash_uses_real_detection_model_dump(self):
+        """End-to-end: two Detection instances with identical content but
+        different auto-generated UUIDs and execution-scoped thumbnail
+        paths must hash identically when serialized via ``model_dump()``.
+
+        Pins the contract that the engine relies on (engine.py:527).
+        """
+        from src.pipeline.detection import Detection
+
+        det_a = Detection(
+            bbox_pixel=[10.0, 20.0, 30.0, 40.0],
+            bbox_geo=[1.0, 2.0, 1.5, 2.5],
+            center_geo=[1.25, 2.25],
+            confidence=0.9,
+            source="fused",
+            cfar_snr=12.0,
+            yolo_score=0.85,
+            tile_index=3,
+            thumbnail_path="/data/thumbnails/exec-A/det.png",
+        )
+        det_b = Detection(
+            bbox_pixel=[10.0, 20.0, 30.0, 40.0],
+            bbox_geo=[1.0, 2.0, 1.5, 2.5],
+            center_geo=[1.25, 2.25],
+            confidence=0.9,
+            source="fused",
+            cfar_snr=12.0,
+            yolo_score=0.85,
+            tile_index=3,
+            thumbnail_path="/data/thumbnails/exec-B/det.png",
+        )
+        # Sanity check: the underlying objects DO differ (UUID + path)
+        assert det_a.id != det_b.id
+        assert det_a.thumbnail_path != det_b.thumbnail_path
+
+        h_a = compute_result_hash([det_a.model_dump()])
+        h_b = compute_result_hash([det_b.model_dump()])
+        assert h_a == h_b
+
 
 # ====================================================================
 # Input params hashing (I-TRACE-4)
