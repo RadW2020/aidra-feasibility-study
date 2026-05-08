@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     max_concurrent_pipelines: int = 1
     pipeline_timeout_seconds: int = 600
 
+    # ---- Orphan reaper ----
+    # Executions stuck in pending/running longer than this threshold are
+    # auto-marked 'failed' by a scheduled job. Default 60 min comfortably
+    # exceeds pipeline_timeout_seconds (10 min) plus download/preprocess
+    # retries so a legitimately slow run is never killed by the reaper.
+    orphan_reaper_threshold_minutes: int = 60
+    orphan_reaper_interval_minutes: int = 15
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

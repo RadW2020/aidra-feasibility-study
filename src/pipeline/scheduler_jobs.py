@@ -134,7 +134,22 @@ def configure_scheduler(
         name="System health probe",
     )
 
-    # Job 5: Nightly resilience refresh (orbit-sim + drift)
+    # Job 5: Orphan execution reaper
+    # Executions stuck in pending/running past the configured threshold
+    # (container kill, OOM, network drop before recorder.update_status)
+    # are auto-marked 'failed' so dashboards and reconciliation queries
+    # don't treat half-finished work as in-flight.
+    scheduler.add_job(
+        reap_orphan_executions,
+        trigger=IntervalTrigger(minutes=config.orphan_reaper_interval_minutes),
+        kwargs={"threshold_minutes": config.orphan_reaper_threshold_minutes},
+        id="orphan_reaper",
+        name="Orphan execution reaper",
+        max_instances=1,
+        misfire_grace_time=600,
+    )
+
+    # Job 6: Nightly resilience refresh (orbit-sim + drift)
     # Mantiene poblado el dashboard 08 sin curl manual — la migración 006
     # introduce una historia que se vacía con el tiempo si nadie ejecuta
     # las simulaciones.  Ejecuta a las 02:30 AM para no chocar con la
@@ -426,6 +441,44 @@ async def health_probe(config: Settings) -> None:
         level,
         "Health probe: %s",
         ", ".join(f"{k}={v}" for k, v in results.items()),
+    )
+
+
+async def reap_orphan_executions(threshold_minutes: int) -> None:
+    """Mark executions stuck in pending/running past *threshold_minutes*
+    as ``failed`` and log each reaped row.
+
+    Independent of the pipeline engine: needs only the DB connection.
+    Errors are logged but never propagate so a transient DB blip never
+    poisons the scheduler.
+    """
+    from src.traceability.recorder import ExecutionRecorder
+
+    recorder = ExecutionRecorder(db)
+    try:
+        reaped = await recorder.reap_orphans(threshold_minutes)
+    except Exception:
+        logger.exception("Orphan reaper failed")
+        return
+
+    if not reaped:
+        logger.debug(
+            "Orphan reaper: nothing to reap (threshold=%d min)",
+            threshold_minutes,
+        )
+        return
+
+    for row in reaped:
+        logger.warning(
+            "Reaped orphan execution: id=%s, prior_status=%s, created_at=%s",
+            row.get("id"),
+            row.get("prior_status"),
+            row.get("created_at"),
+        )
+    logger.info(
+        "Orphan reaper: marked %d executions as failed (threshold=%d min)",
+        len(reaped),
+        threshold_minutes,
     )
 
 

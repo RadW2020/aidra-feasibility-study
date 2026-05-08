@@ -65,6 +65,33 @@ COUNT_EXECUTIONS = """
       AND ($3::text IS NULL OR status = $3)
 """
 
+# Reaper: marks executions stuck in pending/running past a threshold as
+# failed. The CTE captures the previous status before the UPDATE so the
+# annotation in error_message is accurate (PostgreSQL evaluates the SET
+# expression with pre-update column values, but the CTE form makes the
+# intent explicit and survives schema reorderings).
+REAP_ORPHAN_EXECUTIONS = """
+    WITH targets AS (
+        SELECT id, status AS prior_status, created_at
+        FROM execution_log
+        WHERE status IN ('pending', 'running')
+          AND created_at < NOW() - make_interval(mins => $1::int)
+    )
+    UPDATE execution_log e
+    SET status = 'failed',
+        error_message = NULLIF(
+            TRIM(BOTH ' | ' FROM
+                COALESCE(e.error_message, '') ||
+                CASE WHEN COALESCE(e.error_message, '') = '' THEN '' ELSE ' | ' END ||
+                'reaped: stuck in ' || t.prior_status || ' for >' || $1::int || ' minutes'
+            ),
+            ''
+        )
+    FROM targets t
+    WHERE e.id = t.id
+    RETURNING e.id, t.prior_status, t.created_at
+"""
+
 # ====================================================================
 # detections
 # ====================================================================

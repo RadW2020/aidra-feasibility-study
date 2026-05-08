@@ -33,6 +33,7 @@ from src.db.connection import Database
 from src.db.models import ExecutionRecord
 from src.db.queries import (
     INSERT_EXECUTION,
+    REAP_ORPHAN_EXECUTIONS,
     SELECT_EXECUTION_BY_ID,
     SELECT_EXECUTIONS,
 )
@@ -374,6 +375,26 @@ class ExecutionRecorder:
             product_type,
             pixel_spacing,
         )
+
+    async def reap_orphans(self, threshold_minutes: int) -> list[dict[str, Any]]:
+        """Mark executions stuck in pending/running past *threshold_minutes*
+        as ``failed`` and annotate ``error_message`` with the prior status.
+
+        Pipeline runs that crashed before the recorder could transition them
+        to ``success``/``error`` (container kill, OOM, network drop) leave
+        the row in ``pending`` or ``running`` indefinitely. The reaper job
+        cleans these up so dashboards and reconciliation queries do not
+        treat half-finished work as in-flight.
+
+        The threshold should comfortably exceed
+        ``settings.pipeline_timeout_seconds * (download retries)`` so a
+        legitimately slow run is not killed by the reaper.
+
+        Returns a list of ``{id, prior_status, created_at}`` dicts for the
+        affected rows, suitable for structured logging by the caller.
+        """
+        rows = await self._db.fetch(REAP_ORPHAN_EXECUTIONS, int(threshold_minutes))
+        return [dict(r) for r in rows]
 
     async def update_status(
         self,
