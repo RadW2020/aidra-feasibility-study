@@ -65,21 +65,31 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
 
 ## R6 — Reproducibilidad rota: `output_hash` no estable + `input_params_hash NULL`
 
-- **Severidad:** A · **Probabilidad:** A · **Estado:** abierto (reabierto 2026-05-08)
-- **Descripcion:** Auditoria contra prod (2026-05-08) detecta que `output_hash` difiere en TODAS las re-ejecuciones de la misma escena con mismo modelo y mismo perfil — 12 runs muestrados, 12 hashes distintos. Adicionalmente, `input_params_hash` es NULL en ~50% de los runs persistidos en `execution_log`. La cadena de hashes existe pero su valor no es comparable entre runs.
-- **Impacto:** El gate `gate:reproducibility` declarado en CLAUDE.md §6 ("mismo input → mismo output_hash") NO se cumple en produccion. El bundle D3 verifica presencia de hash, no reproducibilidad real. Para INT8 dinamico se observa ademas no determinismo en numero de detecciones (1127 vs 9490 sobre la misma escena, mismo modelo, mismo `params_hash`).
-- **Mitigacion (vigente, insuficiente):**
-  1. `commit_sha` capturado en `execution_log` al inicio del run (I-TRACE-4, ver migration 004). ✓
-  2. `input_params_hash` declarado en schema. ⚠️ no siempre poblado.
-  3. `MODEL_CARD.md` incluye SHA256 del peso. ✓
-  4. CI bloquea PRs que muevan pesos sin actualizar la ficha. ✓
-  5. `tests/test_traceability/test_pipeline_e2e_repro.py` valida la ruta sintetica; **no cubre el path real de produccion**.
-- **Acciones pendientes:**
-  1. Auditar `compute_result_hash()` y excluir campos timestamp/UUID/created_at del hash; ordenar detecciones por (lat, lon, bbox) con float-format fijo.
-  2. Backfill SQL de `input_params_hash` para runs antiguos NULL; assert NOT NULL en migracion futura.
-  3. Para INT8 dinamico: pin de seeds en torch quantize o migracion a INT8 estatico con calibracion.
-  4. Test E2E que ejecute el pipeline de prod 2 veces sobre input sintetico y exija mismo `output_hash`.
-- **Trigger:** verifier `--bundle` reporta hash mismatch (ya activo).
+- **Severidad:** A · **Probabilidad:** A · **Estado:** mitigado (2026-05-08, parte 2)
+- **Descripcion:** Auditoria contra prod (2026-05-08) detecto que `output_hash` difiere en TODAS las re-ejecuciones de la misma escena con mismo modelo y mismo perfil — 12 runs muestrados, 12 hashes distintos. Adicionalmente, `input_params_hash` y `commit_sha` aparecian NULL en runs disparados via `trigger-all-profiles`.
+- **Impacto:** El gate `gate:reproducibility` declarado en CLAUDE.md §6 ("mismo input → mismo output_hash") NO se cumplia en produccion. El bundle D3 verificaba presencia de hash, no reproducibilidad real.
+- **Mitigaciones aplicadas:**
+  1. **`compute_result_hash` purga campos no-de-contenido** antes de hashear (commit `8214b44`): id (UUID por-deteccion), thumbnail_path (incluye execution_id), timestamps. Cubierto por `tests/test_traceability/test_hasher.py::test_result_hash_*`.
+  2. **`input_params_hash` y `commit_sha` poblados en `run_all_profiles`** (commit pendiente): ambos kwargs ahora se calculan por iteracion de perfil (clonando el request con el profile correcto) y se pasan a `recorder.create_pending`.
+  3. `commit_sha` resuelto via `SOURCE_COMMIT` (Coolify) → `AIDRA_COMMIT_SHA` → `git rev-parse HEAD` (I-TRACE-4, migration 004). ✓
+  4. `MODEL_CARD.md` incluye SHA256 del peso. ✓
+  5. CI bloquea PRs que muevan pesos sin actualizar la ficha. ✓
+- **Evidencia de cierre (2026-05-08):** terna FP32 v2 sobre image_id `76f82d1c` produjo `output_hash=2c62f00608a38147…` IDENTICO en los 4 perfiles que completaron (`ground`, `sat-high`, `sat-mid`, `sat-low`), todos con `num_detections=1092`. Detalle en `EVIDENCE.md` seccion "Determinism evidence".
+- **Caveats residuales:**
+  1. Runs antiguos persistidos antes del fix conservan sus hashes "rotos" — no se backfill-ean (cada run es snapshot a su tiempo); el determinismo es propiedad de runs nuevos.
+  2. Para `INT8 dinamico` se observo no-determinismo en `num_detections` (1127 vs 9490 sobre la misma escena con mismos params); ver R12 mas abajo.
+- **Trigger de re-apertura:** verifier `--bundle` reporta hash mismatch sin justificacion, o nueva ronda de runs identicos produce > 1 `output_hash` distinct.
+
+## R12 — INT8 dinamico no determinista en numero de detecciones
+
+- **Severidad:** M · **Probabilidad:** A · **Estado:** abierto (registrado 2026-05-08)
+- **Descripcion:** El modelo `vesseltracker-sar-yolov8-int8-dynamic` produjo 1127 vs 9490 detecciones en runs con misma escena, mismo modelo, mismo perfil y mismo `input_params_hash`. La quantizacion INT8 dinamica de PyTorch reusa caches por-sample y depende del orden de threading, lo que introduce variabilidad sub-confidence-threshold que pasa el cut.
+- **Impacto:** Las comparaciones de compresion FP32-vs-INT8 son ruidosas; el panel `03-compression-bench` agrega muestras que no son reproducibles individualmente, aunque la media-poblacion siga siendo informativa. La ficha `MODEL_CARD.md` del INT8 debe reflejar este sesgo.
+- **Mitigacion:**
+  1. Documentar el sesgo en `models/cards/vesseltracker-sar-yolov8-int8-dynamic.MODEL_CARD.md`.
+  2. Considerar migrar a **INT8 estatico** con calibracion (post-quantization sin runtime caches), que devuelve outputs identicos run-a-run a costa de un step de calibracion offline.
+  3. Pinning de seeds + `torch.use_deterministic_algorithms(True)` en `models/yolo.py`.
+- **Trigger:** > 5% de variacion en `num_detections` sobre el mismo input dentro de una semana.
 
 ## R7 — Cobertura geografica sesgada
 

@@ -96,6 +96,52 @@ print(f'commit_sha:           {m[\"commit_sha\"]}')
 
 ---
 
+## Determinism evidence — `output_hash` profile-invariance (2026-05-08)
+
+External audit on 2026-05-08 found that `output_hash` differed across
+every re-run of the same scene (12 distinct hashes over 12 runs of the
+same image+model+profile). Root cause: `Detection.id =
+default_factory=uuid.uuid4` and the per-execution `thumbnail_path`
+were both serialised into the result hash. Fix in commit `8214b44`
+strips the non-content fields from the hash input.
+
+The first batch run after the fix targeted Sentinel-1 product
+`S1D_IW_GRDH_1SDV_20260505T062642_20260505T062707_002645_0046BC_4AA4`
+(image_id `76f82d1c-…`) using the FP32 baseline `vesseltracker-sar-yolov8`
+across the four profiles that completed (`sat-extreme` exceeded the
+60 min reaper threshold and was marked failed — see R9 in the risk
+register: "FP32 sat-extreme is operationally impractical for full
+GRDH scenes under the post-`321de6b` throttle").
+
+| profile | execution_id (8) | num_detections | output_hash |
+|---|---|---|---|
+| ground | `dc837f54` | 1092 | `2c62f00608a38147…` |
+| sat-high | `87ca8836` | 1092 | `2c62f00608a38147…` |
+| sat-mid | `19f944f9` | 1092 | `2c62f00608a38147…` |
+| sat-low | `258384b1` | 1092 | `2c62f00608a38147…` |
+
+Single shared hash across four constraint profiles closes both
+**I-MOD-3** (constraint profile must not alter outputs) and
+**gate:reproducibility** declared in CLAUDE.md §6 ("mismo input →
+mismo output_hash") on real Sentinel-1 GRDH data.
+
+**Verify** (requires admin Grafana credentials or DB access):
+```sql
+SELECT constraint_profile, num_detections,
+       LEFT(output_hash, 16) AS output_hash_prefix
+FROM execution_log
+WHERE id IN (
+    'dc837f54-b908-4e82-92b7-7958b62e3faf',  -- ground
+    '87ca8836-6d45-44ea-8782-1ebe35ef0cb9',  -- sat-high
+    '19f944f9-c244-4ee4-9963-e61cae3a4748',  -- sat-mid
+    '258384b1-90b9-47dd-97f5-e59b1d3b07b7'   -- sat-low
+)
+ORDER BY constraint_profile;
+-- expected: 4 rows, num_detections=1092 each, output_hash_prefix='2c62f00608a38147'
+```
+
+---
+
 ## Reproduction (for the auditor)
 
 The whole chain is reproducible from outside the server given an API

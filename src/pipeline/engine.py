@@ -733,6 +733,19 @@ class PipelineEngine:
                     # Load detector for this model
                     det = await self.model_manager.get_model(request.model)
                     det_info = det.get_model_info()
+
+                    # Capture the same provenance kwargs that engine.run uses,
+                    # so multi-profile rows are reproducible from their hash.
+                    # Without this both columns stayed NULL on every
+                    # trigger-all-profiles call (audited 2026-05-08).
+                    profile_request = request.model_copy(
+                        update={"profile": profile_name}
+                    )
+                    input_params_hash = compute_input_params_hash(
+                        self._build_input_params(profile_request, det_info)
+                    )
+                    commit_sha = get_commit_sha()
+
                     execution_id = await self.recorder.create_pending(
                         image_id=product.product_id,
                         image_hash=image_hash,
@@ -755,6 +768,8 @@ class PipelineEngine:
                         triggered_by=request.triggered_by,
                         execution_id=pre_id,
                         compression_technique=det_info.get("compression_technique", "none"),
+                        input_params_hash=input_params_hash,
+                        commit_sha=commit_sha,
                     )
                     await self.recorder.update_status(execution_id, "running")
 
