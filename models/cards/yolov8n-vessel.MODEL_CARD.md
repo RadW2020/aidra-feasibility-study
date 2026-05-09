@@ -1,7 +1,7 @@
 ---
 model_id: yolov8n-vessel
 version: unknown
-created_at: unknown
+created_at: 2026-04-26
 authors: ["unknown"]
 license: AGPL-3.0 (heredada de la arquitectura YOLOv8)
 ---
