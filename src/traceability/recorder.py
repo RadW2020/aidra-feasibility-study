@@ -78,7 +78,14 @@ UPDATE_EXECUTION_FIELDS = """
         num_tiles = COALESCE($14, num_tiles),
         output_hash = COALESCE($15, output_hash),
         status = COALESCE($16, status),
-        error_message = COALESCE($17, error_message),
+        -- Late successes must clear any reaper-stamped error_message
+        -- (otherwise a run reaped as failed but actually finishing OK
+        -- ends up with status='success' and a stale "reaped: stuck in..."
+        -- message, which is misleading in dashboards and audits).
+        error_message = CASE
+            WHEN $16 = 'success' THEN NULL
+            ELSE COALESCE($17, error_message)
+        END,
         notes = COALESCE($18, notes)
     WHERE id = $1
 """

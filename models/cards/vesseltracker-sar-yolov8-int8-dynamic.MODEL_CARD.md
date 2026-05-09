@@ -127,6 +127,21 @@ modelo base si se asume equivalencia funcional.
 
 # Limitaciones
 
+- **No-determinismo bit-wise marginal (I-TRACE marginal)**: la
+  cuantización dinámica recalcula escalas y zero-points de activaciones
+  en runtime, por lo que el orden de operaciones de punto flotante en
+  ONNX Runtime sobre x86/ARM puede diferir levemente entre ejecuciones
+  con input idéntico. Consecuencia: el `output_hash` (SHA256 del
+  resultado serializado) puede variar entre runs idénticos del mismo
+  modelo INT8. La trazabilidad I-TRACE-1/2 se mantiene a nivel de
+  *artefacto persistido* (cada run sigue produciendo un output con su
+  hash inmutable), pero la **reproducibilidad bit-wise input → hash no
+  está garantizada para esta variante**. Para validación cruzada en
+  evidencia D3, se acepta proximidad funcional (Δdetecciones ≤ ε,
+  IoU ≥ τ) como sustituto del hash exacto. La degradación es de
+  cuantización, no de seed mal fijada — fijar `seed=42` no la elimina.
+  Mitigación pendiente para post-MVP: explorar static INT8 con QDQ
+  fijo o "fuzzy hash" sobre serialización canónica de detecciones.
 - **+126.7% en conteo de detecciones**: sin ground-truth etiquetado
   no se puede distinguir si es mejora de recall o aumento de FAR.
   Hipótesis predominante: aumento de FAR por ruido de cuantización
