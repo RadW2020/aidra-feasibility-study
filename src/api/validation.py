@@ -34,12 +34,18 @@ class SyntheticValidationRequest(BaseModel):
     tile_size: int = Field(640, ge=128, le=2048)
     seed: int = Field(42, ge=0, le=2**31 - 1)
     iou_threshold: float = Field(0.3, ge=0.0, le=1.0)
+    match_mode: str = Field("center", pattern="^(iou|center)$")
+    center_tolerance_px: float = Field(20.0, ge=0.0, le=512.0)
     confidence_threshold: float = Field(0.0, ge=0.0, le=1.0)
     model: str | None = Field(
         default=None,
+        description=("Model name to validate. Defaults to settings.default_model when omitted."),
+    )
+    model_version: str | None = Field(
+        default=None,
         description=(
-            "Model name to validate. Defaults to settings.default_model "
-            "when omitted."
+            "Exact model version/variant. Defaults to "
+            "settings.default_model_version for the default model."
         ),
     )
 
@@ -66,16 +72,19 @@ async def run_synthetic(
         raise HTTPException(
             status_code=503,
             detail=(
-                "Pipeline engine not available — model files missing or "
-                "lifespan failed to start."
+                "Pipeline engine not available — model files missing or lifespan failed to start."
             ),
         )
 
     settings = Settings()
     model_name = request.model or settings.default_model
+    model_version = request.model_version
+    if model_name == settings.default_model and model_version is None:
+        model_version = settings.default_model_version
     try:
         detector = await engine.model_manager.get_model(
             name=model_name,
+            version=model_version,
             confidence_threshold=settings.confidence_threshold,
             iou_threshold=settings.iou_threshold,
         )
@@ -83,6 +92,10 @@ async def run_synthetic(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     info = detector.get_model_info()
+    try:
+        engine._validate_model_for_sensor(info, "s1")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     report = await run_synthetic_validation(
         yolo_detector=detector,
@@ -92,6 +105,8 @@ async def run_synthetic(
         tile_size=request.tile_size,
         seed=request.seed,
         iou_threshold=request.iou_threshold,
+        match_mode=request.match_mode,
+        center_tolerance_px=request.center_tolerance_px,
         confidence_threshold=request.confidence_threshold,
     )
 
@@ -124,9 +139,7 @@ async def list_runs(
 ) -> list[dict[str, Any]]:
     """List validation_runs rows ordered by created_at DESC."""
     if not 1 <= limit <= 500:
-        raise HTTPException(
-            status_code=400, detail="limit must be in [1, 500]"
-        )
+        raise HTTPException(status_code=400, detail="limit must be in [1, 500]")
     rows = await list_validation_runs(
         model_name=model_name,
         compression_technique=compression_technique,

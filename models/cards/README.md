@@ -7,7 +7,7 @@ registrado en `src/models/manager.py` debe tener una ficha aquí.
 | Model ID                       | Estado AI Act         | Riesgo       | Ficha                                                        |
 |--------------------------------|-----------------------|--------------|--------------------------------------------------------------|
 | `vesseltracker-sar-yolov8`     | apto, validado en xView3-SAR Med/Adriatic | limited risk | [vesseltracker-sar-yolov8.MODEL_CARD.md](./vesseltracker-sar-yolov8.MODEL_CARD.md) |
-| `yolov8n`                      | apto (modelo de base) | minimal risk | [yolov8n.MODEL_CARD.md](./yolov8n.MODEL_CARD.md)             |
+| `yolov8n`                      | referencia COCO — **no operativo para SAR** | minimal risk | [yolov8n.MODEL_CARD.md](./yolov8n.MODEL_CARD.md)             |
 | `yolov8n-vessel`               | **bloqueado** — procedencia | n/a       | [yolov8n-vessel.MODEL_CARD.md](./yolov8n-vessel.MODEL_CARD.md) |
 | `yolov8s-vessel`               | **bloqueado** — procedencia | n/a       | [yolov8s-vessel.MODEL_CARD.md](./yolov8s-vessel.MODEL_CARD.md) |
 | `cfar-default` (algoritmo)     | baseline validado en xView3-SAR Med/Adriatic | n/a          | [cfar-default.MODEL_CARD.md](./cfar-default.MODEL_CARD.md)   |

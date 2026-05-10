@@ -26,9 +26,7 @@ class Settings(BaseSettings):
     """
 
     # ---- Base de datos ----
-    database_url: str = (
-        "postgresql+asyncpg://aidra:changeme@localhost:5432/aidra"
-    )
+    database_url: str = "postgresql+asyncpg://aidra:changeme@localhost:5432/aidra"
 
     # ---- Copernicus Data Space credentials ----
     copernicus_user: str = ""
@@ -41,7 +39,8 @@ class Settings(BaseSettings):
 
     # ---- Pipeline defaults ----
     default_zone: str = "gibraltar"
-    default_model: str = "yolov8n-sar"
+    default_model: str = "vesseltracker-sar-yolov8"
+    default_model_version: str = "v1.0"
     default_profile: str = "ground"
     confidence_threshold: float = 0.25
     iou_threshold: float = 0.45
@@ -109,20 +108,14 @@ class Settings(BaseSettings):
     # covers local development; production must override via
     # AIDRA_CORS_ORIGINS so dashboards/clients hosted on other domains
     # can reach the service without modifying source.
-    aidra_cors_origins: str = (
-        "http://localhost,http://localhost:3000,http://localhost:8000"
-    )
+    aidra_cors_origins: str = "http://localhost,http://localhost:3000,http://localhost:8000"
 
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse the comma-separated CORS origins into a list, stripping
         whitespace and dropping empty entries.
         """
-        return [
-            o.strip()
-            for o in self.aidra_cors_origins.split(",")
-            if o.strip()
-        ]
+        return [o.strip() for o in self.aidra_cors_origins.split(",") if o.strip()]
 
     # ---- Limites ----
     max_image_size_gb: float = 2.0

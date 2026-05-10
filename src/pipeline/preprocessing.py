@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -107,24 +108,19 @@ def calibrate_sigma0(tiff_path: Path, annotation_xml: Path) -> np.ndarray:
             y_dst = np.arange(rows, dtype=np.float32)
             resampled_cols: list[np.ndarray] = []
             for c in range(cols):
-                resampled_cols.append(
-                    np.interp(y_dst, y_src, lut_stack[:, c])
-                )
+                resampled_cols.append(np.interp(y_dst, y_src, lut_stack[:, c]))
             calibration_lut = np.column_stack(resampled_cols).astype(np.float32)
         else:
             calibration_lut = lut_stack
     else:
-        _log.warning(
-            "No sigmaNought vectors found in annotation XML; "
-            "using unity calibration"
-        )
+        _log.warning("No sigmaNought vectors found in annotation XML; using unity calibration")
         calibration_lut = np.ones((rows, cols), dtype=np.float32)
 
     # --- Apply calibration ---
     # Avoid division by zero
     calibration_lut = np.where(calibration_lut == 0, 1.0, calibration_lut)
 
-    sigma0_linear = (dn ** 2) / (calibration_lut ** 2)
+    sigma0_linear = (dn**2) / (calibration_lut**2)
     # Clamp to small positive before log to avoid -inf / nan
     sigma0_linear = np.clip(sigma0_linear, 1e-10, None)
     sigma0_db = (10.0 * np.log10(sigma0_linear)).astype(np.float32)
@@ -180,8 +176,8 @@ def apply_lee_filter(image: np.ndarray, window_size: int = 7) -> np.ndarray:
 
     # Local statistics via uniform (box) filter
     mean_local = uniform_filter(img, size=window_size, mode="reflect")
-    mean_sq = uniform_filter(img ** 2, size=window_size, mode="reflect")
-    var_local = mean_sq - mean_local ** 2
+    mean_sq = uniform_filter(img**2, size=window_size, mode="reflect")
+    var_local = mean_sq - mean_local**2
     var_local = np.clip(var_local, 0.0, None)
 
     # Estimate noise variance as mean of local variances (assumes
@@ -240,9 +236,7 @@ def create_tiles(
     rows, cols = image.shape[:2]
     step = tile_size - overlap
     if step <= 0:
-        raise ValueError(
-            f"overlap ({overlap}) must be smaller than tile_size ({tile_size})"
-        )
+        raise ValueError(f"overlap ({overlap}) must be smaller than tile_size ({tile_size})")
 
     tiles: list[dict[str, Any]] = []
 
@@ -296,37 +290,104 @@ def create_tiles(
 # ---------------------------------------------------------------------------
 
 
-def _parse_calibration_lut(
-    annotation_xml: Path, num_cols: int
-) -> np.ndarray | None:
-    """Parse calibration LUT from annotation XML as a 1-D array.
+@dataclass(frozen=True)
+class CalibrationLUT:
+    """Sparse Sentinel-1 sigma0 calibration grid.
 
-    Returns a 1-D float32 array of length *num_cols* (interpolated from
-    the sigmaNought vectors), or ``None`` if parsing fails.
+    Sentinel-1 calibration XML stores one sigmaNought vector per azimuth
+    line.  Keeping the sparse grid avoids materialising a full-scene 2-D
+    array while still allowing per-window 2-D interpolation.
     """
+
+    lines: np.ndarray
+    values: np.ndarray
+    num_cols: int
+
+    def window(
+        self,
+        row_start: int,
+        row_end: int,
+        col_start: int,
+        col_end: int,
+    ) -> np.ndarray:
+        """Return a 2-D LUT slice for ``[row_start:row_end, col_start:col_end]``."""
+        row_coords = np.arange(row_start, row_end, dtype=np.float32)
+        col_values = self.values[:, col_start:col_end]
+        if row_coords.size == 0 or col_values.size == 0:
+            return np.empty((row_coords.size, col_values.shape[1]), dtype=np.float32)
+        if self.lines.size == 1:
+            return np.repeat(col_values, row_coords.size, axis=0).astype(np.float32)
+
+        out = np.empty((row_coords.size, col_values.shape[1]), dtype=np.float32)
+        for c in range(col_values.shape[1]):
+            out[:, c] = np.interp(
+                row_coords,
+                self.lines,
+                col_values[:, c],
+                left=col_values[0, c],
+                right=col_values[-1, c],
+            )
+        return out
+
+
+def _parse_calibration_lut(
+    annotation_xml: Path, num_rows: int, num_cols: int
+) -> CalibrationLUT | None:
+    """Parse calibration LUT from annotation XML as a sparse 2-D grid."""
     try:
         tree = ET.parse(annotation_xml)
         root = tree.getroot()
+        lines: list[float] = []
+        rows: list[np.ndarray] = []
         for cal_vec in root.iter("calibrationVector"):
+            line_el = cal_vec.find("line")
+            pixel_el = cal_vec.find("pixel")
             sigma_el = cal_vec.find("sigmaNought")
             if sigma_el is not None and sigma_el.text:
                 values = np.array(
                     [float(v) for v in sigma_el.text.strip().split()],
                     dtype=np.float32,
                 )
+                if values.size == 0:
+                    continue
+                line = (
+                    float(line_el.text)
+                    if line_el is not None and line_el.text
+                    else float(len(rows))
+                )
+                pixel_positions: np.ndarray
+                if pixel_el is not None and pixel_el.text:
+                    pixel_positions = np.array(
+                        [float(v) for v in pixel_el.text.strip().split()],
+                        dtype=np.float32,
+                    )
+                else:
+                    pixel_positions = np.linspace(0, num_cols - 1, values.size, dtype=np.float32)
+                if pixel_positions.size != values.size:
+                    pixel_positions = np.linspace(0, num_cols - 1, values.size, dtype=np.float32)
                 if len(values) != num_cols:
-                    x_src = np.linspace(0, num_cols - 1, len(values))
                     x_dst = np.arange(num_cols, dtype=np.float32)
-                    values = np.interp(x_dst, x_src, values).astype(np.float32)
-                return values
+                    values = np.interp(
+                        x_dst,
+                        pixel_positions,
+                        values,
+                        left=values[0],
+                        right=values[-1],
+                    ).astype(np.float32)
+                lines.append(line)
+                rows.append(values)
+        if rows:
+            order = np.argsort(np.asarray(lines, dtype=np.float32))
+            line_arr = np.asarray(lines, dtype=np.float32)[order]
+            values_arr = np.stack(rows, axis=0).astype(np.float32)[order]
+            line_arr = np.clip(line_arr, 0, max(num_rows - 1, 0))
+            return CalibrationLUT(line_arr, values_arr, num_cols)
     except Exception as exc:
         _log.warning("Failed to parse calibration LUT", extra={"error": str(exc)})
     return None
 
 
-def _calibrate_tile_linear(
-    dn_tile: np.ndarray, cal_row: np.ndarray | None
-) -> np.ndarray:
+def _calibrate_tile_linear(dn_tile: np.ndarray, cal_lut: np.ndarray | None) -> np.ndarray:
     """Calibrate a single tile from DN to linear sigma0 (power scale).
 
     Returns linear-power sigma0 because downstream consumers (Lee filter,
@@ -334,11 +395,11 @@ def _calibrate_tile_linear(
     for visualization or YOLO input.
     """
     dn = dn_tile.astype(np.float32)
-    if cal_row is not None:
-        lut = np.where(cal_row == 0, 1.0, cal_row)
-        sigma0_linear = (dn ** 2) / (lut ** 2)
+    if cal_lut is not None:
+        lut = np.where(cal_lut == 0, 1.0, cal_lut)
+        sigma0_linear = (dn**2) / (lut**2)
     else:
-        sigma0_linear = dn ** 2
+        sigma0_linear = dn**2
     return np.clip(sigma0_linear, 1e-10, None).astype(np.float32)
 
 
@@ -362,12 +423,14 @@ def _load_gcps(product_dir: Path) -> list[dict[str, float]] | None:
                 lat_el = point.find("latitude")
                 lon_el = point.find("longitude")
                 if all(x is not None and x.text for x in [line_el, pixel_el, lat_el, lon_el]):
-                    gcps.append({
-                        "line": float(line_el.text),
-                        "pixel": float(pixel_el.text),
-                        "lat": float(lat_el.text),
-                        "lon": float(lon_el.text),
-                    })
+                    gcps.append(
+                        {
+                            "line": float(line_el.text),
+                            "pixel": float(pixel_el.text),
+                            "lat": float(lat_el.text),
+                            "lon": float(lon_el.text),
+                        }
+                    )
             if gcps:
                 _log.info("Loaded GCPs", extra={"count": len(gcps), "xml": xml_path.name})
                 return gcps
@@ -571,12 +634,17 @@ def preprocess_s2_full(
         img_height = src.height
         img_width = src.width
         geo_transform = (
-            transform.c, transform.a, transform.b,
-            transform.f, transform.d, transform.e,
+            transform.c,
+            transform.a,
+            transform.b,
+            transform.f,
+            transform.d,
+            transform.e,
         )
 
     # Build CRS transformer to WGS84 (S2 is usually UTM)
     from pyproj import Transformer
+
     to_wgs84 = None
     if crs and crs != "EPSG:4326":
         try:
@@ -640,9 +708,7 @@ def preprocess_s2_full(
                     corner_xys.append(affine_pixel_to_geo(geo_transform, cc, rr))
 
                 if to_wgs84 is not None:
-                    lonlats = [
-                        to_wgs84.transform(x, y) for x, y in corner_xys
-                    ]
+                    lonlats = [to_wgs84.transform(x, y) for x, y in corner_xys]
                 else:
                     lonlats = corner_xys
 
@@ -655,22 +721,27 @@ def preprocess_s2_full(
                     "lat_max": float(max(lats)),
                 }
 
-                tiles.append({
-                    "array": rgb,
-                    "row_offset": row_offset,
-                    "col_offset": col_offset,
-                    "geo_bounds": geo_bounds,
-                    "geo_transform": geo_transform,
-                })
+                tiles.append(
+                    {
+                        "array": rgb,
+                        "row_offset": row_offset,
+                        "col_offset": col_offset,
+                        "geo_bounds": geo_bounds,
+                        "geo_transform": geo_transform,
+                    }
+                )
     finally:
         red_src.close()
         green_src.close()
         blue_src.close()
 
-    _log.info("S2 preprocessing complete", extra={
-        "num_tiles": len(tiles),
-        "original_shape": [img_height, img_width],
-    })
+    _log.info(
+        "S2 preprocessing complete",
+        extra={
+            "num_tiles": len(tiles),
+            "original_shape": [img_height, img_width],
+        },
+    )
 
     return {
         "tiles": tiles,
@@ -729,13 +800,9 @@ def preprocess_full(
     )
 
     # --- 1. Locate files ---
-    tiff_path = _find_file(product_dir, "*.tiff") or _find_file(
-        product_dir, "*.tif"
-    )
+    tiff_path = _find_file(product_dir, "*.tiff") or _find_file(product_dir, "*.tif")
     if tiff_path is None:
-        raise FileNotFoundError(
-            f"No TIFF measurement file found in {product_dir}"
-        )
+        raise FileNotFoundError(f"No TIFF measurement file found in {product_dir}")
 
     annotation_xml = _find_calibration_xml(product_dir)
 
@@ -765,8 +832,12 @@ def preprocess_full(
         # Fallback: try rasterio transform (may be identity/pixel coords)
         if transform and transform.a != 1.0:
             geo_transform = (
-                transform.c, transform.a, transform.b,
-                transform.f, transform.d, transform.e,
+                transform.c,
+                transform.a,
+                transform.b,
+                transform.f,
+                transform.d,
+                transform.e,
             )
         else:
             _log.warning("No valid geo_transform — coordinates will be in pixel space")
@@ -781,12 +852,20 @@ def preprocess_full(
         },
     )
 
-    # --- 3. Parse calibration LUT (1-D, per-column) ---
-    cal_row: np.ndarray | None = None
+    # --- 3. Parse calibration LUT (sparse 2-D line/column grid) ---
+    cal_lut: CalibrationLUT | None = None
     if annotation_xml is not None:
-        cal_row = _parse_calibration_lut(annotation_xml, img_width)
-        if cal_row is not None:
-            _log.info("Calibration LUT loaded", extra={"cols": len(cal_row)})
+        cal_lut = _parse_calibration_lut(annotation_xml, img_height, img_width)
+        if cal_lut is not None:
+            _log.info(
+                "Calibration LUT loaded",
+                extra={
+                    "vectors": int(cal_lut.lines.size),
+                    "cols": int(cal_lut.num_cols),
+                    "line_min": float(np.min(cal_lut.lines)),
+                    "line_max": float(np.max(cal_lut.lines)),
+                },
+            )
         else:
             _log.warning("Could not parse calibration LUT; using raw DN")
     else:
@@ -801,8 +880,10 @@ def preprocess_full(
         # and take the axis-aligned pixel bbox of the result.
         cols, rows = [], []
         for lon, lat in (
-            (lon_min, lat_min), (lon_max, lat_min),
-            (lon_max, lat_max), (lon_min, lat_max),
+            (lon_min, lat_min),
+            (lon_max, lat_min),
+            (lon_max, lat_max),
+            (lon_min, lat_max),
         ):
             c, r = affine_geo_to_pixel(geo_transform, lon, lat)
             cols.append(c)
@@ -883,7 +964,14 @@ def preprocess_full(
 
                 # Calibrate to LINEAR sigma0 (Lee + CFAR assume linear power)
                 chunk_cal = (
-                    cal_row[c_start_clamped:c_end] if cal_row is not None else None
+                    cal_lut.window(
+                        r_start_clamped,
+                        r_end,
+                        c_start_clamped,
+                        c_end,
+                    )
+                    if cal_lut is not None
+                    else None
                 )
                 calibrated_linear = _calibrate_tile_linear(dn_chunk, chunk_cal)
 
@@ -905,17 +993,17 @@ def preprocess_full(
                 # Geo bounds — compute from the four rotated corners
                 abs_row = row_start_aoi + row_offset
                 abs_col = col_start_aoi + col_offset
-                geo_bounds = _tile_geo_corners(
-                    geo_transform, abs_col, abs_row, tile_size
-                )
+                geo_bounds = _tile_geo_corners(geo_transform, abs_col, abs_row, tile_size)
 
-                tiles.append({
-                    "array": tile,
-                    "row_offset": abs_row,
-                    "col_offset": abs_col,
-                    "geo_bounds": geo_bounds,
-                    "geo_transform": geo_transform,
-                })
+                tiles.append(
+                    {
+                        "array": tile,
+                        "row_offset": abs_row,
+                        "col_offset": abs_col,
+                        "geo_bounds": geo_bounds,
+                        "geo_transform": geo_transform,
+                    }
+                )
 
     _log.info(
         "Windowed preprocessing complete",
@@ -929,7 +1017,7 @@ def preprocess_full(
     metadata: dict[str, Any] = {
         "product_dir": str(product_dir),
         "original_shape": original_shape,
-        "calibration": "sigma0_linear" if cal_row is not None else "raw_dn_squared",
+        "calibration": "sigma0_linear" if cal_lut is not None else "raw_dn_squared",
         "filter": "lee_7x7_linear",
         "tile_size": tile_size,
         "overlap": overlap,
@@ -946,7 +1034,7 @@ def preprocess_full(
 
     # I-SAR-1: marca quality=invalid si falta cualquier paso critico.
     quality, reasons = _evaluate_scene_quality(
-        cal_row=cal_row,
+        cal_row=cal_lut,
         gcps=gcps,
         geo_transform=geo_transform,
         valid_footprint=valid_footprint,
@@ -964,7 +1052,7 @@ def preprocess_full(
 
 
 def _evaluate_scene_quality(
-    cal_row: np.ndarray | None,
+    cal_row: CalibrationLUT | np.ndarray | None,
     gcps: list[Any] | None,
     geo_transform: tuple[float, ...] | None,
     valid_footprint: dict[str, Any] | None,
@@ -1139,9 +1227,7 @@ def generate_synthetic_sar_tile(
     rng = np.random.default_rng(seed)
 
     # Background: Rayleigh-distributed clutter (models SAR sea surface)
-    background = rng.rayleigh(scale=noise_mean, size=(size, size)).astype(
-        np.float32
-    )
+    background = rng.rayleigh(scale=noise_mean, size=(size, size)).astype(np.float32)
 
     ground_truth: list[dict[str, Any]] = []
     for _ in range(num_vessels):
@@ -1161,10 +1247,7 @@ def generate_synthetic_sar_tile(
         sigma_x = max(w / 3.0, 0.5)
         sigma_y = max(h / 3.0, 0.5)
         gaussian = np.exp(
-            -(
-                (x_grid - cx) ** 2 / (2.0 * sigma_x ** 2)
-                + (y_grid - cy) ** 2 / (2.0 * sigma_y ** 2)
-            )
+            -((x_grid - cx) ** 2 / (2.0 * sigma_x**2) + (y_grid - cy) ** 2 / (2.0 * sigma_y**2))
         )
         background[y_lo:y_hi, x_lo:x_hi] += vessel_amplitude * gaussian
 
@@ -1185,7 +1268,9 @@ def generate_synthetic_sar_tile(
 # ---------------------------------------------------------------------------
 
 
-def _calculate_valid_footprint(image: np.ndarray, geo_transform: tuple[float, ...]) -> dict[str, Any] | None:
+def _calculate_valid_footprint(
+    image: np.ndarray, geo_transform: tuple[float, ...]
+) -> dict[str, Any] | None:
     """Professional approach: Detect the valid data boundary.
 
     Creates a GeoJSON polygon of the area containing actual sensor data,
@@ -1209,8 +1294,7 @@ def _calculate_valid_footprint(image: np.ndarray, geo_transform: tuple[float, ..
         # Subsample points for convex hull (too many is slow)
         step = max(1, len(lons) // 5000)
         points = [
-            (float(lon), float(lat))
-            for lon, lat in zip(lons[::step], lats[::step], strict=False)
+            (float(lon), float(lat)) for lon, lat in zip(lons[::step], lats[::step], strict=False)
         ]
         poly = MultiPoint(points).convex_hull
 
@@ -1273,8 +1357,10 @@ def _crop_to_aoi(
     proj_cols: list[float] = []
     proj_rows: list[float] = []
     for lon, lat in (
-        (lon_min, lat_min), (lon_max, lat_min),
-        (lon_max, lat_max), (lon_min, lat_max),
+        (lon_min, lat_min),
+        (lon_max, lat_min),
+        (lon_max, lat_max),
+        (lon_min, lat_max),
     ):
         c, r = affine_geo_to_pixel(geo_transform, lon, lat)
         proj_cols.append(c)

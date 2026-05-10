@@ -33,10 +33,16 @@ estimator). When they agree, the detection is robust; when they disagree,
 the case is ambiguous and worth manual review.
 
 For each of 20 high-confidence sea detections (sampled with seed=42 from
-the most recent successful run, `on_land = false AND cluster_anomaly = false`),
-both views are saved as PNG plus a manifest with SHA256 of every artefact,
-the `commit_sha` of the producing code (`e956ab4...`), and the
-`model_hash` of the YOLO weights (`18aec1bb...`).
+the selected successful run, `on_land = false AND cluster_anomaly = false`),
+both views are saved as PNG plus a manifest with SHA256 of every artefact.
+
+For INT8 executions the manifest records two model identities:
+`execution_model_hash` for the model that produced the detections, and
+`gradcam_model_hash` for the FP32 PyTorch baseline used only to render
+Grad-CAM.  This distinction is intentional: ONNX Runtime does not expose
+the autograd graph required by Grad-CAM, so the heatmap is an explanation
+proxy for the corresponding FP32 architecture, not a direct gradient
+through the INT8 runtime.
 
 Below, four representative cases.
 
@@ -107,19 +113,20 @@ both views rather than collapsing to a single number.
 ## 3. Reproducibility
 
 ```bash
-docker exec aidra-app python /app/scripts/run_interpretability.py \
+python scripts/run_interpretability.py \
     --execution-id fcdf96e2-03ff-4c40-86af-8abffb45fce9 \
     --n 20 \
-    --out /data/interpretability
-# Output: /data/interpretability/<execution_id>_interp_<short_uuid>/
+    --out data/interpretability
+# Output: data/interpretability/<execution_id>_interp_<short_uuid>/
 #   - 60 PNGs + manifest.json
 ```
 
 The `manifest.json` includes per-sample `detection_id`, `confidence`,
 `source` (`yolo` / `fused`), `thumbnail_path`, and SHA256 of each
-generated PNG. It also records `commit_sha` and `model_hash`, which
-allows a third party to verify the artefacts were produced by the
-declared code on the declared weights.
+generated PNG. It also records `commit_sha`, `execution_model_hash`, and
+`gradcam_model_hash`, which allows a third party to verify the artefacts
+were produced by the declared code on the declared weights while keeping
+the INT8-vs-FP32 explanation boundary explicit.
 
 ---
 

@@ -107,11 +107,17 @@ strips the non-content fields from the hash input.
 
 The first batch run after the fix targeted Sentinel-1 product
 `S1D_IW_GRDH_1SDV_20260505T062642_20260505T062707_002645_0046BC_4AA4`
-(image_id `76f82d1c-…`) using the FP32 baseline `vesseltracker-sar-yolov8`
-across the four profiles that completed (`sat-extreme` exceeded the
-60 min reaper threshold and was marked failed — see R9 in the risk
-register: "FP32 sat-extreme is operationally impractical for full
-GRDH scenes under the post-`321de6b` throttle").
+(image_id `76f82d1c-…`) across the four profiles that completed
+(`sat-extreme` exceeded the 60 min reaper threshold and was marked
+failed — see R9 in the risk register).
+
+**Correction (2026-05-10 external review):** these four rows were
+originally described as FP32, but production SQL shows they were
+`compression_technique='dynamic_int8'` and
+`model_name='vesseltracker-sar-yolov8-int8-dynamic'`. They demonstrate
+that the result hash no longer includes per-run UUID/thumbnail fields for
+that particular INT8 batch, but they **do not close FP32 bitwise
+reproducibility**.
 
 | profile | execution_id (8) | num_detections | output_hash |
 |---|---|---|---|
@@ -120,14 +126,16 @@ GRDH scenes under the post-`321de6b` throttle").
 | sat-mid | `19f944f9` | 1092 | `2c62f00608a38147…` |
 | sat-low | `258384b1` | 1092 | `2c62f00608a38147…` |
 
-Single shared hash across four constraint profiles closes both
-**I-MOD-3** (constraint profile must not alter outputs) and
-**gate:reproducibility** declared in CLAUDE.md §6 ("mismo input →
-mismo output_hash") on real Sentinel-1 GRDH data.
+Single shared hash across four constraint profiles is useful regression
+evidence for the hash canonicalisation fix, but **R6 remains pending for
+an explicit FP32 rerun** after model-version pinning. Dynamic INT8 remains
+tracked separately under R12 because other repeated INT8 groups still
+produce distinct output hashes.
 
 **Verify** (requires admin Grafana credentials or DB access):
 ```sql
 SELECT constraint_profile, num_detections,
+       model_name, compression_technique,
        LEFT(output_hash, 16) AS output_hash_prefix
 FROM execution_log
 WHERE id IN (
@@ -137,7 +145,9 @@ WHERE id IN (
     '258384b1-90b9-47dd-97f5-e59b1d3b07b7'   -- sat-low
 )
 ORDER BY constraint_profile;
--- expected: 4 rows, num_detections=1092 each, output_hash_prefix='2c62f00608a38147'
+-- observed 2026-05-10: 4 rows, model_name='vesseltracker-sar-yolov8-int8-dynamic',
+-- compression_technique='dynamic_int8', num_detections=1092 each,
+-- output_hash_prefix='2c62f00608a38147'
 ```
 
 ---

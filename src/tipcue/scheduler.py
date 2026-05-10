@@ -32,6 +32,7 @@ from src.db.models import TaskingEntry
 from src.db.queries import (
     INSERT_CUE,
     SELECT_PENDING_CUES,
+    UPDATE_CUE_AFTER_ERROR,
     UPDATE_CUE_STATUS,
 )
 from src.pipeline.engine import PipelineRequest, PipelineResult
@@ -246,12 +247,8 @@ class CueScheduler:
         """
         # Check cooldown
         if zone is not None:
-            cooldown_cutoff = datetime.now(tz=UTC) - timedelta(
-                minutes=self._cooldown_minutes
-            )
-            count = await self._db.fetchval(
-                CHECK_RECENT_CUE, zone, cooldown_cutoff
-            )
+            cooldown_cutoff = datetime.now(tz=UTC) - timedelta(minutes=self._cooldown_minutes)
+            count = await self._db.fetchval(CHECK_RECENT_CUE, zone, cooldown_cutoff)
             if count and count > 0:
                 raise ValueError(
                     f"Zone '{zone}' has a pending cue within the last "
@@ -364,9 +361,7 @@ class CueScheduler:
             exec_uuid: UUID | None = None
             if execution_id is not None:
                 exec_uuid = (
-                    execution_id
-                    if isinstance(execution_id, UUID)
-                    else UUID(str(execution_id))
+                    execution_id if isinstance(execution_id, UUID) else UUID(str(execution_id))
                 )
 
             # Update cue in database
@@ -391,12 +386,12 @@ class CueScheduler:
 
             # Update cue with error status
             await self._db.execute(
-                UPDATE_CUE_STATUS,
+                UPDATE_CUE_AFTER_ERROR,
                 cue_id,
-                "error",
                 None,
                 "error",
                 0,
+                str(exc),
             )
 
             return CueResult(

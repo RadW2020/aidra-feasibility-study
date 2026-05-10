@@ -147,6 +147,11 @@ class PipelineRequest(BaseModel):
         Zona de busqueda de imagenes (clave de ``SEARCH_ZONES``).
     model:
         Variante de modelo a usar (e.g. ``"yolov8n-sar"``).
+    model_version:
+        Version/variante exacta del modelo.  Si se omite para el modelo por
+        defecto se usa ``Settings.default_model_version``; si se omite para
+        un modelo con multiples variantes registradas, ``ModelManager`` lo
+        rechaza para evitar resolver por "ultimo registrado".
     profile:
         Perfil de restriccion de recursos (e.g. ``"ground"``).
     image_id:
@@ -170,6 +175,7 @@ class PipelineRequest(BaseModel):
 
     zone: str = "gibraltar"
     model: str | None = None
+    model_version: str | None = None
     profile: str = "ground"
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None
@@ -266,7 +272,9 @@ class PipelineEngine:
     # Public API
     # ------------------------------------------------------------------
 
-    async def run(self, request: PipelineRequest, execution_id: UUID | None = None) -> PipelineResult:
+    async def run(
+        self, request: PipelineRequest, execution_id: UUID | None = None
+    ) -> PipelineResult:
         """Ejecuta el pipeline completo de deteccion.
 
         Pasos:
@@ -311,12 +319,15 @@ class PipelineEngine:
 
             # ---- Step 2: Load Model Dynamically ----
             model_name = request.model or self.config.default_model
+            model_version = self._resolve_model_version(request)
             detector = await self.model_manager.get_model(
                 name=model_name,
+                version=model_version,
                 confidence_threshold=request.confidence_threshold,
                 iou_threshold=request.iou_threshold,
             )
             model_info = detector.get_model_info()
+            self._validate_model_for_sensor(model_info, request.sensor)
 
             # ---- Step 2b: Create pending execution record ----
             self._log.info(
@@ -382,11 +393,7 @@ class PipelineEngine:
             # that were placeholders at creation time
             from src.db.connection import db as _db
 
-            footprint_geojson = (
-                json.dumps(product.footprint)
-                if product.footprint
-                else None
-            )
+            footprint_geojson = json.dumps(product.footprint) if product.footprint else None
 
             await _db.execute(
                 """
@@ -510,9 +517,7 @@ class PipelineEngine:
             # filtradas por anomaly/land si configurado, para no inflar
             # el almacenamiento.
             try:
-                thumbnails_root = Path(
-                    getattr(self.config, "thumbnails_dir", "/data/thumbnails")
-                )
+                thumbnails_root = Path(getattr(self.config, "thumbnails_dir", "/data/thumbnails"))
                 generate_thumbnails(
                     detections=detection_result.detections,
                     tiles=tiles,
@@ -525,19 +530,14 @@ class PipelineEngine:
                     extra={"execution_id": str(execution_id), "error": str(exc)},
                 )
 
-            save_stats = await self._save_detections(
-                execution_id, detection_result.detections
-            )
-            output_hash = compute_result_hash(
-                [d.model_dump() for d in detection_result.detections]
-            )
+            save_stats = await self._save_detections(execution_id, detection_result.detections)
+            output_hash = compute_result_hash([d.model_dump() for d in detection_result.detections])
 
             persisted_detections = save_stats["saved"]
             persisted_confidences = save_stats["confidences"]
             if persisted_confidences:
                 det_stats = {
-                    "avg_confidence": sum(persisted_confidences)
-                    / len(persisted_confidences),
+                    "avg_confidence": sum(persisted_confidences) / len(persisted_confidences),
                     "max_confidence": max(persisted_confidences),
                     "min_confidence": min(persisted_confidences),
                 }
@@ -633,11 +633,7 @@ class PipelineEngine:
             # Emit error metric — attach run_id exemplar so a failure
             # spike in Grafana links straight to the matching log
             # bundle in Loki and to the row in execution_log.
-            _err_exemplar = (
-                {"trace_id": str(execution_id)}
-                if execution_id is not None
-                else None
-            )
+            _err_exemplar = {"trace_id": str(execution_id)} if execution_id is not None else None
             _err_metric = PIPELINE_RUNS_TOTAL.labels(
                 profile=request.profile,
                 model_variant=request.model,
@@ -660,7 +656,8 @@ class PipelineEngine:
                 await self._cleanup(image_path)
 
     async def run_all_profiles(
-        self, request: PipelineRequest,
+        self,
+        request: PipelineRequest,
         execution_ids: dict[str, UUID] | None = None,
     ) -> dict[str, PipelineResult]:
         """Ejecuta el pipeline con todos los perfiles sobre la misma imagen.
@@ -726,21 +723,25 @@ class PipelineEngine:
                     # Create execution record for this profile
                     pre_id = (execution_ids or {}).get(profile_name)
                     footprint_geojson_str = (
-                        json.dumps(product.footprint)
-                        if product.footprint
-                        else None
+                        json.dumps(product.footprint) if product.footprint else None
                     )
-                    # Load detector for this model
-                    det = await self.model_manager.get_model(request.model)
+                    # Load detector for this exact model variant
+                    model_name = request.model or self.config.default_model
+                    model_version = self._resolve_model_version(request)
+                    det = await self.model_manager.get_model(
+                        model_name,
+                        version=model_version,
+                        confidence_threshold=request.confidence_threshold,
+                        iou_threshold=request.iou_threshold,
+                    )
                     det_info = det.get_model_info()
+                    self._validate_model_for_sensor(det_info, request.sensor)
 
                     # Capture the same provenance kwargs that engine.run uses,
                     # so multi-profile rows are reproducible from their hash.
                     # Without this both columns stayed NULL on every
                     # trigger-all-profiles call (audited 2026-05-08).
-                    profile_request = request.model_copy(
-                        update={"profile": profile_name}
-                    )
+                    profile_request = request.model_copy(update={"profile": profile_name})
                     input_params_hash = compute_input_params_hash(
                         self._build_input_params(profile_request, det_info)
                     )
@@ -849,9 +850,7 @@ class PipelineEngine:
 
                 except MemoryError:
                     total_ms = (time.monotonic() - start_time) * 1000.0
-                    await self._safe_update_status(
-                        execution_id, "error", "OOM under profile"
-                    )
+                    await self._safe_update_status(execution_id, "error", "OOM under profile")
                     PIPELINE_RUNS_TOTAL.labels(
                         profile=profile_name,
                         model_variant=request.model,
@@ -867,9 +866,7 @@ class PipelineEngine:
                 except Exception as exc:
                     total_ms = (time.monotonic() - start_time) * 1000.0
                     error_msg = f"{type(exc).__name__}: {exc}"
-                    await self._safe_update_status(
-                        execution_id, "error", error_msg
-                    )
+                    await self._safe_update_status(execution_id, "error", error_msg)
                     PIPELINE_RUNS_TOTAL.labels(
                         profile=profile_name,
                         model_variant=request.model,
@@ -908,23 +905,21 @@ class PipelineEngine:
             "request": {
                 "zone": request.zone,
                 "model": request.model,
+                "model_version": request.model_version,
                 "profile": request.profile,
                 "image_id": request.image_id,
                 "aoi_bbox": request.aoi_bbox,
                 "confidence_threshold": request.confidence_threshold,
                 "iou_threshold": request.iou_threshold,
-                "date_from": request.date_from.isoformat()
-                if request.date_from
-                else None,
-                "date_to": request.date_to.isoformat()
-                if request.date_to
-                else None,
+                "date_from": request.date_from.isoformat() if request.date_from else None,
+                "date_to": request.date_to.isoformat() if request.date_to else None,
                 "trigger_type": request.trigger_type,
             },
             "settings": {
                 "tile_size": self.config.tile_size,
                 "tile_overlap": self.config.tile_overlap,
                 "default_model": self.config.default_model,
+                "default_model_version": self.config.default_model_version,
                 "default_profile": self.config.default_profile,
                 "cfar_guard_size": self.config.cfar_guard_size,
                 "cfar_training_size": self.config.cfar_training_size,
@@ -945,6 +940,35 @@ class PipelineEngine:
                 "format": model_info.get("format"),
             },
         }
+
+    def _resolve_model_version(self, request: PipelineRequest) -> str | None:
+        """Return the exact model version to request from ``ModelManager``."""
+        if request.model_version:
+            return request.model_version
+        model_name = request.model or self.config.default_model
+        if model_name == self.config.default_model:
+            return self.config.default_model_version
+        return None
+
+    @staticmethod
+    def _validate_model_for_sensor(
+        model_info: dict[str, Any],
+        sensor: str,
+    ) -> None:
+        """Reject generic optical/COCO detectors on the SAR pipeline."""
+        if sensor.lower() != "s1":
+            return
+        name = str(model_info.get("name", "")).lower()
+        if name.startswith("cfar"):
+            return
+        classes = {str(c).strip().lower() for c in model_info.get("classes", []) if str(c).strip()}
+        if classes.intersection({"ship", "vessel"}):
+            return
+        raise ValueError(
+            "Model is not approved for Sentinel-1 SAR vessel detection: "
+            f"name={model_info.get('name')!r}, classes={sorted(classes)!r}. "
+            "Use a SAR model with class 'ship' or 'vessel'."
+        )
 
     def _validate_request(self, request: PipelineRequest) -> None:
         """Validate that request parameters are sane.
@@ -967,8 +991,7 @@ class PipelineEngine:
 
         if request.aoi_bbox is not None and len(request.aoi_bbox) != 4:
             raise PipelineError(
-                "aoi_bbox must have exactly 4 elements "
-                "[lon_min, lat_min, lon_max, lat_max]"
+                "aoi_bbox must have exactly 4 elements [lon_min, lat_min, lon_max, lat_max]"
             )
 
         if not 0.0 <= request.confidence_threshold <= 1.0:
@@ -976,9 +999,7 @@ class PipelineEngine:
                 f"confidence_threshold must be in [0, 1], got {request.confidence_threshold}"
             )
 
-    async def _search_image(
-        self, request: PipelineRequest
-    ) -> CopernicusSearchResult:
+    async def _search_image(self, request: PipelineRequest) -> CopernicusSearchResult:
         """Search Copernicus for the target image.
 
         If ``request.image_id`` is provided, the product is fetched
@@ -1044,15 +1065,12 @@ class PipelineEngine:
 
         if not search_results:
             raise IngestionError(
-                f"No images found for zone '{request.zone}' "
-                f"in the specified date range"
+                f"No images found for zone '{request.zone}' in the specified date range"
             )
 
         return search_results[0]
 
-    async def _download_with_retry(
-        self, product: CopernicusSearchResult
-    ) -> Path:
+    async def _download_with_retry(self, product: CopernicusSearchResult) -> Path:
         """Download a product with retry logic.
 
         Parameters
@@ -1102,8 +1120,7 @@ class PipelineEngine:
                 await asyncio.sleep(backoff)
 
         raise IngestionError(
-            f"Download failed after {retry_cfg['max_retries'] + 1} attempts: "
-            f"{last_error}"
+            f"Download failed after {retry_cfg['max_retries'] + 1} attempts: {last_error}"
         )
 
     async def _run_detection(
@@ -1160,6 +1177,7 @@ class PipelineEngine:
                 # Derive geo_bounds so the CFAR sea-mask helper can use it
                 # without re-implementing the affine projection.
                 from src.pipeline.preprocessing import _tile_geo_corners
+
                 formatted_tile["geo_bounds"] = _tile_geo_corners(
                     tuple(global_gt),
                     tile.get("col_offset", 0),
@@ -1176,8 +1194,12 @@ class PipelineEngine:
                     # are absorbed into the per-tile origin (lon_min/lat_max),
                     # so detection geocoding must NOT add them again.
                     formatted_tile["geo_transform"] = (
-                        gb["lon_min"], px_x, 0.0,
-                        gb["lat_max"], 0.0, px_y,
+                        gb["lon_min"],
+                        px_x,
+                        0.0,
+                        gb["lat_max"],
+                        0.0,
+                        px_y,
                     )
                     formatted_tile["row_offset"] = 0
                     formatted_tile["col_offset"] = 0
@@ -1208,16 +1230,11 @@ class PipelineEngine:
 
                 if not profiled_result.success:
                     if profiled_result.error == "OOM":
-                        raise OOMError(
-                            f"Out of memory under profile '{profile}'"
-                        )
+                        raise OOMError(f"Out of memory under profile '{profile}'")
                     if profiled_result.error == "timeout":
-                        raise TimeoutError(
-                            f"Timeout under profile '{profile}'"
-                        )
+                        raise TimeoutError(f"Timeout under profile '{profile}'")
                     raise DetectionError(
-                        f"Detection failed under profile '{profile}': "
-                        f"{profiled_result.error}"
+                        f"Detection failed under profile '{profile}': {profiled_result.error}"
                     )
 
                 # Extract DetectionResult from raw result and carry
@@ -1255,9 +1272,7 @@ class PipelineEngine:
         except MemoryError as exc:
             raise OOMError(f"Out of memory during detection: {exc}") from exc
         except builtins.TimeoutError as exc:
-            raise TimeoutError(
-                f"Detection timed out after {TIMEOUTS['inference_total']}s"
-            ) from exc
+            raise TimeoutError(f"Detection timed out after {TIMEOUTS['inference_total']}s") from exc
         except Exception as exc:
             if isinstance(exc, (DetectionError, ProfileError)):
                 raise
@@ -1290,24 +1305,24 @@ class PipelineEngine:
         # metricas de mar y filtrable en API/dashboard).
         try:
             from global_land_mask import globe as _globe
+
             _has_land_mask = True
         except ImportError:
             _globe = None
             _has_land_mask = False
-            self._log.info(
-                "global-land-mask not installed — on_land flag stays False"
-            )
+            self._log.info("global-land-mask not installed — on_land flag stays False")
 
         # Professional Edge Filtering: Spatial Clipping
         # Use the valid footprint from preprocessing if available
         valid_area_poly = None
         Point = None
-        if hasattr(self, '_current_metadata') and 'valid_footprint' in self._current_metadata:
+        if hasattr(self, "_current_metadata") and "valid_footprint" in self._current_metadata:
             try:
                 from shapely.geometry import Point as _Point
                 from shapely.geometry import shape
+
                 Point = _Point
-                valid_area_poly = shape(self._current_metadata['valid_footprint'])
+                valid_area_poly = shape(self._current_metadata["valid_footprint"])
                 self._log.info("Using footprint clipping")
             except ImportError:
                 pass
@@ -1316,6 +1331,7 @@ class PipelineEngine:
         edge_lons: set[float] = set()
         if valid_area_poly is None and len(detections) > 15:
             from collections import Counter
+
             lon_counts: Counter = Counter()
             for det in detections:
                 if det.center_geo and len(det.center_geo) == 2:
@@ -1352,16 +1368,20 @@ class PipelineEngine:
                 bbox_geo_geojson: str | None = None
                 if det.bbox_geo and len(det.bbox_geo) == 4:
                     lon_min, lat_min, lon_max, lat_max = det.bbox_geo
-                    bbox_geo_geojson = json.dumps({
-                        "type": "Polygon",
-                        "coordinates": [[
-                            [lon_min, lat_min],
-                            [lon_max, lat_min],
-                            [lon_max, lat_max],
-                            [lon_min, lat_max],
-                            [lon_min, lat_min],
-                        ]],
-                    })
+                    bbox_geo_geojson = json.dumps(
+                        {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [lon_min, lat_min],
+                                    [lon_max, lat_min],
+                                    [lon_max, lat_max],
+                                    [lon_min, lat_max],
+                                    [lon_min, lat_min],
+                                ]
+                            ],
+                        }
+                    )
 
                 # I-DET-2: pobla on_land via global-land-mask (informativo).
                 on_land = bool(getattr(det, "on_land", False))
@@ -1380,9 +1400,7 @@ class PipelineEngine:
                     cluster_anomaly=cluster_anomaly,
                 )
                 det.quality_verdict = quality_verdict
-                verdict_counts[quality_verdict] = (
-                    verdict_counts.get(quality_verdict, 0) + 1
-                )
+                verdict_counts[quality_verdict] = verdict_counts.get(quality_verdict, 0) + 1
 
                 await db.execute(
                     INSERT_DETECTION,
@@ -1400,9 +1418,9 @@ class PipelineEngine:
                     det.tile_index,
                     0,  # tile_row_offset
                     0,  # tile_col_offset
-                    on_land,           # I-DET-2
-                    cluster_anomaly,   # I-DET-3
-                    thumbnail_path,    # wow #1
+                    on_land,  # I-DET-2
+                    cluster_anomaly,  # I-DET-3
+                    thumbnail_path,  # wow #1
                     quality_verdict,
                 )
                 saved += 1
@@ -1487,16 +1505,20 @@ class PipelineEngine:
             target_bbox_geojson: str | None = None
             if tip.target_bbox and len(tip.target_bbox) == 4:
                 lon_min, lat_min, lon_max, lat_max = tip.target_bbox
-                target_bbox_geojson = json.dumps({
-                    "type": "Polygon",
-                    "coordinates": [[
-                        [lon_min, lat_min],
-                        [lon_max, lat_min],
-                        [lon_max, lat_max],
-                        [lon_min, lat_max],
-                        [lon_min, lat_min],
-                    ]],
-                })
+                target_bbox_geojson = json.dumps(
+                    {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [lon_min, lat_min],
+                                [lon_max, lat_min],
+                                [lon_max, lat_max],
+                                [lon_min, lat_max],
+                                [lon_min, lat_min],
+                            ]
+                        ],
+                    }
+                )
 
             triggering_ids = [str(uid) for uid in tip.triggering_detections]
 
@@ -1561,9 +1583,7 @@ class PipelineEngine:
             Optional UUID of the pipeline run; emitted as a
             ``trace_id`` exemplar.
         """
-        exemplar = (
-            {"trace_id": str(execution_id)} if execution_id is not None else None
-        )
+        exemplar = {"trace_id": str(execution_id)} if execution_id is not None else None
         if exemplar is not None:
             PIPELINE_RUNS_TOTAL.labels(
                 profile=profile,
@@ -1619,9 +1639,7 @@ class PipelineEngine:
         """
         try:
             if path.is_dir():
-                await asyncio.get_event_loop().run_in_executor(
-                    None, shutil.rmtree, path
-                )
+                await asyncio.get_event_loop().run_in_executor(None, shutil.rmtree, path)
             elif path.is_file():
                 path.unlink()
             self._log.debug(
@@ -1655,9 +1673,7 @@ class PipelineEngine:
             Optional error message.
         """
         try:
-            await self.recorder.update_status(
-                execution_id, status, error_message
-            )
+            await self.recorder.update_status(execution_id, status, error_message)
         except Exception:
             self._log.error(
                 "Failed to update execution status in error handler",

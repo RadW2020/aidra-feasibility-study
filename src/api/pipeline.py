@@ -44,6 +44,7 @@ _ALL_PROFILES = ["ground", "sat-high", "sat-mid", "sat-low", "sat-extreme"]
 def _get_engine():
     """Get the PipelineEngine singleton. Raises 503 if not available."""
     from src.main import get_engine
+
     engine = get_engine()
     if engine is None:
         raise HTTPException(
@@ -78,6 +79,7 @@ async def _run_pipeline_background(
     engine = None
     try:
         from src.main import get_engine
+
         engine = get_engine()
         if engine is None:
             logger.error("Engine not available for background pipeline run")
@@ -88,6 +90,7 @@ async def _run_pipeline_background(
         pipeline_request = PipelineRequest(
             zone=request.zone,
             model=request.model,
+            model_version=request.model_version,
             profile=request.profile,
             sensor=request.sensor,
             image_id=request.image_id,
@@ -140,6 +143,7 @@ async def _run_all_profiles_background(
 
     try:
         from src.main import get_engine
+
         engine = get_engine()
         if engine is None:
             logger.error("Engine not available for all-profiles run")
@@ -150,6 +154,7 @@ async def _run_all_profiles_background(
         pipeline_request = PipelineRequest(
             zone=request.zone,
             model=request.model,
+            model_version=request.model_version,
             profile="ground",  # base profile, run_all_profiles overrides
             image_id=request.image_id,
             aoi_bbox=request.aoi_bbox,
@@ -160,7 +165,8 @@ async def _run_all_profiles_background(
         _pipeline_state["progress"] = 0.0
 
         results = await engine.run_all_profiles(
-            pipeline_request, execution_ids=execution_ids,
+            pipeline_request,
+            execution_ids=execution_ids,
         )
 
         logger.info(
@@ -270,9 +276,7 @@ async def trigger_all_profiles(
             )
 
         # Create execution IDs upfront for every profile
-        execution_ids: dict[str, UUID] = {
-            profile: uuid4() for profile in _ALL_PROFILES
-        }
+        execution_ids: dict[str, UUID] = {profile: uuid4() for profile in _ALL_PROFILES}
 
         _pipeline_state.update(
             running=True,
@@ -282,7 +286,9 @@ async def trigger_all_profiles(
         )
 
     background_tasks.add_task(
-        _run_all_profiles_background, request, execution_ids,
+        _run_all_profiles_background,
+        request,
+        execution_ids,
     )
 
     return {

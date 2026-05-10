@@ -42,9 +42,14 @@ SELECT_MODEL_BY_HASH = """
 
 SELECT_MODEL_BY_NAME_VERSION = """
     SELECT * FROM models_registry
-    WHERE name = $1 AND ($2::text IS NULL OR version = $2)
-    ORDER BY registered_at DESC
+    WHERE name = $1 AND version = $2
     LIMIT 1
+"""
+
+SELECT_MODELS_BY_NAME = """
+    SELECT * FROM models_registry
+    WHERE name = $1
+    ORDER BY registered_at DESC
 """
 
 # ------------------------------------------------------------------
@@ -154,12 +159,7 @@ class ModelManager:
         Database singleton for registry operations.
     """
 
-    def __init__(
-        self,
-        models_dir: Path | str,
-        db: Database,
-        max_cached_models: int = 2
-    ) -> None:
+    def __init__(self, models_dir: Path | str, db: Database, max_cached_models: int = 2) -> None:
         self.models_dir = Path(models_dir)
         self.db = db
         self.max_cached_models = max_cached_models
@@ -168,7 +168,7 @@ class ModelManager:
         logger.info(
             "ModelManager initialised: models_dir=%s, max_cache=%d",
             self.models_dir,
-            self.max_cached_models
+            self.max_cached_models,
         )
 
     # ------------------------------------------------------------------
@@ -202,9 +202,7 @@ class ModelManager:
             logger.warning("No model files found in %s", self.models_dir)
             return []
 
-        logger.info(
-            "Scanning %d model files in %s", len(model_files), self.models_dir
-        )
+        logger.info("Scanning %d model files in %s", len(model_files), self.models_dir)
 
         registered: list[ModelInfo] = []
 
@@ -275,12 +273,27 @@ class ModelManager:
             import gc
 
             import torch
+
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-        # 2. Resolve model path
-        row = await self.db.fetchrow(SELECT_MODEL_BY_NAME_VERSION, name, version)
+        # 2. Resolve model path.  If several variants share the same base
+        # name, callers must request the exact version instead of relying on
+        # "latest registered" order.
+        row = None
+        if version is None and not name.startswith("cfar"):
+            rows = await self.db.fetch(SELECT_MODELS_BY_NAME, name)
+            if len(rows) > 1:
+                variants = ", ".join(sorted(str(r["version"]) for r in rows))
+                raise ValueError(
+                    f"Ambiguous model '{name}': registered versions are "
+                    f"{variants}. Pass model_version explicitly."
+                )
+            if len(rows) == 1:
+                row = rows[0]
+        elif version is not None:
+            row = await self.db.fetchrow(SELECT_MODEL_BY_NAME_VERSION, name, version)
         if row is None:
             model_path = self._find_model_file(name, version)
             if model_path is None:
@@ -305,7 +318,7 @@ class ModelManager:
         # 3. Load appropriate detector type
         detector: BaseDetector
         if name.startswith("cfar"):
-             detector = await self._load_cfar_detector(name, version)
+            detector = await self._load_cfar_detector(name, version)
         else:
             logger.info("Loading YOLO model: %s (path=%s)", cache_key, model_path)
             detector = YOLODetector(
@@ -314,6 +327,11 @@ class ModelManager:
                 iou_threshold=iou_threshold,
                 device=device,
             )
+            if row is not None:
+                detector.model_name = row["name"]
+                detector.model_version = row["version"]
+            elif version is not None:
+                detector.model_version = version
 
         # Propagate compression_technique to the detector so the engine
         # can persist it on every execution_log row (Q3 compresion
@@ -337,6 +355,7 @@ class ModelManager:
     async def _load_cfar_detector(self, name: str, version: str | None) -> BaseDetector:
         """Specialized loader for CFAR algorithm."""
         from src.models.cfar import CFARDetector
+
         logger.info("Loading dynamic CFAR detector: %s", name)
         # Note: CFARDetector should implement BaseDetector
         return CFARDetector()  # type: ignore
@@ -496,9 +515,7 @@ class ModelManager:
             elif isinstance(names, (list, tuple)):
                 classes = list(names)
         except Exception:
-            logger.debug(
-                "Could not extract metadata from %s", model_path.name, exc_info=True
-            )
+            logger.debug("Could not extract metadata from %s", model_path.name, exc_info=True)
 
         # Build compression params JSON
         compression_params: dict[str, Any] | None = None
@@ -509,28 +526,28 @@ class ModelManager:
         # UPSERT_MODEL expects: $1...$14
         await self.db.execute(
             UPSERT_MODEL,
-            name,                                           # $1: name
-            version,                                        # $2: version
-            fmt,                                            # $3: format
-            str(model_path.resolve()),                      # $4: file_path
-            file_hash,                                      # $5: file_hash
-            size_mb,                                        # $6: size_mb
-            base_model,                                     # $7: base_model
-            compression_technique,                          # $8: compression_technique
-            json.dumps(compression_params) if compression_params else None,  # $9: compression_params (JSONB)
-            num_params,                                     # $10: num_params
-            num_layers,                                     # $11: num_layers
-            input_size,                                     # $12: input_size
-            classes,                                        # $13: classes
-            json.dumps({"source": "scan_and_register"}),    # $14: metadata (JSONB)
+            name,  # $1: name
+            version,  # $2: version
+            fmt,  # $3: format
+            str(model_path.resolve()),  # $4: file_path
+            file_hash,  # $5: file_hash
+            size_mb,  # $6: size_mb
+            base_model,  # $7: base_model
+            compression_technique,  # $8: compression_technique
+            json.dumps(compression_params)
+            if compression_params
+            else None,  # $9: compression_params (JSONB)
+            num_params,  # $10: num_params
+            num_layers,  # $11: num_layers
+            input_size,  # $12: input_size
+            classes,  # $13: classes
+            json.dumps({"source": "scan_and_register"}),  # $14: metadata (JSONB)
         )
 
         # Fetch the inserted/updated row to get the generated UUID
         row = await self.db.fetchrow(SELECT_MODEL_BY_HASH, file_hash)
         if row is None:
-            raise RuntimeError(
-                f"Failed to retrieve model after upsert: {name} v{version}"
-            )
+            raise RuntimeError(f"Failed to retrieve model after upsert: {name} v{version}")
         return _row_to_model_info(row)
 
     # I-AIA-1: ai-act-card gate. Sin ficha MODEL_CARD.md el modelo no
@@ -561,9 +578,7 @@ class ModelManager:
             "antes de registrar el modelo."
         )
 
-    def _find_model_file(
-        self, name: str, version: str | None
-    ) -> Path | None:
+    def _find_model_file(self, name: str, version: str | None) -> Path | None:
         """Search the models directory for a file matching the given
         name and version.
 

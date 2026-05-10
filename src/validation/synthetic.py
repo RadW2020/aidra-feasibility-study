@@ -34,18 +34,16 @@ from src.validation.metrics import (
 logger = logging.getLogger(__name__)
 
 
-def _synthetic_tile(size: int, num_vessels: int, seed: int) -> tuple[
-    np.ndarray, list[dict[str, Any]]
-]:
+def _synthetic_tile(
+    size: int, num_vessels: int, seed: int
+) -> tuple[np.ndarray, list[dict[str, Any]]]:
     """Generate one synthetic tile + GT bboxes in pixel coordinates.
 
     The preprocessing helper returns vessel centres + half-widths;
     we project to ``[x_min, y_min, x_max, y_max]`` so the matcher in
     :func:`match_predictions` can score them with bbox IoU.
     """
-    image, gt = generate_synthetic_sar_tile(
-        size=size, num_vessels=num_vessels, seed=seed
-    )
+    image, gt = generate_synthetic_sar_tile(size=size, num_vessels=num_vessels, seed=seed)
     gt_bboxes: list[dict[str, Any]] = []
     for v in gt:
         bbox = v.get("bbox")
@@ -54,16 +52,16 @@ def _synthetic_tile(size: int, num_vessels: int, seed: int) -> tuple[
             w = v.get("width", 8)
             h = v.get("height", 8)
             bbox = [cx - w, cy - h, cx + w, cy + h]
-        gt_bboxes.append({
-            "bbox": [float(x) for x in bbox],
-            "class_name": v.get("class_name", "vessel"),
-        })
+        gt_bboxes.append(
+            {
+                "bbox": [float(x) for x in bbox],
+                "class_name": v.get("class_name", "vessel"),
+            }
+        )
     return image, gt_bboxes
 
 
-def _build_tile_payload(
-    image: np.ndarray, tile_index: int
-) -> dict[str, Any]:
+def _build_tile_payload(image: np.ndarray, tile_index: int) -> dict[str, Any]:
     """Wrap a numpy tile in the dict shape DetectionEngine expects."""
     return {
         "data": image,
@@ -85,6 +83,8 @@ async def run_synthetic_validation(
     tile_size: int = 640,
     seed: int = 42,
     iou_threshold: float = 0.3,
+    match_mode: str = "center",
+    center_tolerance_px: float = 20.0,
     confidence_threshold: float = 0.0,
     pixel_spacing_m: float = 10.0,
 ) -> ValidationReport:
@@ -133,7 +133,8 @@ async def run_synthetic_validation(
             preds,
             gt,
             iou_threshold=iou_threshold,
-            match_mode="iou",
+            match_mode=match_mode,
+            center_tolerance_px=center_tolerance_px,
         )
         gt_total += len(gt)
         pred_total += len(preds)
@@ -144,13 +145,20 @@ async def run_synthetic_validation(
         per_scene_scored.append(scored)
         logger.info(
             "synthetic scene %d/%d: gt=%d preds=%d tp=%d fp=%d fn=%d",
-            i + 1, num_scenes, len(gt), len(preds), tp, fp, fn,
+            i + 1,
+            num_scenes,
+            len(gt),
+            len(preds),
+            tp,
+            fp,
+            fn,
         )
 
     pr_curve = pr_curve_from_scored(per_scene_scored, gt_total)
     return ValidationReport(
         model_name=model_name,
         iou_threshold=iou_threshold,
+        center_tolerance_px=center_tolerance_px,
         confidence_threshold=confidence_threshold,
         num_scenes=num_scenes,
         num_ground_truth=gt_total,
@@ -160,5 +168,5 @@ async def run_synthetic_validation(
         false_negatives=fn_total,
         total_area_km2=area_total,
         pr_curve=pr_curve,
-        match_mode="iou",
+        match_mode=match_mode,
     )

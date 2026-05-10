@@ -63,17 +63,20 @@ async def energy_profile(
                 cpu_cores_used=cpu_pct / 100.0 * 4,  # Scale by utilization
                 processor=processor,
             )
-            results.append({
-                "model_name": row["model_name"],
-                "model_version": row["model_version"],
-                "constraint_profile": row["constraint_profile"],
-                "processor": processor,
-                "inference_ms": row["avg_inference_ms"],
-                **estimate.model_dump(),
-            })
+            results.append(
+                {
+                    "model_name": row["model_name"],
+                    "model_version": row["model_version"],
+                    "constraint_profile": row["constraint_profile"],
+                    "processor": processor,
+                    "inference_ms": row["avg_inference_ms"],
+                    **estimate.model_dump(),
+                }
+            )
 
             # Emit Prometheus metric
             from src.observability.prometheus_metrics import ENERGY_JOULES
+
             ENERGY_JOULES.labels(
                 profile=row["constraint_profile"],
                 model_variant=row["model_name"],
@@ -117,6 +120,7 @@ async def orbital_budget(
 
         # Emit metrics
         from src.observability.prometheus_metrics import IMAGES_PER_ORBIT, TOPS_PER_WATT
+
         tops = profiler.calculate_tops_per_watt(
             model_flops=8_700_000_000,  # ~8.7 GFLOPs for YOLOv8n
             inference_seconds=cpu_time_s,
@@ -124,7 +128,9 @@ async def orbital_budget(
         )
         TOPS_PER_WATT.labels(model_variant=model, processor=processor).set(tops)
         IMAGES_PER_ORBIT.labels(
-            model_variant=model, profile=profile, satellite_type=satellite,
+            model_variant=model,
+            profile=profile,
+            satellite_type=satellite,
         ).set(budget.max_images_per_orbit)
 
         return budget.model_dump()
@@ -144,7 +150,9 @@ async def orbital_budget(
 async def downlink_analysis(
     image_id: str | None = Query(None, description="Execution image_id to look up sizes from DB"),
     image_size_mb: float = Query(800.0, description="SAR image size in MB (used if no image_id)"),
-    result_size_kb: float = Query(10.0, description="Processed result size in KB (used if no image_id)"),
+    result_size_kb: float = Query(
+        10.0, description="Processed result size in KB (used if no image_id)"
+    ),
     downlink_profile: str | None = Query(None, description="Specific downlink profile"),
 ) -> list[dict[str, Any]]:
     """Compare downlink requirements with vs without OBDP.
@@ -209,12 +217,18 @@ async def obdp_value_report() -> dict[str, Any]:
         # Build mock execution records for the report
         records = []
         for row in rows:
-            records.append(type("R", (), {
-                "image_size_mb": row["image_size_mb"],
-                "num_detections": row["num_detections"],
-                "avg_confidence": row["avg_confidence"],
-                "id": row["id"],
-            })())
+            records.append(
+                type(
+                    "R",
+                    (),
+                    {
+                        "image_size_mb": row["image_size_mb"],
+                        "num_detections": row["num_detections"],
+                        "avg_confidence": row["avg_confidence"],
+                        "id": row["id"],
+                    },
+                )()
+            )
 
         report = analyzer.generate_obdp_value_report(records)
         return report.model_dump()
@@ -231,7 +245,10 @@ async def obdp_value_report() -> dict[str, Any]:
 @router.get("/latency")
 async def latency_comparison(
     orbit: str | None = Query(None, description="Orbit type (leo_500, sso_700, leo_350_isstyle)"),
-    downlink: str | None = Query(None, description="Downlink profile (cubesat_uhf, cubesat_sband, smallsat_xband, highcap_ka)"),
+    downlink: str | None = Query(
+        None,
+        description="Downlink profile (cubesat_uhf, cubesat_sband, smallsat_xband, highcap_ka)",
+    ),
     inference_ms: float = Query(150.0, description="On-board inference time in ms"),
     image_size_mb: float = Query(800.0, description="Image size in MB"),
     result_size_kb: float = Query(10.0, description="Result size in KB"),
@@ -267,7 +284,8 @@ async def latency_comparison(
 
 class BitFlipRequest(BaseModel):
     """Request body for bit-flip resilience sweep."""
-    model: str = "yolov8n-sar"
+
+    model: str = "vesseltracker-sar-yolov8"
     flip_counts: list[int] = [0, 1, 5, 10, 50, 100]
     runs_per_count: int = 3
 
@@ -287,6 +305,7 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
 
         settings = Settings()
         from pathlib import Path
+
         model_path = Path(settings.models_dir) / f"{request.model}.pt"
         if not model_path.exists():
             raise HTTPException(404, f"Model file not found: {model_path}")
@@ -307,6 +326,7 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
         # the degradation_pct formula short-circuits to 0% for every flip
         # count, hiding the SEU sensitivity we are trying to measure.
         import numpy as np
+
         test_image, _ = generate_synthetic_sar_tile(size=640, num_vessels=5, seed=42)
         # 99th percentile clip to keep the few hottest pixels from collapsing
         # the rest of the dynamic range; vessels stay bright after rescale.
@@ -323,7 +343,8 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
         baseline_detections = len(baseline_dets)
         baseline_confidence = (
             float(sum(d["confidence"] for d in baseline_dets) / len(baseline_dets))
-            if baseline_dets else 0.0
+            if baseline_dets
+            else 0.0
         )
 
         result = simulator.sweep_bitflips(
@@ -341,6 +362,7 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
         from uuid import uuid4
 
         from src.observability.prometheus_metrics import BITFLIP_DEGRADATION
+
         sweep_id = uuid4()
         for entry in result.results:
             BITFLIP_DEGRADATION.labels(
@@ -373,6 +395,7 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
 
 class OrbitSimulationRequest(BaseModel):
     """Request body for orbit simulation."""
+
     num_images: int = 20
     satellite: str = "cubesat_6u"
 
@@ -385,29 +408,38 @@ async def simulate_orbit(request: OrbitSimulationRequest) -> dict[str, Any]:
         from src.orbital.orbit_params import SATELLITE_POWER_BUDGETS
 
         if request.satellite not in SATELLITE_POWER_BUDGETS:
-            raise HTTPException(400, f"Unknown satellite: {request.satellite}. Options: {list(SATELLITE_POWER_BUDGETS.keys())}")
+            raise HTTPException(
+                400,
+                f"Unknown satellite: {request.satellite}. Options: {list(SATELLITE_POWER_BUDGETS.keys())}",
+            )
 
         sat = SATELLITE_POWER_BUDGETS[request.satellite]
 
         # Build model infos from registry
         from src.db.queries import SELECT_ALL_MODELS
+
         rows = await db.fetch(SELECT_ALL_MODELS)
 
         from src.db.models import ModelInfo
+
         models = []
         for row in rows:
-            models.append(ModelInfo(
-                id=row["id"],
-                name=row["name"],
-                version=row["version"],
-                format=row["format"],
-                file_hash=row["file_hash"],
-                size_mb=row["size_mb"],
-                num_params=row.get("num_params"),
-            ))
+            models.append(
+                ModelInfo(
+                    id=row["id"],
+                    name=row["name"],
+                    version=row["version"],
+                    format=row["format"],
+                    file_hash=row["file_hash"],
+                    size_mb=row["size_mb"],
+                    num_params=row.get("num_params"),
+                )
+            )
 
         if not models:
-            return {"message": "No models registered. Run the pipeline first to populate model registry."}
+            return {
+                "message": "No models registered. Run the pipeline first to populate model registry."
+            }
 
         config = DecisionConfig()
         engine = DecisionEngine(models=models, energy_profiler=None, config=config)
@@ -425,6 +457,7 @@ async def simulate_orbit(request: OrbitSimulationRequest) -> dict[str, Any]:
             BATTERY_LEVEL_WH,
             DECISION_ACTION,
         )
+
         BATTERY_LEVEL_WH.set(result.final_battery_wh)
 
         action_counts: dict[str, int] = {}
@@ -434,6 +467,7 @@ async def simulate_orbit(request: OrbitSimulationRequest) -> dict[str, Any]:
 
         try:
             import json as _json
+
             await db.execute(
                 INSERT_ORBIT_SIM_RUN,
                 request.satellite,
@@ -460,7 +494,9 @@ async def simulate_orbit(request: OrbitSimulationRequest) -> dict[str, Any]:
 
 @router.get("/resilience/drift")
 async def drift_status(
-    window_size: int = Query(10, ge=3, le=100, description="Number of recent executions to analyze"),
+    window_size: int = Query(
+        10, ge=3, le=100, description="Number of recent executions to analyze"
+    ),
 ) -> dict[str, Any]:
     """Check for drift in recent pipeline executions."""
     try:
@@ -482,23 +518,25 @@ async def drift_status(
 
         records = []
         for row in rows:
-            records.append(ExecutionRecord(
-                id=row["id"],
-                created_at=row["created_at"],
-                image_id=row["image_id"],
-                image_hash=row["image_hash"],
-                model_name=row["model_name"],
-                model_version=row["model_version"],
-                model_hash=row["model_hash"],
-                model_size_mb=row["model_size_mb"],
-                num_detections=row["num_detections"],
-                avg_confidence=row["avg_confidence"],
-                output_hash=row["output_hash"],
-                status=row["status"],
-                inference_ms=row.get("inference_ms"),
-                peak_ram_mb=row.get("peak_ram_mb"),
-                cpu_usage_pct=row.get("cpu_usage_pct"),
-            ))
+            records.append(
+                ExecutionRecord(
+                    id=row["id"],
+                    created_at=row["created_at"],
+                    image_id=row["image_id"],
+                    image_hash=row["image_hash"],
+                    model_name=row["model_name"],
+                    model_version=row["model_version"],
+                    model_hash=row["model_hash"],
+                    model_size_mb=row["model_size_mb"],
+                    num_detections=row["num_detections"],
+                    avg_confidence=row["avg_confidence"],
+                    output_hash=row["output_hash"],
+                    status=row["status"],
+                    inference_ms=row.get("inference_ms"),
+                    peak_ram_mb=row.get("peak_ram_mb"),
+                    cpu_usage_pct=row.get("cpu_usage_pct"),
+                )
+            )
 
         config = DecisionConfig()
         engine = DecisionEngine(models=[], energy_profiler=None, config=config)
@@ -508,6 +546,7 @@ async def drift_status(
         # the dashboard reflects historical drift behaviour.
         if result.is_drifting:
             from src.observability.prometheus_metrics import DRIFT_ALERTS
+
             DRIFT_ALERTS.labels(metric=result.metric).inc()
 
         try:
@@ -532,6 +571,7 @@ async def drift_status(
 
 class DecisionRequest(BaseModel):
     """Request body for decision engine query."""
+
     available_cpu: float = 1.0
     available_ram_mb: int = 1024
     available_energy_wh: float = 5.0
@@ -548,17 +588,20 @@ async def query_decision_engine(request: DecisionRequest) -> dict[str, Any]:
         rows = await db.fetch(SELECT_ALL_MODELS)
 
         from src.db.models import ModelInfo
+
         models = []
         for row in rows:
-            models.append(ModelInfo(
-                id=row["id"],
-                name=row["name"],
-                version=row["version"],
-                format=row["format"],
-                file_hash=row["file_hash"],
-                size_mb=row["size_mb"],
-                num_params=row.get("num_params"),
-            ))
+            models.append(
+                ModelInfo(
+                    id=row["id"],
+                    name=row["name"],
+                    version=row["version"],
+                    format=row["format"],
+                    file_hash=row["file_hash"],
+                    size_mb=row["size_mb"],
+                    num_params=row.get("num_params"),
+                )
+            )
 
         if not models:
             return {"action": "skip", "reason": "No models registered", "selected_model": None}
@@ -575,6 +618,7 @@ async def query_decision_engine(request: DecisionRequest) -> dict[str, Any]:
 
         # Emit Prometheus metric
         from src.observability.prometheus_metrics import DECISION_ACTION
+
         DECISION_ACTION.labels(action=result.action).inc()
 
         return result.model_dump()

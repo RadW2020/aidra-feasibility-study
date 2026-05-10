@@ -32,6 +32,11 @@ C. Santamariz, cuyos pesos no están publicados.
   - Polarización: no se documenta cuál(es) se usó(usaron); las
     estadísticas VH y VV difieren.
 - Procedencia: pública (HuggingFace repo público, Apache 2.0).
+- Trazabilidad del dataset de entrenamiento: **no hay snapshot/manifest
+  SHA256 disponible en el repositorio upstream**. AIDRA declara esta
+  limitación como gap I-MOD-4: los pesos tienen SHA256 verificable, pero
+  el dataset exacto usado por el autor original no puede reconstruirse
+  bit-a-bit desde la información pública actual.
 
 # Métricas de validación
 

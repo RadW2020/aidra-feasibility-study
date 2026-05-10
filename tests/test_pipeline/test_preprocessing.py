@@ -16,12 +16,60 @@ import pytest
 
 from src.pipeline.preprocessing import (
     _build_pixel_to_geo_transform,
+    _calibrate_tile_linear,
+    _parse_calibration_lut,
     affine_geo_to_pixel,
     affine_pixel_to_geo,
     apply_lee_filter,
     create_tiles,
     generate_synthetic_sar_tile,
 )
+
+# ====================================================================
+# SAR calibration LUT
+# ====================================================================
+
+
+class TestCalibrationLUT:
+    """Tests for Sentinel-1 line/column calibration interpolation."""
+
+    def test_parse_lut_interpolates_by_azimuth_line(self, tmp_path):
+        xml = tmp_path / "calibration.xml"
+        xml.write_text(
+            """
+<root>
+  <calibrationVector>
+    <line>0</line>
+    <pixel>0 3</pixel>
+    <sigmaNought>1 1</sigmaNought>
+  </calibrationVector>
+  <calibrationVector>
+    <line>9</line>
+    <pixel>0 3</pixel>
+    <sigmaNought>2 2</sigmaNought>
+  </calibrationVector>
+</root>
+""".strip()
+        )
+
+        lut = _parse_calibration_lut(xml, num_rows=10, num_cols=4)
+
+        assert lut is not None
+        window = lut.window(0, 10, 0, 4)
+        assert window.shape == (10, 4)
+        np.testing.assert_allclose(window[0], np.ones(4, dtype=np.float32))
+        np.testing.assert_allclose(window[-1], np.ones(4, dtype=np.float32) * 2)
+        assert 1.0 < float(window[5, 0]) < 2.0
+
+    def test_calibration_uses_2d_lut_not_first_row_only(self):
+        dn = np.ones((2, 2), dtype=np.float32) * 4.0
+        lut = np.array([[1.0, 1.0], [2.0, 2.0]], dtype=np.float32)
+
+        sigma0 = _calibrate_tile_linear(dn, lut)
+
+        np.testing.assert_allclose(sigma0[0], [16.0, 16.0])
+        np.testing.assert_allclose(sigma0[1], [4.0, 4.0])
+
 
 # ====================================================================
 # Synthetic tile generation
@@ -191,9 +239,7 @@ class TestCreateTiles:
         expected_cols = math.ceil(cols / step)
         expected_count = expected_rows * expected_cols
 
-        assert len(tiles) == expected_count, (
-            f"Expected {expected_count} tiles, got {len(tiles)}"
-        )
+        assert len(tiles) == expected_count, f"Expected {expected_count} tiles, got {len(tiles)}"
 
     def test_create_tiles_metadata(self):
         """Each tile dict must include row_offset, col_offset, and geo_bounds."""

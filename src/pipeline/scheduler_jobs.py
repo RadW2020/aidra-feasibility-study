@@ -314,6 +314,7 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
         if target_bbox_geojson:
             try:
                 import json
+
                 geojson = json.loads(target_bbox_geojson)
                 coords = geojson.get("coordinates", [[]])[0]
                 if coords and len(coords) >= 4:
@@ -361,7 +362,7 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
                 result.num_detections,
             )
 
-        except Exception:
+        except Exception as exc:
             # Mark for retry; once attempts hits max_attempts the SQL
             # transitions the row to status='failed' so the dashboard
             # doesn't show exhausted cues as still queued.
@@ -372,11 +373,10 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
                     None,
                     "error",
                     None,
+                    str(exc),
                 )
             except Exception:
-                logger.exception(
-                    "Failed to update cue %s status after error", cue_id
-                )
+                logger.exception("Failed to update cue %s status after error", cue_id)
 
             CUES_EXECUTED_TOTAL.labels(status="discarded").inc()
             logger.exception("Cue %s processing failed", cue_id)
@@ -426,19 +426,13 @@ async def cleanup_old_images(
                 removed_count += 1
             elif item.is_dir():
                 # Compute directory size before removal
-                dir_size = sum(
-                    f.stat().st_size
-                    for f in item.rglob("*")
-                    if f.is_file()
-                )
+                dir_size = sum(f.stat().st_size for f in item.rglob("*") if f.is_file())
                 shutil.rmtree(item)
                 freed_mb += dir_size / (1024 * 1024)
                 removed_count += 1
 
         except OSError:
-            logger.warning(
-                "Failed to remove old image: %s", item, exc_info=True
-            )
+            logger.warning("Failed to remove old image: %s", item, exc_info=True)
 
     logger.info(
         "Image cleanup completed: removed %d items, freed %.1f MB",
@@ -559,20 +553,16 @@ async def nightly_resilience_refresh() -> None:
     logger.info("Nightly resilience refresh starting")
 
     try:
-        result = await simulate_orbit(
-            OrbitSimulationRequest(satellite="small_sat", num_images=30)
-        )
+        result = await simulate_orbit(OrbitSimulationRequest(satellite="small_sat", num_images=30))
         if isinstance(result, dict) and "final_battery_wh" in result:
             logger.info(
-                "Resilience refresh: orbit-sim final_battery_wh=%.2f, "
-                "processed=%d",
+                "Resilience refresh: orbit-sim final_battery_wh=%.2f, processed=%d",
                 result["final_battery_wh"],
                 result.get("processed_images", 0),
             )
         else:
             logger.warning(
-                "Resilience refresh: orbit-sim returned no battery data "
-                "(message=%s)",
+                "Resilience refresh: orbit-sim returned no battery data (message=%s)",
                 (result or {}).get("message") if isinstance(result, dict) else "?",
             )
     except Exception:

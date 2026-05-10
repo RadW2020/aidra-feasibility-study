@@ -20,6 +20,7 @@ services:
       - MODELS_DIR=/app/models
       - IMAGES_DIR=/data/images
       - DEFAULT_MODEL=${DEFAULT_MODEL:-vesseltracker-sar-yolov8}
+      - DEFAULT_MODEL_VERSION=${DEFAULT_MODEL_VERSION:-v1.0}
       - LOG_LEVEL=INFO
       - PROMETHEUS_ENABLED=true
       - LOKI_URL=http://aidra-loki:3100

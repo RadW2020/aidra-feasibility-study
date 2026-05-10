@@ -300,13 +300,24 @@ INSERT_CUE = """
 """
 
 SELECT_PENDING_CUES = """
-    SELECT *, ST_AsGeoJSON(target_bbox) AS target_bbox_geojson
-    FROM tasking_queue
-    WHERE status = 'pending'
-      AND (cooldown_until IS NULL OR cooldown_until < NOW())
-      AND attempts < max_attempts
-    ORDER BY priority DESC, created_at
-    LIMIT $1
+    WITH picked AS (
+        SELECT id
+        FROM tasking_queue
+        WHERE status = 'pending'
+          AND (cooldown_until IS NULL OR cooldown_until < NOW())
+          AND attempts < max_attempts
+        ORDER BY priority DESC, created_at
+        LIMIT $1
+        FOR UPDATE SKIP LOCKED
+    )
+    UPDATE tasking_queue AS q
+    SET status = 'processing',
+        scheduled_at = NOW(),
+        attempts = attempts + 1,
+        last_error = NULL
+    FROM picked
+    WHERE q.id = picked.id
+    RETURNING q.*, ST_AsGeoJSON(q.target_bbox) AS target_bbox_geojson
 """
 
 UPDATE_CUE_STATUS = """
@@ -315,8 +326,7 @@ UPDATE_CUE_STATUS = """
         executed_at = CASE WHEN $2 = 'completed' THEN NOW() ELSE executed_at END,
         execution_id = $3,
         result_status = $4,
-        confirmed_detections = $5,
-        attempts = attempts + 1
+        confirmed_detections = $5
     WHERE id = $1
 """
 
@@ -327,13 +337,17 @@ UPDATE_CUE_STATUS = """
 UPDATE_CUE_AFTER_ERROR = """
     UPDATE tasking_queue
     SET status = CASE
-            WHEN attempts + 1 >= max_attempts THEN 'failed'
+            WHEN attempts >= max_attempts THEN 'failed'
             ELSE 'pending'
         END,
         execution_id = $2,
         result_status = $3,
         confirmed_detections = $4,
-        attempts = attempts + 1
+        last_error = $5,
+        cooldown_until = CASE
+            WHEN attempts >= max_attempts THEN cooldown_until
+            ELSE NOW() + INTERVAL '15 minutes'
+        END
     WHERE id = $1
 """
 

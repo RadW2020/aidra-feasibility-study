@@ -65,7 +65,7 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
 
 ## R6 — Reproducibilidad rota: `output_hash` no estable + `input_params_hash NULL`
 
-- **Severidad:** A · **Probabilidad:** A · **Estado:** mitigado (2026-05-08, parte 2)
+- **Severidad:** A · **Probabilidad:** A · **Estado:** reabierto parcial (2026-05-10)
 - **Descripcion:** Auditoria contra prod (2026-05-08) detecto que `output_hash` difiere en TODAS las re-ejecuciones de la misma escena con mismo modelo y mismo perfil — 12 runs muestrados, 12 hashes distintos. Adicionalmente, `input_params_hash` y `commit_sha` aparecian NULL en runs disparados via `trigger-all-profiles`.
 - **Impacto:** El gate `gate:reproducibility` declarado en CLAUDE.md §6 ("mismo input → mismo output_hash") NO se cumplia en produccion. El bundle D3 verificaba presencia de hash, no reproducibilidad real.
 - **Mitigaciones aplicadas:**
@@ -74,10 +74,12 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
   3. `commit_sha` resuelto via `SOURCE_COMMIT` (Coolify) → `AIDRA_COMMIT_SHA` → `git rev-parse HEAD` (I-TRACE-4, migration 004). ✓
   4. `MODEL_CARD.md` incluye SHA256 del peso. ✓
   5. CI bloquea PRs que muevan pesos sin actualizar la ficha. ✓
-- **Evidencia de cierre (2026-05-08):** terna FP32 v2 sobre image_id `76f82d1c` produjo `output_hash=2c62f00608a38147…` IDENTICO en los 4 perfiles que completaron (`ground`, `sat-high`, `sat-mid`, `sat-low`), todos con `num_detections=1092`. Detalle en `EVIDENCE.md` seccion "Determinism evidence".
+- **Evidencia corregida (2026-05-10):** la terna que se habia descrito como FP32 sobre image_id `76f82d1c` era en realidad `dynamic_int8` (`model_name='vesseltracker-sar-yolov8-int8-dynamic'`) por resolucion ambigua de modelo sin version explicita. El `output_hash=2c62f00608a38147…` identico en 4 perfiles prueba la canonicalizacion del hash para ese batch concreto, pero **no cierra reproducibilidad FP32**.
+- **Mitigacion adicional en repo (2026-05-10):** `PipelineRequest` y `PipelineTriggerRequest` aceptan `model_version`; `Settings.default_model_version='v1.0'`; `ModelManager.get_model()` rechaza nombres ambiguos con multiples variantes si no se pasa version; `input_params_hash` incluye la version solicitada.
 - **Caveats residuales:**
   1. Runs antiguos persistidos antes del fix conservan sus hashes "rotos" — no se backfill-ean (cada run es snapshot a su tiempo); el determinismo es propiedad de runs nuevos.
   2. Para `INT8 dinamico` se observo no-determinismo en `num_detections` (1127 vs 9490 sobre la misma escena con mismos params); ver R12 mas abajo.
+  3. Falta ejecutar y registrar nueva ronda FP32 explicita (`model_version='v1.0'`) en prod post-fix.
 - **Trigger de re-apertura:** verifier `--bundle` reporta hash mismatch sin justificacion, o nueva ronda de runs identicos produce > 1 `output_hash` distinct.
 
 ## R12 — INT8 dinamico no determinista en numero de detecciones

@@ -58,25 +58,28 @@ async def health_check() -> HealthResponse:
         ) from exc
 
     # -- 2. Models loaded --
-    models_loaded = 0
+    model_files_count = 0
     try:
         models_dir = Path(settings.models_dir)
         if models_dir.is_dir():
             # Count .pt, .onnx, .tflite model files
             for ext in ("*.pt", "*.onnx", "*.tflite"):
-                models_loaded += len(list(models_dir.glob(ext)))
+                model_files_count += len(list(models_dir.glob(ext)))
     except Exception:
         logger.debug("Could not count model files", exc_info=True)
 
     # Also count models registered in DB (more authoritative when available)
+    registered_models_count = 0
     try:
-        db_model_count = await db.fetchval(
-            "SELECT COUNT(*) FROM models_registry"
-        )
-        if db_model_count and db_model_count > models_loaded:
-            models_loaded = db_model_count
+        db_model_count = await db.fetchval("SELECT COUNT(*) FROM models_registry")
+        registered_models_count = int(db_model_count or 0)
     except Exception:
         pass  # Table might not exist yet
+
+    # Backward-compatible field: keep reporting the larger legacy count, but
+    # expose the two meanings separately so health does not imply six
+    # operationally registered models when it merely saw six weight files.
+    models_loaded = max(model_files_count, registered_models_count)
 
     # -- 3. Scheduler status --
     scheduler_status = "stopped"
@@ -106,6 +109,8 @@ async def health_check() -> HealthResponse:
         status=status,
         db=db_status,
         models_loaded=models_loaded,
+        model_files_count=model_files_count,
+        registered_models_count=registered_models_count,
         scheduler=scheduler_status,
         version="1.0.0",
         uptime_seconds=uptime,

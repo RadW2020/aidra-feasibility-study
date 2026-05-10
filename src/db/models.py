@@ -131,6 +131,8 @@ class TaskingEntry(BaseModel):
     result_status: str | None = None
     confirmed_detections: int | None = None
     attempts: int = 0
+    max_attempts: int = 3
+    last_error: str | None = None
 
 
 class BenchmarkResult(BaseModel):
@@ -170,6 +172,7 @@ class PipelineTriggerRequest(BaseModel):
 
     zone: str = "gibraltar"
     model: str | None = None
+    model_version: str | None = None
     profile: str = "ground"
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None
@@ -204,6 +207,8 @@ class HealthResponse(BaseModel):
     status: str
     db: str
     models_loaded: int
+    model_files_count: int | None = None
+    registered_models_count: int | None = None
     scheduler: str
     version: str = "1.0.0"
     uptime_seconds: float | None = None

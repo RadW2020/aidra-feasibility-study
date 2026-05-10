@@ -72,9 +72,7 @@ class YOLODetector(BaseDetector):
     ) -> None:
         self.model_path = Path(model_path)
         if not self.model_path.exists():
-            raise FileNotFoundError(
-                f"Model weights not found: {self.model_path}"
-            )
+            raise FileNotFoundError(f"Model weights not found: {self.model_path}")
 
         self.confidence_threshold = confidence_threshold
         self.iou_threshold = iou_threshold
@@ -84,6 +82,7 @@ class YOLODetector(BaseDetector):
         suffix = self.model_path.suffix.lower()
         self.model_format: str = "onnx" if suffix == ".onnx" else "pytorch"
         self.model_name: str = self.model_path.stem
+        self.model_version: str = "v1.0"
         self.model_size_mb: float = self.model_path.stat().st_size / (1024 * 1024)
         self.model_hash: str = _sha256_file(self.model_path)
         # Set by ModelManager after construction from models_registry row
@@ -134,6 +133,7 @@ class YOLODetector(BaseDetector):
         Used after bit-flip injection to test inference with corrupted weights.
         """
         import torch
+
         state = self._model.model.state_dict()
         for name, arr in weights.items():
             if name in state:
@@ -197,9 +197,7 @@ class YOLODetector(BaseDetector):
         )
         return detections
 
-    def predict_batch(
-        self, tiles: list[NDArray[np.uint8]]
-    ) -> list[list[dict[str, Any]]]:
+    def predict_batch(self, tiles: list[NDArray[np.uint8]]) -> list[list[dict[str, Any]]]:
         """Run batch inference on multiple tiles.
 
         Parameters
@@ -254,9 +252,7 @@ class YOLODetector(BaseDetector):
         )
         return batch_detections
 
-    def export_onnx(
-        self, output_path: Path | str, opset: int = 13
-    ) -> Path:
+    def export_onnx(self, output_path: Path | str, opset: int = 13) -> Path:
         """Export a PyTorch model to ONNX format.
 
         Parameters
@@ -277,14 +273,11 @@ class YOLODetector(BaseDetector):
         """
         if self.model_format != "pytorch":
             raise RuntimeError(
-                f"Cannot export to ONNX: model is already in "
-                f"{self.model_format} format"
+                f"Cannot export to ONNX: model is already in {self.model_format} format"
             )
 
         output_path = Path(output_path)
-        logger.info(
-            "Exporting YOLO model to ONNX: %s (opset=%d)", output_path, opset
-        )
+        logger.info("Exporting YOLO model to ONNX: %s (opset=%d)", output_path, opset)
 
         # ultralytics .export() returns the path to the exported file
         exported = self._model.export(format="onnx", opset=opset)
@@ -316,9 +309,7 @@ class YOLODetector(BaseDetector):
         try:
             model_obj = self._model.model
             if hasattr(model_obj, "parameters"):
-                num_params = sum(
-                    p.numel() for p in model_obj.parameters()
-                )
+                num_params = sum(p.numel() for p in model_obj.parameters())
             if hasattr(model_obj, "model"):
                 # YOLOv8 sequential layers
                 num_layers = len(list(model_obj.model.modules()))
@@ -338,6 +329,7 @@ class YOLODetector(BaseDetector):
 
         return {
             "name": self.model_name,
+            "version": self.model_version,
             "format": self.model_format,
             "size_mb": round(self.model_size_mb, 2),
             "hash": self.model_hash,
