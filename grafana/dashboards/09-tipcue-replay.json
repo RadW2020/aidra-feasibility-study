@@ -19,6 +19,19 @@
   "templating": {
     "list": [
       {
+        "name": "timeframe",
+        "type": "custom",
+        "label": "Time scope",
+        "description": "Operational (post-fix) hides cues created before the Tip & Cue zone-mapping fix (migrations 013/014, cutoff 2026-05-11). Full history shows every cue ever recorded.",
+        "query": "Operational (post-fix) : 2026-05-11T00:00:00Z, Full history : 1970-01-01T00:00:00Z",
+        "current": {"text": "Operational (post-fix)", "value": "2026-05-11T00:00:00Z"},
+        "options": [
+          {"text": "Operational (post-fix)", "value": "2026-05-11T00:00:00Z", "selected": true},
+          {"text": "Full history",           "value": "1970-01-01T00:00:00Z", "selected": false}
+        ],
+        "multi": false
+      },
+      {
         "name": "status",
         "type": "custom",
         "label": "Cue status",
@@ -53,7 +66,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
       "options": {
         "mode": "markdown",
-        "content": "**Tip & Cue** is AIDRA's autonomous re-tasking loop. When a pipeline run produces a low-or-moderate-confidence detection cluster in a zone of interest, the evaluator queues a `cue` to **re-observe** the same area in the next satellite pass. Each row below is a chain `T0 → Cue → T1`.\n\n- **T0** = the original execution that triggered the cue.\n- **Cue** = the re-tasking entry (target zone, priority, reason).\n- **T1** = the re-observation execution (when the scheduler runs the cue).\n\nClick **▶ Open replay** to see a visual side-by-side comparison: SAR thumbnails of the triggering detections vs. the confirming detections, with confidence uplift and latency metrics. This is the SatCen tender extra: the satellite chasing its own findings."
+        "content": "**Tip & Cue** is AIDRA's autonomous re-tasking loop. When a pipeline run produces a low-or-moderate-confidence detection cluster in a zone of interest, the evaluator queues a `cue` to **re-observe** the same area in the next satellite pass. Each row below is a chain `T0 → Cue → T1`.\n\n- **T0** = the original execution that triggered the cue.\n- **Cue** = the re-tasking entry (target zone, priority, reason).\n- **T1** = the re-observation execution (when the scheduler runs the cue).\n\nClick **▶ Open replay** to see a visual side-by-side comparison: SAR thumbnails of the triggering detections vs. the confirming detections, with confidence uplift and latency metrics. This is the SatCen tender extra: the satellite chasing its own findings.\n\n> **Time scope** (variable above): defaults to **Operational (post-fix)**, which hides cues created before the Tip & Cue zone-mapping fix (migrations 013/014, cutoff 2026-05-11). Switch to **Full history** to audit the pre-fix incident — the failed rows are kept on purpose for traceability."
       }
     },
     {
@@ -67,7 +80,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '$timeframe'::timestamptz\n  AND ('$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -140,7 +153,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COUNT(*) AS completed\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND status = 'completed'",
+          "rawSql": "SELECT COUNT(*) AS completed\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '$timeframe'::timestamptz\n  AND status = 'completed'",
           "format": "table",
           "editorMode": "code"
         }
@@ -170,7 +183,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT ROUND(AVG(cardinality(triggering_detections))::numeric, 1) AS avg_dets\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT ROUND(AVG(cardinality(triggering_detections))::numeric, 1) AS avg_dets\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '$timeframe'::timestamptz\n  AND ('$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -199,7 +212,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COALESCE(target_zone, 'unknown') AS zone, COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR status = '$status')\nGROUP BY target_zone\nORDER BY cues DESC\nLIMIT 8",
+          "rawSql": "SELECT COALESCE(target_zone, 'unknown') AS zone, COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '$timeframe'::timestamptz\n  AND ('$status' = 'all' OR status = '$status')\nGROUP BY target_zone\nORDER BY cues DESC\nLIMIT 8",
           "format": "table",
           "editorMode": "code"
         }
@@ -221,7 +234,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT\n    '${api_base}/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    t.attempts                                    AS \"attempts\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    COALESCE(t.last_error, '')                    AS \"last_error\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND ('$status' = 'all' OR t.status = '$status')\nORDER BY t.created_at DESC\nLIMIT 100",
+          "rawSql": "SELECT\n    '${api_base}/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    t.attempts                                    AS \"attempts\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    COALESCE(t.last_error, '')                    AS \"last_error\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND t.created_at >= '$timeframe'::timestamptz\n  AND ('$status' = 'all' OR t.status = '$status')\nORDER BY t.created_at DESC\nLIMIT 100",
           "format": "table",
           "editorMode": "code"
         }

@@ -13,6 +13,19 @@
   "templating": {
     "list": [
       {
+        "name": "timeframe",
+        "type": "custom",
+        "label": "Time scope",
+        "description": "Operational (post-fix) hides execution rows created before the Tip & Cue zone-mapping fix (migrations 013/014, cutoff 2026-05-11). Full history shows every recorded run, including the pre-fix incident.",
+        "query": "Operational (post-fix) : 2026-05-11T00:00:00Z, Full history : 1970-01-01T00:00:00Z",
+        "current": {"text": "Operational (post-fix)", "value": "2026-05-11T00:00:00Z"},
+        "options": [
+          {"text": "Operational (post-fix)", "value": "2026-05-11T00:00:00Z", "selected": true},
+          {"text": "Full history",           "value": "1970-01-01T00:00:00Z", "selected": false}
+        ],
+        "multi": false
+      },
+      {
         "name": "model",
         "type": "query",
         "label": "Model",
@@ -47,7 +60,7 @@
       "gridPos": {"x": 0, "y": 0, "w": 24, "h": 4},
       "options": {
         "mode": "html",
-        "content": "<div style='padding:18px 22px;border-radius:8px;background:#0f1924;border:1px solid #26384c;color:#dde6f3'>\n  <div style='font-size:11px;color:#84baef;letter-spacing:2px;font-weight:700;margin-bottom:8px'>EVALUATOR VIEW</div>\n  <div style='font-size:24px;font-weight:800;color:#f3f6fb;margin-bottom:6px'>Can the deployed AIDRA run produce auditable D3/D4 evidence?</div>\n  <div style='font-size:14px;line-height:1.55;max-width:1200px'>This dashboard is intentionally evidence-first: live operational status, GEOINT output, traceability completeness, hardware-profile budget fit, model registry and known validation gaps. Green means the deployed database contains the evidence; yellow/red means the evaluator should ask for the referenced offline artefact or a new run.</div>\n</div>"
+        "content": "<div style='padding:18px 22px;border-radius:8px;background:#0f1924;border:1px solid #26384c;color:#dde6f3'>\n  <div style='font-size:11px;color:#84baef;letter-spacing:2px;font-weight:700;margin-bottom:8px'>EVALUATOR VIEW</div>\n  <div style='font-size:24px;font-weight:800;color:#f3f6fb;margin-bottom:6px'>Can the deployed AIDRA run produce auditable D3/D4 evidence?</div>\n  <div style='font-size:14px;line-height:1.55;max-width:1200px'>This dashboard is intentionally evidence-first: live operational status, GEOINT output, traceability completeness, hardware-profile budget fit, model registry and known validation gaps. Green means the deployed database contains the evidence; yellow/red means the evaluator should ask for the referenced offline artefact or a new run.</div>\n  <div style='font-size:12px;color:#9cb1cc;margin-top:10px;line-height:1.5'>Default <b>Time scope</b> is <i>Operational (post-fix)</i> — runs created before the 2026-05-11 Tip &amp; Cue zone-mapping fix (migrations 013/014) are hidden so the operational KPIs reflect the current build. Switch to <i>Full history</i> to audit the pre-fix incident; failed rows are kept on purpose for traceability.</div>\n</div>"
       }
     },
     {
@@ -60,7 +73,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COUNT(*) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
+          "rawSql": "SELECT COUNT(*) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND created_at >= '$timeframe'::timestamptz\n  AND status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -78,7 +91,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND d.quality_verdict = 'valid_sea_target'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
+          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '$timeframe'::timestamptz\n  AND e.status = 'success'\n  AND d.quality_verdict = 'valid_sea_target'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -97,7 +110,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "WITH latest AS (\n  SELECT commit_sha\n  FROM execution_log\n  WHERE commit_sha IS NOT NULL AND commit_sha <> ''\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT COALESCE(AVG(CASE WHEN image_hash IS NOT NULL AND image_hash <> ''\n    AND model_hash IS NOT NULL AND model_hash <> ''\n    AND output_hash IS NOT NULL AND output_hash <> ''\n    AND input_params_hash IS NOT NULL AND input_params_hash <> ''\n    AND e.commit_sha IS NOT NULL AND e.commit_sha <> ''\nTHEN 1.0 ELSE 0.0 END), 0) AS value\nFROM execution_log e\nJOIN latest l ON l.commit_sha = e.commit_sha\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
+          "rawSql": "WITH latest AS (\n  SELECT commit_sha\n  FROM execution_log\n  WHERE commit_sha IS NOT NULL AND commit_sha <> ''\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT COALESCE(AVG(CASE WHEN image_hash IS NOT NULL AND image_hash <> ''\n    AND model_hash IS NOT NULL AND model_hash <> ''\n    AND output_hash IS NOT NULL AND output_hash <> ''\n    AND input_params_hash IS NOT NULL AND input_params_hash <> ''\n    AND e.commit_sha IS NOT NULL AND e.commit_sha <> ''\nTHEN 1.0 ELSE 0.0 END), 0) AS value\nFROM execution_log e\nJOIN latest l ON l.commit_sha = e.commit_sha\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '$timeframe'::timestamptz\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -115,7 +128,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "WITH latest AS (\n  SELECT commit_sha\n  FROM execution_log\n  WHERE commit_sha IS NOT NULL AND commit_sha <> ''\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT COALESCE(AVG(CASE WHEN e.status = 'success' THEN 0.0 ELSE 1.0 END), 0) AS value\nFROM execution_log e\nJOIN latest l ON l.commit_sha = e.commit_sha\nWHERE $__timeFilter(e.created_at)\n  AND e.status NOT IN ('pending', 'running')\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
+          "rawSql": "WITH latest AS (\n  SELECT commit_sha\n  FROM execution_log\n  WHERE commit_sha IS NOT NULL AND commit_sha <> ''\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT COALESCE(AVG(CASE WHEN e.status = 'success' THEN 0.0 ELSE 1.0 END), 0) AS value\nFROM execution_log e\nJOIN latest l ON l.commit_sha = e.commit_sha\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '$timeframe'::timestamptz\n  AND e.status NOT IN ('pending', 'running')\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -133,7 +146,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS value\nFROM execution_log\nWHERE status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS value\nFROM execution_log\nWHERE created_at >= '$timeframe'::timestamptz\n  AND status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -152,7 +165,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT\n  created_at AS run_at,\n  LEFT(id::text, 8) AS run_id,\n  model_name,\n  model_version,\n  constraint_profile AS profile,\n  LEFT(image_hash, 12) AS image_sha,\n  LEFT(model_hash, 12) AS model_sha,\n  LEFT(output_hash, 12) AS output_sha,\n  LEFT(input_params_hash, 12) AS settings_sha,\n  LEFT(commit_sha, 10) AS commit,\n  num_detections,\n  ROUND((inference_ms / 60000.0)::numeric, 1) AS inference_min\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')\nORDER BY created_at DESC\nLIMIT 10",
+          "rawSql": "SELECT\n  created_at AS run_at,\n  LEFT(id::text, 8) AS run_id,\n  model_name,\n  model_version,\n  constraint_profile AS profile,\n  LEFT(image_hash, 12) AS image_sha,\n  LEFT(model_hash, 12) AS model_sha,\n  LEFT(output_hash, 12) AS output_sha,\n  LEFT(input_params_hash, 12) AS settings_sha,\n  LEFT(commit_sha, 10) AS commit,\n  num_detections,\n  ROUND((inference_ms / 60000.0)::numeric, 1) AS inference_min\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND created_at >= '$timeframe'::timestamptz\n  AND status = 'success'\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')\nORDER BY created_at DESC\nLIMIT 10",
           "format": "table",
           "editorMode": "code"
         }
@@ -171,7 +184,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "WITH budgets(profile, cpu_budget, ram_budget_mb) AS (\n  VALUES\n    ('ground', 4.0, 24576),\n    ('sat-high', 2.0, 4096),\n    ('sat-mid', 1.0, 2048),\n    ('sat-low', 0.5, 1024),\n    ('sat-extreme', 0.25, 512)\n), runs AS (\n  SELECT constraint_profile AS profile,\n         COUNT(*) AS runs,\n         AVG(inference_ms) / 60000.0 AS avg_latency_min,\n         AVG(peak_ram_mb) AS avg_ram_mb,\n         AVG(cpu_usage_pct) AS avg_cpu_pct\n  FROM execution_log\n  WHERE $__timeFilter(created_at)\n    AND status = 'success'\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n  GROUP BY constraint_profile\n)\nSELECT b.profile,\n       b.ram_budget_mb,\n       ROUND(r.avg_ram_mb::numeric, 0) AS observed_ram_mb,\n       ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n       b.cpu_budget,\n       ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n       ROUND(r.avg_latency_min::numeric, 1) AS latency_min,\n       COALESCE(r.runs, 0) AS runs,\n       CASE\n         WHEN r.runs IS NULL THEN 'NO DATA'\n         WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n         WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget * 1.10) THEN 'WARN_CPU'\n         ELSE 'PASS'\n       END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile WHEN 'ground' THEN 1 WHEN 'sat-high' THEN 2 WHEN 'sat-mid' THEN 3 WHEN 'sat-low' THEN 4 WHEN 'sat-extreme' THEN 5 END",
+          "rawSql": "WITH budgets(profile, cpu_budget, ram_budget_mb) AS (\n  VALUES\n    ('ground', 4.0, 24576),\n    ('sat-high', 2.0, 4096),\n    ('sat-mid', 1.0, 2048),\n    ('sat-low', 0.5, 1024),\n    ('sat-extreme', 0.25, 512)\n), runs AS (\n  SELECT constraint_profile AS profile,\n         COUNT(*) AS runs,\n         AVG(inference_ms) / 60000.0 AS avg_latency_min,\n         AVG(peak_ram_mb) AS avg_ram_mb,\n         AVG(cpu_usage_pct) AS avg_cpu_pct\n  FROM execution_log\n  WHERE $__timeFilter(created_at)\n    AND created_at >= '$timeframe'::timestamptz\n    AND status = 'success'\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n  GROUP BY constraint_profile\n)\nSELECT b.profile,\n       b.ram_budget_mb,\n       ROUND(r.avg_ram_mb::numeric, 0) AS observed_ram_mb,\n       ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n       b.cpu_budget,\n       ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n       ROUND(r.avg_latency_min::numeric, 1) AS latency_min,\n       COALESCE(r.runs, 0) AS runs,\n       CASE\n         WHEN r.runs IS NULL THEN 'NO DATA'\n         WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n         WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget * 1.10) THEN 'WARN_CPU'\n         ELSE 'PASS'\n       END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile WHEN 'ground' THEN 1 WHEN 'sat-high' THEN 2 WHEN 'sat-mid' THEN 3 WHEN 'sat-low' THEN 4 WHEN 'sat-extreme' THEN 5 END",
           "format": "table",
           "editorMode": "code"
         }
@@ -196,7 +209,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT\n  model_name,\n  model_version,\n  COALESCE(NULLIF(compression_technique, ''), 'none') AS compression,\n  ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n  COUNT(*) FILTER (WHERE status = 'success') AS success_runs,\n  ROUND((AVG(inference_ms) FILTER (WHERE status = 'success') / 60000.0)::numeric, 1) AS avg_latency_min,\n  ROUND(AVG(avg_confidence) FILTER (WHERE status = 'success')::numeric, 3) AS avg_confidence,\n  (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n  (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n  (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n  CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS accuracy_evidence\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY model_name, model_version, compression_technique\nORDER BY model_name, compression",
+          "rawSql": "SELECT\n  model_name,\n  model_version,\n  COALESCE(NULLIF(compression_technique, ''), 'none') AS compression,\n  ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n  COUNT(*) FILTER (WHERE status = 'success') AS success_runs,\n  ROUND((AVG(inference_ms) FILTER (WHERE status = 'success') / 60000.0)::numeric, 1) AS avg_latency_min,\n  ROUND(AVG(avg_confidence) FILTER (WHERE status = 'success')::numeric, 3) AS avg_confidence,\n  (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n  (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n  (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n  CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS accuracy_evidence\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND created_at >= '$timeframe'::timestamptz\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY model_name, model_version, compression_technique\nORDER BY model_name, compression",
           "format": "table",
           "editorMode": "code"
         }
@@ -215,7 +228,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'valid_sea_target') AS valid_sea_targets,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'candidate') AS cfar_candidates,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'land_artifact') AS land_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'cluster_artifact') AS cluster_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'outside_footprint') AS outside_footprint,\n  ROUND(AVG(d.confidence) FILTER (WHERE d.quality_verdict = 'valid_sea_target')::numeric, 3) AS valid_avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
+          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'valid_sea_target') AS valid_sea_targets,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'candidate') AS cfar_candidates,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'land_artifact') AS land_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'cluster_artifact') AS cluster_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'outside_footprint') AS outside_footprint,\n  ROUND(AVG(d.confidence) FILTER (WHERE d.quality_verdict = 'valid_sea_target')::numeric, 3) AS valid_avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '$timeframe'::timestamptz\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
           "format": "table",
           "editorMode": "code"
         }
