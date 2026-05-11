@@ -209,3 +209,129 @@ async def test_trigger_request_defaults(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "started"
+
+
+# ------------------------------------------------------------------
+# test_reset_idle_noop
+# ------------------------------------------------------------------
+
+
+async def test_reset_idle_noop(client):
+    """POST /api/pipeline/reset is a no-op when the flag is already idle."""
+    _reset_pipeline_state()
+    resp = await client.post("/api/pipeline/reset")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data == {"status": "already_idle", "cleared": False}
+
+
+# ------------------------------------------------------------------
+# test_reset_clears_stale_state
+# ------------------------------------------------------------------
+
+
+async def test_reset_clears_stale_state(client, mock_db):
+    """Reset clears the flag when execution_log shows no active run."""
+    from uuid import uuid4
+
+    stale_eid = uuid4()
+    pipeline_mod._pipeline_state.update(
+        running=True,
+        current_profile="sat-extreme",
+        progress=0.0,
+        current_execution_id=str(stale_eid),
+    )
+
+    # Mock fetchrow to return a terminal status for that execution
+    from tests.test_api.conftest import FakeRecord
+    mock_db.fetchrow.return_value = FakeRecord(status="failed")
+
+    try:
+        resp = await client.post("/api/pipeline/reset")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cleared"] is True
+        assert data["prior_state"]["current_profile"] == "sat-extreme"
+        assert pipeline_mod._pipeline_state["running"] is False
+    finally:
+        _reset_pipeline_state()
+
+
+# ------------------------------------------------------------------
+# test_reset_blocked_when_active
+# ------------------------------------------------------------------
+
+
+async def test_reset_blocked_when_active(client, mock_db):
+    """Reset returns 409 with offending ids when an execution is still running."""
+    from uuid import uuid4
+
+    live_eid = uuid4()
+    pipeline_mod._pipeline_state.update(
+        running=True,
+        current_profile="ground",
+        progress=0.5,
+        current_execution_id=str(live_eid),
+    )
+
+    from tests.test_api.conftest import FakeRecord
+    mock_db.fetchrow.return_value = FakeRecord(status="running")
+
+    try:
+        resp = await client.post("/api/pipeline/reset")
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert str(live_eid) in detail["blocking_execution_ids"]
+        # State must NOT have been cleared
+        assert pipeline_mod._pipeline_state["running"] is True
+    finally:
+        _reset_pipeline_state()
+
+
+# ------------------------------------------------------------------
+# test_reset_all_profiles_mode
+# ------------------------------------------------------------------
+
+
+async def test_reset_all_profiles_mode_with_no_active_rows(client, mock_db):
+    """When current_profile='all' and no rows are pending/running, reset clears state."""
+    pipeline_mod._pipeline_state.update(
+        running=True,
+        current_profile="all",
+        progress=0.0,
+        current_execution_id=None,
+    )
+
+    mock_db.fetch.return_value = []  # no blocking rows
+
+    try:
+        resp = await client.post("/api/pipeline/reset")
+        assert resp.status_code == 200
+        assert resp.json()["cleared"] is True
+        assert pipeline_mod._pipeline_state["running"] is False
+    finally:
+        _reset_pipeline_state()
+
+
+async def test_reset_all_profiles_mode_blocked(client, mock_db):
+    """When current_profile='all' and rows are still running, reset returns 409."""
+    from uuid import uuid4
+
+    pipeline_mod._pipeline_state.update(
+        running=True,
+        current_profile="all",
+        progress=0.0,
+        current_execution_id=None,
+    )
+
+    live_eid = uuid4()
+    from tests.test_api.conftest import FakeRecord
+    mock_db.fetch.return_value = [FakeRecord(id=live_eid)]
+
+    try:
+        resp = await client.post("/api/pipeline/reset")
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert str(live_eid) in detail["blocking_execution_ids"]
+    finally:
+        _reset_pipeline_state()

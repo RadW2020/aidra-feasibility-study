@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from src.db.connection import db
 from src.db.models import (
     PipelineStatusResponse,
     PipelineTriggerRequest,
@@ -296,6 +297,76 @@ async def trigger_all_profiles(
         "profiles": _ALL_PROFILES,
         "executions": {p: str(eid) for p, eid in execution_ids.items()},
     }
+
+
+@router.post("/pipeline/reset")
+async def reset_pipeline_state() -> dict:
+    """Release ``_pipeline_state`` when it disagrees with ``execution_log``.
+
+    The in-memory ``_pipeline_state`` flag and the ``execution_log`` rows are
+    updated by independent code paths: the background task that runs the
+    pipeline owns the flag, while ``reap_orphan_executions`` only touches
+    the database. If the API process is restarted mid-run, or the orphan
+    reaper closes a row that the background task is still chasing, the
+    flag can stay ``running=True`` indefinitely and every new
+    ``/api/pipeline/trigger*`` call returns 409.
+
+    This endpoint reconciles the two sources of truth without an SSH or
+    container restart: it inspects the current ``execution_id`` (and any
+    recent rows when the run was ``trigger-all-profiles``), and only
+    clears the flag when no row remains in ``pending`` or ``running``.
+    Returns 409 with the offending execution ids when the run is
+    genuinely still active.
+
+    Auditable by design: every call is bearer-token authenticated through
+    the global write middleware and writes an INFO log line with the
+    state being cleared.
+    """
+    if not _pipeline_state["running"]:
+        return {"status": "already_idle", "cleared": False}
+
+    eid = _pipeline_state.get("current_execution_id")
+    profile = _pipeline_state.get("current_profile")
+
+    blocking_ids: list[str] = []
+
+    if eid:
+        row = await db.fetchrow(
+            "SELECT status FROM execution_log WHERE id = $1::uuid",
+            eid,
+        )
+        if row and row["status"] in ("pending", "running"):
+            blocking_ids.append(eid)
+    elif profile == "all":
+        # trigger-all-profiles does not pin current_execution_id; reconcile
+        # by looking at the most recent batch (last 6 hours is a safe
+        # upper bound — sat-extreme tops out near 2.5h, so anything older
+        # is either complete or already reaped).
+        rows = await db.fetch(
+            "SELECT id FROM execution_log "
+            "WHERE status IN ('pending', 'running') "
+            "AND created_at > NOW() - INTERVAL '6 hours'",
+        )
+        blocking_ids.extend(str(r["id"]) for r in rows)
+
+    if blocking_ids:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Pipeline state is consistent with execution_log; not clearing.",
+                "blocking_execution_ids": blocking_ids,
+            },
+        )
+
+    prior = dict(_pipeline_state)
+    _pipeline_state.update(
+        running=False,
+        current_profile=None,
+        progress=None,
+        current_execution_id=None,
+    )
+    logger.info("Pipeline state reset; prior state was %s", prior)
+    return {"status": "cleared", "cleared": True, "prior_state": prior}
 
 
 @router.get("/pipeline/status", response_model=PipelineStatusResponse)
