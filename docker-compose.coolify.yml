@@ -103,6 +103,25 @@ services:
           memory: 512M
         reservations:
           memory: 256M
+    # Custom Traefik labels: when a visitor hits the bare domain
+    # (https://aidra.uliber.com/) Grafana would redirect to /login because
+    # the root path belongs to the admin console. Public dashboards
+    # already live at /public-dashboards/<token>, so we route exact-path
+    # "/" to the public home dashboard via a high-priority router
+    # (priority 1000 beats Coolify's auto-generated PathPrefix router at
+    # the default priority). Everything else on aidra.uliber.com keeps
+    # going to Grafana untouched.
+    labels:
+      - "traefik.http.routers.aidra-home-redirect.entrypoints=https"
+      - "traefik.http.routers.aidra-home-redirect.tls=true"
+      - "traefik.http.routers.aidra-home-redirect.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.aidra-home-redirect.priority=1000"
+      - "traefik.http.routers.aidra-home-redirect.rule=Host(`aidra.uliber.com`) && Path(`/`)"
+      - "traefik.http.routers.aidra-home-redirect.middlewares=aidra-home-redirect-mw"
+      - "traefik.http.routers.aidra-home-redirect.service=noop@internal"
+      - "traefik.http.middlewares.aidra-home-redirect-mw.redirectregex.regex=^https?://aidra\\.uliber\\.com/?$$"
+      - "traefik.http.middlewares.aidra-home-redirect-mw.redirectregex.replacement=https://aidra.uliber.com/public-dashboards/f86d408b3b744d149051330e131a47c8"
+      - "traefik.http.middlewares.aidra-home-redirect-mw.redirectregex.permanent=false"
 
   aidra-renderer:
     image: grafana/grafana-image-renderer:3.12.4
