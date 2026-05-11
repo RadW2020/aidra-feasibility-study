@@ -28,9 +28,9 @@
           "type": "postgres",
           "uid": "PostgreSQL"
         },
-        "query": "SELECT DISTINCT model_name FROM execution_log ORDER BY model_name",
+        "query": "SELECT model_name FROM execution_log WHERE model_name LIKE 'vesseltracker-sar-yolov8%' AND image_id <> 'pending' GROUP BY model_name ORDER BY COUNT(DISTINCT constraint_profile) FILTER (WHERE status = 'success' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')) DESC, CASE WHEN model_name = 'vesseltracker-sar-yolov8' THEN 0 ELSE 1 END, model_name",
         "includeAll": false,
-        "current": {},
+        "current": {"text": "vesseltracker-sar-yolov8-int8-dynamic", "value": "vesseltracker-sar-yolov8-int8-dynamic"},
         "refresh": 1,
         "sort": 1,
         "multi": false
@@ -43,9 +43,9 @@
           "type": "postgres",
           "uid": "PostgreSQL"
         },
-        "query": "SELECT DISTINCT image_id FROM execution_log WHERE model_name = '$model' ORDER BY image_id",
+        "query": "SELECT image_id FROM execution_log WHERE model_name = '$model' AND image_id <> 'pending' AND status = 'success' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%') GROUP BY image_id ORDER BY COUNT(DISTINCT constraint_profile) DESC, COUNT(*) DESC, MAX(created_at) DESC",
         "includeAll": false,
-        "current": {},
+        "current": {"text": "7086e4eb-f8d1-45da-8c29-fc16439e10e2", "value": "7086e4eb-f8d1-45da-8c29-fc16439e10e2"},
         "refresh": 1,
         "sort": 1,
         "multi": false

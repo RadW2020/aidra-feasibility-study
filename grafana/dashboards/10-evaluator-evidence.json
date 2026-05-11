@@ -97,7 +97,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COALESCE(AVG(CASE WHEN image_hash IS NOT NULL AND image_hash <> ''\n    AND model_hash IS NOT NULL AND model_hash <> ''\n    AND output_hash IS NOT NULL AND output_hash <> ''\n    AND input_params_hash IS NOT NULL AND input_params_hash <> ''\n    AND commit_sha IS NOT NULL AND commit_sha <> ''\nTHEN 1.0 ELSE 0.0 END), 0) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)",
+          "rawSql": "WITH latest AS (\n  SELECT commit_sha\n  FROM execution_log\n  WHERE commit_sha IS NOT NULL AND commit_sha <> ''\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT COALESCE(AVG(CASE WHEN image_hash IS NOT NULL AND image_hash <> ''\n    AND model_hash IS NOT NULL AND model_hash <> ''\n    AND output_hash IS NOT NULL AND output_hash <> ''\n    AND input_params_hash IS NOT NULL AND input_params_hash <> ''\n    AND e.commit_sha IS NOT NULL AND e.commit_sha <> ''\nTHEN 1.0 ELSE 0.0 END), 0) AS value\nFROM execution_log e\nJOIN latest l ON l.commit_sha = e.commit_sha\nWHERE $__timeFilter(e.created_at)\n  AND e.status = 'success'\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -115,7 +115,7 @@
         {
           "refId": "A",
           "datasource": {"type": "postgres", "uid": "PostgreSQL"},
-          "rawSql": "SELECT COALESCE(AVG(CASE WHEN status = 'success' THEN 0.0 ELSE 1.0 END), 0) AS value\nFROM execution_log\nWHERE $__timeFilter(created_at)\n  AND ('$model' = 'all' OR model_name = '$model')\n  AND ('$profile' = 'all' OR constraint_profile = '$profile')",
+          "rawSql": "WITH latest AS (\n  SELECT commit_sha\n  FROM execution_log\n  WHERE commit_sha IS NOT NULL AND commit_sha <> ''\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT COALESCE(AVG(CASE WHEN e.status = 'success' THEN 0.0 ELSE 1.0 END), 0) AS value\nFROM execution_log e\nJOIN latest l ON l.commit_sha = e.commit_sha\nWHERE $__timeFilter(e.created_at)\n  AND e.status NOT IN ('pending', 'running')\n  AND ('$model' = 'all' OR e.model_name = '$model')\n  AND ('$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }

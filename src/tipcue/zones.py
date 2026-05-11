@@ -38,6 +38,9 @@ class Zone(BaseModel):
         Prioridad de la zona: 0=normal, 1=alta, 2=urgente.
     description:
         Descripcion textual del interes de la zona.
+    search_zone:
+        Zona de ingesta Sentinel-1 usada para buscar la escena que cubre
+        esta zona operacional de Tip & Cue.
     active:
         Si la zona esta activa para evaluacion de tips.
     """
@@ -53,6 +56,7 @@ class Zone(BaseModel):
     geometry: dict[str, Any] = Field(default_factory=dict)
     priority: int = Field(default=0, ge=0, le=2)
     description: str = ""
+    search_zone: str = "gibraltar"
     active: bool = True
 
     @model_validator(mode="after")
@@ -117,6 +121,7 @@ DEFAULT_ZONES: list[Zone] = [
         bbox=[-5.6, 35.8, -5.3, 36.1],
         priority=1,
         description="Punto de paso obligatorio entre Atlantico y Mediterraneo",
+        search_zone="gibraltar",
     ),
     Zone(
         id="algeciras_port",
@@ -124,6 +129,7 @@ DEFAULT_ZONES: list[Zone] = [
         bbox=[-5.5, 36.05, -5.35, 36.15],
         priority=1,
         description="Zona de fondeo del puerto de Algeciras, alta densidad",
+        search_zone="gibraltar",
     ),
     Zone(
         id="med_patrol",
@@ -131,6 +137,7 @@ DEFAULT_ZONES: list[Zone] = [
         bbox=[10.0, 33.0, 16.0, 38.0],
         priority=0,
         description="Ruta migratoria y de trafico, Tunez-Sicilia",
+        search_zone="mediterranean_west",
     ),
 ]
 
@@ -163,3 +170,22 @@ def get_active_zones() -> list[Zone]:
         Lista de zonas con ``active=True``.
     """
     return [z for z in DEFAULT_ZONES if z.active]
+
+
+def resolve_search_zone(zone_id: str | None, default: str = "gibraltar") -> str:
+    """Resolve a Tip & Cue operational zone to a Sentinel-1 search zone.
+
+    ``target_zone`` in ``tasking_queue`` is intentionally the operational
+    Tip & Cue zone used by replay/cooldown logic. The pipeline search layer
+    accepts a smaller catalogue of Copernicus ingestion zones, so cue
+    processors must translate before creating ``PipelineRequest``.
+    Unknown zones are returned unchanged to preserve compatibility with
+    callers that already pass a valid pipeline search zone.
+    """
+
+    if not zone_id:
+        return default
+    zone = get_zone(zone_id)
+    if zone is None:
+        return zone_id
+    return zone.search_zone or default

@@ -45,6 +45,7 @@ from src.db.queries import (
 )
 from src.observability.prometheus_metrics import ACTIVE_CUES, CUES_EXECUTED_TOTAL
 from src.pipeline.engine import PipelineEngine, PipelineRequest
+from src.tipcue.zones import resolve_search_zone
 
 if TYPE_CHECKING:
     pass
@@ -335,8 +336,9 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
         )
 
         try:
+            search_zone = resolve_search_zone(target_zone, engine.config.default_zone)
             request = PipelineRequest(
-                zone=target_zone or engine.config.default_zone,
+                zone=search_zone,
                 model=engine.config.default_model,
                 profile=engine.config.default_profile,
                 aoi_bbox=aoi_bbox,

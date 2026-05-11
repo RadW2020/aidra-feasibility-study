@@ -36,6 +36,7 @@ from src.db.queries import (
     UPDATE_CUE_STATUS,
 )
 from src.pipeline.engine import PipelineRequest, PipelineResult
+from src.tipcue.zones import resolve_search_zone
 
 logger = logging.getLogger(__name__)
 
@@ -343,7 +344,7 @@ class CueScheduler:
 
             # Execute pipeline
             pipeline_request = PipelineRequest(
-                zone=target_zone or "gibraltar",
+                zone=resolve_search_zone(target_zone),
                 trigger_type="cue",
                 triggered_by=triggered_by,
                 aoi_bbox=bbox,

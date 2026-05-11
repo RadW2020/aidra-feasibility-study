@@ -14,7 +14,13 @@ import json
 from uuid import UUID, uuid4
 
 from src.tipcue.evaluator import TipEvaluator
-from src.tipcue.zones import DEFAULT_ZONES, Zone, get_active_zones, get_zone
+from src.tipcue.zones import (
+    DEFAULT_ZONES,
+    Zone,
+    get_active_zones,
+    get_zone,
+    resolve_search_zone,
+)
 
 # ---------------------------------------------------------------------------
 # Zone
@@ -95,6 +101,15 @@ class TestZoneHelpers:
             lon_min, lat_min, lon_max, lat_max = zone.bbox
             assert lon_min < lon_max
             assert lat_min < lat_max
+
+    def test_default_zones_resolve_to_pipeline_search_zones(self) -> None:
+        assert resolve_search_zone("gibraltar_strait") == "gibraltar"
+        assert resolve_search_zone("algeciras_port") == "gibraltar"
+        assert resolve_search_zone("med_patrol") == "mediterranean_west"
+
+    def test_search_zone_resolution_preserves_unknown_pipeline_zone(self) -> None:
+        assert resolve_search_zone("suez_approach") == "suez_approach"
+        assert resolve_search_zone(None, default="english_channel") == "english_channel"
 
 
 # ---------------------------------------------------------------------------
