@@ -67,7 +67,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND ('$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -170,7 +170,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT ROUND(AVG(cardinality(triggering_detections))::numeric, 1) AS avg_dets\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND ('$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT ROUND(AVG(cardinality(triggering_detections))::numeric, 1) AS avg_dets\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -199,7 +199,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COALESCE(target_zone, 'unknown') AS zone, COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND ('$status' = 'all' OR status = '$status')\nGROUP BY target_zone\nORDER BY cues DESC\nLIMIT 8",
+          "rawSql": "SELECT COALESCE(target_zone, 'unknown') AS zone, COUNT(*) AS cues\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')\nGROUP BY target_zone\nORDER BY cues DESC\nLIMIT 8",
           "format": "table",
           "editorMode": "code"
         }
@@ -221,7 +221,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT\n    '${api_base}/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    t.attempts                                    AS \"attempts\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    COALESCE(t.last_error, '')                    AS \"last_error\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND t.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND ('$status' = 'all' OR t.status = '$status')\nORDER BY t.created_at DESC\nLIMIT 100",
+          "rawSql": "SELECT\n    '${api_base}/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    t.attempts                                    AS \"attempts\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    COALESCE(t.last_error, '')                    AS \"last_error\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND t.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR t.status = '$status')\nORDER BY t.created_at DESC\nLIMIT 100",
           "format": "table",
           "editorMode": "code"
         }
