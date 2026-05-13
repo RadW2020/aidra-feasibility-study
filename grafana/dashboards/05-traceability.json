@@ -96,7 +96,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(*) AS total_executions\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n    AND ('$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT COUNT(*) AS total_executions\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -138,7 +138,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ROUND(\n        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::numeric\n        / NULLIF(COUNT(*)::numeric, 0),\n        3\n    ) AS success_rate\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')",
+          "rawSql": "SELECT\n    ROUND(\n        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::numeric\n        / NULLIF(COUNT(*)::numeric, 0),\n        3\n    ) AS success_rate\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -184,7 +184,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(DISTINCT image_id) AS unique_images\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n    AND ('$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT COUNT(DISTINCT image_id) AS unique_images\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -226,7 +226,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(DISTINCT model_name || model_version) AS unique_models\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\n    AND ('$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT COUNT(DISTINCT model_name || model_version) AS unique_models\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -269,7 +269,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    e.id,\n    e.created_at AS timestamp,\n    e.image_id,\n    e.image_title,\n    e.model_name,\n    e.model_version,\n    e.compression_technique,\n    e.constraint_profile AS profile,\n    e.num_detections AS detections,\n    ROUND(e.avg_confidence::numeric, 3) AS avg_confidence,\n    ROUND(e.inference_ms::numeric, 1) AS latency_ms,\n    ROUND(e.peak_ram_mb::numeric, 1) AS peak_ram_mb,\n    e.status,\n    e.trigger_type,\n    e.error_message\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$status' = 'all' OR e.status = '$status')\nORDER BY e.created_at DESC\nLIMIT 200",
+          "rawSql": "SELECT\n    e.id,\n    e.created_at AS timestamp,\n    e.image_id,\n    e.image_title,\n    e.model_name,\n    e.model_version,\n    e.compression_technique,\n    e.constraint_profile AS profile,\n    e.num_detections AS detections,\n    ROUND(e.avg_confidence::numeric, 3) AS avg_confidence,\n    ROUND(e.inference_ms::numeric, 1) AS latency_ms,\n    ROUND(e.peak_ram_mb::numeric, 1) AS peak_ram_mb,\n    e.status,\n    e.trigger_type,\n    e.error_message\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR e.model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR e.status = '$status')\nORDER BY e.created_at DESC\nLIMIT 200",
           "format": "table",
           "editorMode": "code"
         }
@@ -358,7 +358,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    e.id AS execution_id,\n    e.created_at AS timestamp,\n    e.image_id,\n    e.image_hash,\n    e.model_name,\n    e.model_version,\n    e.model_hash,\n    e.model_format,\n    e.model_size_mb,\n    e.output_hash,\n    e.input_params_hash,\n    e.confidence_threshold,\n    e.iou_threshold,\n    e.tile_size,\n    e.constraint_profile AS profile,\n    e.status,\n    e.pipeline_version,\n    e.hostname\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND ('$model' = 'all' OR e.model_name = '$model')\n    AND ('$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND ('$status' = 'all' OR e.status = '$status')\nORDER BY e.created_at DESC\nLIMIT 100",
+          "rawSql": "SELECT\n    e.id AS execution_id,\n    e.created_at AS timestamp,\n    e.image_id,\n    e.image_hash,\n    e.model_name,\n    e.model_version,\n    e.model_hash,\n    e.model_format,\n    e.model_size_mb,\n    e.output_hash,\n    e.input_params_hash,\n    e.confidence_threshold,\n    e.iou_threshold,\n    e.tile_size,\n    e.constraint_profile AS profile,\n    e.status,\n    e.pipeline_version,\n    e.hostname\nFROM execution_log e\nWHERE e.created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR e.model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR e.constraint_profile = '$profile')\n    AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR e.status = '$status')\nORDER BY e.created_at DESC\nLIMIT 100",
           "format": "table",
           "editorMode": "code"
         }
@@ -434,7 +434,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    $__timeGroup(created_at, '1h') AS \"time\",\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::int AS success,\n    SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END)::int AS error\nFROM execution_log\nWHERE $__timeFilter(created_at)\n    AND ('$model' = 'all' OR model_name = '$model')\n    AND ('$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY 1\nORDER BY 1",
+          "rawSql": "SELECT\n    $__timeGroup(created_at, '1h') AS \"time\",\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::int AS success,\n    SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END)::int AS error\nFROM execution_log\nWHERE $__timeFilter(created_at)\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY 1\nORDER BY 1",
           "format": "time_series",
           "editorMode": "code"
         }
