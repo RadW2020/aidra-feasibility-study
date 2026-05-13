@@ -77,7 +77,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum(rate(aidra_pipeline_runs_total{profile=~\"$profile\", model_variant=~\"$model_variant\"}[1h])) by (status)",
+          "expr": "sum(rate(aidra_pipeline_runs_total[1h])) by (status)",
           "legendFormat": "{{status}}",
           "editorMode": "code"
         }
@@ -171,7 +171,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "max(aidra_peak_ram_mb{profile=~\"$profile\", model_variant=~\"$model_variant\"})",
+          "expr": "max(aidra_peak_ram_mb)",
           "legendFormat": "Peak RAM",
           "editorMode": "code"
         }
@@ -222,7 +222,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "max(aidra_cpu_usage_percent{profile=~\"$profile\", model_variant=~\"$model_variant\"})",
+          "expr": "max(aidra_cpu_usage_percent)",
           "legendFormat": "CPU Usage",
           "editorMode": "code"
         }

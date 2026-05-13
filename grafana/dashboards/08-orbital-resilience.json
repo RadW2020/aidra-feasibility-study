@@ -57,7 +57,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COALESCE(LEAST(100, MAX(CASE WHEN degradation_pct > 1 THEN degradation_pct ELSE degradation_pct * 100 END)), 0) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND model_variant LIKE '$model_variant'",
+          "rawSql": "SELECT COALESCE(LEAST(100, MAX(CASE WHEN degradation_pct > 1 THEN degradation_pct ELSE degradation_pct * 100 END)), 0) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR model_variant LIKE '$model_variant')",
           "format": "table",
           "editorMode": "code"
         }
@@ -196,7 +196,7 @@
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND model_variant LIKE '$model_variant'\nGROUP BY num_flips\nORDER BY num_flips::int",
+          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
           "format": "table",
           "editorMode": "code"
         }
