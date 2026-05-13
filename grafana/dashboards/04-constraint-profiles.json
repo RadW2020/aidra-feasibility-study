@@ -2,7 +2,12 @@
   "uid": "aidra-constraint-profiles",
   "title": "AIDRA — Constraint Profiles",
   "description": "Performance comparison under space-grade hardware constraint profiles.",
-  "tags": ["aidra", "profiles", "constraints", "space"],
+  "tags": [
+    "aidra",
+    "profiles",
+    "constraints",
+    "space"
+  ],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
@@ -16,38 +21,116 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["30s", "1m", "5m", "15m"]
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ]
   },
   "templating": {
     "list": [
       {
         "name": "model",
-        "type": "query",
+        "type": "custom",
         "label": "Model",
-        "datasource": {
-          "type": "postgres",
-          "uid": "PostgreSQL"
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,vesseltracker-sar-yolov8,vesseltracker-sar-yolov8-int8-dynamic",
+        "current": {
+          "text": "vesseltracker-sar-yolov8-int8-dynamic",
+          "value": "vesseltracker-sar-yolov8-int8-dynamic"
         },
-        "query": "SELECT model_name FROM execution_log WHERE model_name LIKE 'vesseltracker-sar-yolov8%' AND image_id <> 'pending' GROUP BY model_name ORDER BY COUNT(DISTINCT constraint_profile) FILTER (WHERE status = 'success' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')) DESC, CASE WHEN model_name = 'vesseltracker-sar-yolov8' THEN 0 ELSE 1 END, model_name",
-        "includeAll": false,
-        "current": {"text": "vesseltracker-sar-yolov8-int8-dynamic", "value": "vesseltracker-sar-yolov8-int8-dynamic"},
-        "refresh": 1,
-        "sort": 1,
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": false
+          },
+          {
+            "text": "vesseltracker-sar-yolov8",
+            "value": "vesseltracker-sar-yolov8",
+            "selected": false
+          },
+          {
+            "text": "vesseltracker-sar-yolov8-int8-dynamic",
+            "value": "vesseltracker-sar-yolov8-int8-dynamic",
+            "selected": true
+          }
+        ],
         "multi": false
       },
       {
         "name": "image_id",
-        "type": "query",
+        "type": "custom",
         "label": "Image ID",
-        "datasource": {
-          "type": "postgres",
-          "uid": "PostgreSQL"
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,13b720c6-898b-42e3-a015-499184858d5d,493f46d1-e3b2-47fd-8063-b95aa2c8ffd5,4bc18db9-161f-4251-8c83-938a4733a7cc,7086e4eb-f8d1-45da-8c29-fc16439e10e2,76f82d1c-24d3-40de-bcab-6f14fd467c71,77688a96-9ef7-4a8a-a6a2-93dd71c07e1a,94c52692-be21-4d50-94fe-41fc0bacc197,96aeeeb1-9593-4d94-a99b-cfe52b9c8d8d,b028b2e2-e618-4cc3-aa9e-3f6e17ae88d5,b0c1c489-be11-416c-ae8d-564a80ff106b,d3a823de-3a25-48fb-a4ef-6002887a833d",
+        "current": {
+          "text": "7086e4eb-f8d1-45da-8c29-fc16439e10e2",
+          "value": "7086e4eb-f8d1-45da-8c29-fc16439e10e2"
         },
-        "query": "SELECT image_id FROM execution_log WHERE (LEFT('$model', 1) = '$' OR model_name = '$model') AND image_id <> 'pending' AND status = 'success' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%') GROUP BY image_id ORDER BY COUNT(DISTINCT constraint_profile) DESC, COUNT(*) DESC, MAX(created_at) DESC",
-        "includeAll": false,
-        "current": {"text": "7086e4eb-f8d1-45da-8c29-fc16439e10e2", "value": "7086e4eb-f8d1-45da-8c29-fc16439e10e2"},
-        "refresh": 1,
-        "sort": 1,
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": false
+          },
+          {
+            "text": "13b720c6-898b-42e3-a015-499184858d5d",
+            "value": "13b720c6-898b-42e3-a015-499184858d5d",
+            "selected": false
+          },
+          {
+            "text": "493f46d1-e3b2-47fd-8063-b95aa2c8ffd5",
+            "value": "493f46d1-e3b2-47fd-8063-b95aa2c8ffd5",
+            "selected": false
+          },
+          {
+            "text": "4bc18db9-161f-4251-8c83-938a4733a7cc",
+            "value": "4bc18db9-161f-4251-8c83-938a4733a7cc",
+            "selected": false
+          },
+          {
+            "text": "7086e4eb-f8d1-45da-8c29-fc16439e10e2",
+            "value": "7086e4eb-f8d1-45da-8c29-fc16439e10e2",
+            "selected": true
+          },
+          {
+            "text": "76f82d1c-24d3-40de-bcab-6f14fd467c71",
+            "value": "76f82d1c-24d3-40de-bcab-6f14fd467c71",
+            "selected": false
+          },
+          {
+            "text": "77688a96-9ef7-4a8a-a6a2-93dd71c07e1a",
+            "value": "77688a96-9ef7-4a8a-a6a2-93dd71c07e1a",
+            "selected": false
+          },
+          {
+            "text": "94c52692-be21-4d50-94fe-41fc0bacc197",
+            "value": "94c52692-be21-4d50-94fe-41fc0bacc197",
+            "selected": false
+          },
+          {
+            "text": "96aeeeb1-9593-4d94-a99b-cfe52b9c8d8d",
+            "value": "96aeeeb1-9593-4d94-a99b-cfe52b9c8d8d",
+            "selected": false
+          },
+          {
+            "text": "b028b2e2-e618-4cc3-aa9e-3f6e17ae88d5",
+            "value": "b028b2e2-e618-4cc3-aa9e-3f6e17ae88d5",
+            "selected": false
+          },
+          {
+            "text": "b0c1c489-be11-416c-ae8d-564a80ff106b",
+            "value": "b0c1c489-be11-416c-ae8d-564a80ff106b",
+            "selected": false
+          },
+          {
+            "text": "d3a823de-3a25-48fb-a4ef-6002887a833d",
+            "value": "d3a823de-3a25-48fb-a4ef-6002887a833d",
+            "selected": false
+          }
+        ],
         "multi": false
       }
     ]
@@ -58,7 +141,12 @@
       "type": "text",
       "title": "",
       "transparent": true,
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 3 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
       "options": {
         "mode": "html",
         "content": "<div style='padding:10px 14px;border-radius:10px;background:#0e1620;border:1px solid #2b3645;color:#dde6f3'>\n  <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:4px'>HOW TO READ THIS DASHBOARD</div>\n  <div style='font-size:13px;line-height:1.55'>The <b>same Sentinel-1 scene</b> processed by the <b>same model</b> under five simulated hardware budgets (<i>ground → sat-extreme</i>). Pick a Model and Image ID above. Each panel includes a tooltip explaining what the numbers actually mean — including where the simulation is hard (cgroup-style) and where it is soft (duty cycling). The Pass/Fail table at the bottom is the canonical evidence row for each profile.</div>\n</div>"
@@ -69,7 +157,12 @@
       "title": "Inference latency per profile",
       "description": "Wall-clock inference time over the same Sentinel-1 scene under each hardware profile. ground / sat-high / sat-mid stay close because the inference loop is single-threaded and cannot benefit from extra cores. sat-low (target 0.5) and sat-extreme (target 0.25) take ~2x and ~4x ground respectively, driven by the soft duty-cycle CPUThrottle.",
       "type": "barchart",
-      "gridPos": { "x": 0, "y": 3, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 12,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -94,7 +187,9 @@
             "lineWidth": 1,
             "axisLabel": "minutes"
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "short",
           "decimals": 2
         },
@@ -107,8 +202,14 @@
         "barWidth": 0.7,
         "groupWidth": 0.7,
         "stacking": "none",
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     },
     {
@@ -116,7 +217,12 @@
       "title": "Peak resident memory per profile",
       "description": "Peak RSS observed during inference. NOT a hard limit: the previous setrlimit-based enforcement killed the host process when PyTorch + CUDA shared libraries mapped beyond the budget, so memory is now measured and budget breaches are recorded in execution_log.notes (see the Pass/Fail panel below). Counter-intuitive ordering (sat-low lower than sat-mid; sat-extreme highest) is real: the CPUThrottle pauses let GC run on the throttled profiles, while sat-extreme accumulates buffers during long sleeps.",
       "type": "barchart",
-      "gridPos": { "x": 12, "y": 3, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 12,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -140,7 +246,9 @@
             "gradientMode": "none",
             "lineWidth": 1
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "decmbytes"
         },
         "overrides": []
@@ -152,8 +260,14 @@
         "barWidth": 0.7,
         "groupWidth": 0.7,
         "stacking": "none",
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     },
     {
@@ -161,7 +275,12 @@
       "title": "Detections per profile (output stability check)",
       "description": "Number of vessel detections per constraint profile. FP32 deterministic runs should match across profiles; dynamic INT8 can diverge by runtime/profile (R12), so this panel exposes output drift instead of hiding it. Any FP32 divergence is a fail.",
       "type": "barchart",
-      "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -185,7 +304,9 @@
             "gradientMode": "none",
             "lineWidth": 1
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "min": 0
         },
         "overrides": []
@@ -197,8 +318,14 @@
         "barWidth": 0.7,
         "groupWidth": 0.7,
         "stacking": "none",
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     },
     {
@@ -206,7 +333,12 @@
       "title": "Average CPU usage per profile",
       "description": "Sum of CPU time across all process threads, expressed as a percentage of one core. ground / sat-high / sat-mid all show ~371% because the OpenMP worker threads PyTorch creates inherit affinity at thread-creation time — applying sched_setaffinity later does NOT migrate them to fewer cores. Only the soft CPUThrottle reduces effective utilisation, which is why sat-low (target 0.5) drops to ~186% and sat-extreme (target 0.25) to ~166%. Hard sub-core enforcement would require cgroup v2 delegation or a Docker side-car.",
       "type": "barchart",
-      "gridPos": { "x": 12, "y": 11, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -230,7 +362,9 @@
             "gradientMode": "none",
             "lineWidth": 1
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "percent"
         },
         "overrides": []
@@ -242,8 +376,14 @@
         "barWidth": 0.7,
         "groupWidth": 0.7,
         "stacking": "none",
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     },
     {
@@ -251,7 +391,12 @@
       "title": "Profile Budget Verdict",
       "description": "Strict evidence row per profile: observed RAM/CPU is compared to the declared hardware budget, not only to whether the run completed.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 24,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -272,14 +417,19 @@
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": { "type": "auto" },
+            "cellOptions": {
+              "type": "auto"
+            },
             "inspect": false,
             "filterable": true
           }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "budget_verdict" },
+            "matcher": {
+              "id": "byName",
+              "options": "budget_verdict"
+            },
             "properties": [
               {
                 "id": "custom.cellOptions",
@@ -291,18 +441,69 @@
               {
                 "id": "mappings",
                 "value": [
-                  { "type": "value", "options": { "PASS": { "text": "PASS", "color": "green" } } },
-                  { "type": "value", "options": { "WARN_CPU": { "text": "WARN_CPU", "color": "yellow" } } },
-                  { "type": "value", "options": { "DEGRADED": { "text": "DEGRADED", "color": "yellow" } } },
-                  { "type": "value", "options": { "FAIL_RAM": { "text": "FAIL_RAM", "color": "red" } } },
-                  { "type": "value", "options": { "FAIL_RUN": { "text": "FAIL_RUN", "color": "red" } } },
-                  { "type": "value", "options": { "NO DATA": { "text": "NO DATA", "color": "gray" } } }
+                  {
+                    "type": "value",
+                    "options": {
+                      "PASS": {
+                        "text": "PASS",
+                        "color": "green"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "WARN_CPU": {
+                        "text": "WARN_CPU",
+                        "color": "yellow"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "DEGRADED": {
+                        "text": "DEGRADED",
+                        "color": "yellow"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "FAIL_RAM": {
+                        "text": "FAIL_RAM",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "FAIL_RUN": {
+                        "text": "FAIL_RUN",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "NO DATA": {
+                        "text": "NO DATA",
+                        "color": "gray"
+                      }
+                    }
+                  }
                 ]
               }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "ram_budget_ratio" },
+            "matcher": {
+              "id": "byName",
+              "options": "ram_budget_ratio"
+            },
             "properties": [
               {
                 "id": "custom.cellOptions",
@@ -316,40 +517,85 @@
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "yellow", "value": 0.8 },
-                    { "color": "red", "value": 1.0 }
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 1.0
+                    }
                   ]
                 }
               }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "avg_latency_ms" },
+            "matcher": {
+              "id": "byName",
+              "options": "avg_latency_ms"
+            },
             "properties": [
-              { "id": "unit", "value": "ms" },
-              { "id": "displayName", "value": "Avg Latency" }
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "displayName",
+                "value": "Avg Latency"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "avg_ram_mb" },
+            "matcher": {
+              "id": "byName",
+              "options": "avg_ram_mb"
+            },
             "properties": [
-              { "id": "unit", "value": "decmbytes" },
-              { "id": "displayName", "value": "Avg RAM" }
+              {
+                "id": "unit",
+                "value": "decmbytes"
+              },
+              {
+                "id": "displayName",
+                "value": "Avg RAM"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "avg_cpu_pct" },
+            "matcher": {
+              "id": "byName",
+              "options": "avg_cpu_pct"
+            },
             "properties": [
-              { "id": "unit", "value": "percent" },
-              { "id": "displayName", "value": "Avg CPU" }
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "displayName",
+                "value": "Avg CPU"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "avg_confidence" },
+            "matcher": {
+              "id": "byName",
+              "options": "avg_confidence"
+            },
             "properties": [
-              { "id": "unit", "value": "percentunit" },
-              { "id": "displayName", "value": "Avg Confidence" }
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "displayName",
+                "value": "Avg Confidence"
+              }
             ]
           }
         ]
@@ -359,7 +605,9 @@
         "cellHeight": "sm",
         "footer": {
           "show": false,
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "countRows": false
         }
       }
@@ -369,7 +617,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",

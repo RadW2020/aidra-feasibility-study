@@ -2,7 +2,12 @@
   "uid": "aidra-traceability",
   "title": "AIDRA — Traceability",
   "description": "Immutable log of pipeline executions with provenance hashes (SHA256).",
-  "tags": ["aidra", "traceability", "provenance", "hashes"],
+  "tags": [
+    "aidra",
+    "traceability",
+    "provenance",
+    "hashes"
+  ],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
@@ -16,65 +21,130 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["10s", "30s", "1m", "5m"]
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
   },
   "templating": {
     "list": [
       {
         "name": "model",
-        "type": "query",
+        "type": "custom",
         "label": "Model",
-        "datasource": {
-          "type": "postgres",
-          "uid": "PostgreSQL"
-        },
-        "query": "SELECT DISTINCT model_name FROM execution_log ORDER BY model_name",
-        "includeAll": true,
-        "allValue": "all",
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,vesseltracker-sar-yolov8,vesseltracker-sar-yolov8-int8-dynamic",
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "text": "all",
+          "value": "all"
         },
-        "refresh": 1,
-        "sort": 1,
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "vesseltracker-sar-yolov8",
+            "value": "vesseltracker-sar-yolov8",
+            "selected": false
+          },
+          {
+            "text": "vesseltracker-sar-yolov8-int8-dynamic",
+            "value": "vesseltracker-sar-yolov8-int8-dynamic",
+            "selected": false
+          }
+        ],
         "multi": false
       },
       {
         "name": "profile",
-        "type": "query",
-        "label": "Profile",
-        "datasource": {
-          "type": "postgres",
-          "uid": "PostgreSQL"
-        },
-        "query": "SELECT DISTINCT constraint_profile FROM execution_log ORDER BY constraint_profile",
-        "includeAll": true,
-        "allValue": "all",
+        "type": "custom",
+        "label": "Constraint Profile",
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,ground,sat-high,sat-mid,sat-low,sat-extreme",
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "text": "all",
+          "value": "all"
         },
-        "refresh": 1,
-        "sort": 1,
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "ground",
+            "value": "ground",
+            "selected": false
+          },
+          {
+            "text": "sat-high",
+            "value": "sat-high",
+            "selected": false
+          },
+          {
+            "text": "sat-mid",
+            "value": "sat-mid",
+            "selected": false
+          },
+          {
+            "text": "sat-low",
+            "value": "sat-low",
+            "selected": false
+          },
+          {
+            "text": "sat-extreme",
+            "value": "sat-extreme",
+            "selected": false
+          }
+        ],
         "multi": false
       },
       {
         "name": "status",
-        "type": "query",
+        "type": "custom",
         "label": "Status",
-        "datasource": {
-          "type": "postgres",
-          "uid": "PostgreSQL"
-        },
-        "query": "SELECT DISTINCT status FROM execution_log ORDER BY status",
-        "includeAll": true,
-        "allValue": "all",
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,success,error,failed,pending,running",
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "text": "all",
+          "value": "all"
         },
-        "refresh": 1,
-        "sort": 1,
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "success",
+            "value": "success",
+            "selected": false
+          },
+          {
+            "text": "error",
+            "value": "error",
+            "selected": false
+          },
+          {
+            "text": "failed",
+            "value": "failed",
+            "selected": false
+          },
+          {
+            "text": "pending",
+            "value": "pending",
+            "selected": false
+          },
+          {
+            "text": "running",
+            "value": "running",
+            "selected": false
+          }
+        ],
         "multi": false
       }
     ]
@@ -84,7 +154,12 @@
       "id": 1,
       "title": "Execution Summary",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -106,15 +181,26 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null }
+              {
+                "color": "blue",
+                "value": null
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
@@ -126,7 +212,12 @@
       "id": 2,
       "title": "Success Rate",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -148,19 +239,39 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 0.5 },
-              { "color": "yellow", "value": 0.7 },
-              { "color": "green", "value": 0.9 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "green",
+                "value": 0.9
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percentunit"
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "auto",
@@ -172,7 +283,12 @@
       "id": 3,
       "title": "Unique Images Processed",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -194,15 +310,26 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "purple", "value": null }
+              {
+                "color": "purple",
+                "value": null
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
@@ -214,7 +341,12 @@
       "id": 4,
       "title": "Unique Models Used",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -236,15 +368,26 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "orange", "value": null }
+              {
+                "color": "orange",
+                "value": null
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
@@ -257,7 +400,12 @@
       "title": "Execution Log",
       "description": "Interactive table with the complete pipeline execution log.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -278,23 +426,68 @@
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": { "type": "auto" },
+            "cellOptions": {
+              "type": "auto"
+            },
             "inspect": true,
             "filterable": true
           }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "status" },
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  { "type": "value", "options": { "success": { "text": "SUCCESS", "color": "green" } } },
-                  { "type": "value", "options": { "error": { "text": "ERROR", "color": "red" } } },
-                  { "type": "value", "options": { "timeout": { "text": "TIMEOUT", "color": "orange" } } },
-                  { "type": "value", "options": { "oom": { "text": "OOM", "color": "red" } } },
-                  { "type": "value", "options": { "pending": { "text": "PENDING", "color": "blue" } } }
+                  {
+                    "type": "value",
+                    "options": {
+                      "success": {
+                        "text": "SUCCESS",
+                        "color": "green"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "error": {
+                        "text": "ERROR",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "timeout": {
+                        "text": "TIMEOUT",
+                        "color": "orange"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "oom": {
+                        "text": "OOM",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "pending": {
+                        "text": "PENDING",
+                        "color": "blue"
+                      }
+                    }
+                  }
                 ]
               },
               {
@@ -307,27 +500,51 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "latency_ms" },
+            "matcher": {
+              "id": "byName",
+              "options": "latency_ms"
+            },
             "properties": [
-              { "id": "unit", "value": "ms" }
+              {
+                "id": "unit",
+                "value": "ms"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "peak_ram_mb" },
+            "matcher": {
+              "id": "byName",
+              "options": "peak_ram_mb"
+            },
             "properties": [
-              { "id": "unit", "value": "decmbytes" }
+              {
+                "id": "unit",
+                "value": "decmbytes"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "id" },
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
             "properties": [
-              { "id": "custom.width", "value": 280 }
+              {
+                "id": "custom.width",
+                "value": 280
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "timestamp" },
+            "matcher": {
+              "id": "byName",
+              "options": "timestamp"
+            },
             "properties": [
-              { "id": "custom.width", "value": 180 }
+              {
+                "id": "custom.width",
+                "value": 180
+              }
             ]
           }
         ]
@@ -335,9 +552,14 @@
       "options": {
         "showHeader": true,
         "cellHeight": "sm",
-        "footer": { "show": false },
+        "footer": {
+          "show": false
+        },
         "sortBy": [
-          { "displayName": "timestamp", "desc": true }
+          {
+            "displayName": "timestamp",
+            "desc": true
+          }
         ]
       }
     },
@@ -346,7 +568,12 @@
       "title": "Hash Verification (Provenance Detail)",
       "description": "SHA256 hashes of inputs, models and outputs for traceability verification.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -367,44 +594,88 @@
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": { "type": "auto" },
+            "cellOptions": {
+              "type": "auto"
+            },
             "inspect": true,
             "filterable": true
           }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "image_hash" },
+            "matcher": {
+              "id": "byName",
+              "options": "image_hash"
+            },
             "properties": [
-              { "id": "custom.width", "value": 200 },
-              { "id": "displayName", "value": "Image SHA256" }
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "displayName",
+                "value": "Image SHA256"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "model_hash" },
+            "matcher": {
+              "id": "byName",
+              "options": "model_hash"
+            },
             "properties": [
-              { "id": "custom.width", "value": 200 },
-              { "id": "displayName", "value": "Model SHA256" }
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "displayName",
+                "value": "Model SHA256"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "output_hash" },
+            "matcher": {
+              "id": "byName",
+              "options": "output_hash"
+            },
             "properties": [
-              { "id": "custom.width", "value": 200 },
-              { "id": "displayName", "value": "Output SHA256" }
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "displayName",
+                "value": "Output SHA256"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "input_params_hash" },
+            "matcher": {
+              "id": "byName",
+              "options": "input_params_hash"
+            },
             "properties": [
-              { "id": "custom.width", "value": 200 },
-              { "id": "displayName", "value": "Params SHA256" }
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "displayName",
+                "value": "Params SHA256"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "execution_id" },
+            "matcher": {
+              "id": "byName",
+              "options": "execution_id"
+            },
             "properties": [
-              { "id": "custom.width", "value": 280 }
+              {
+                "id": "custom.width",
+                "value": 280
+              }
             ]
           }
         ]
@@ -422,7 +693,12 @@
       "title": "Execution Timeline",
       "description": "Timeline of executions by status.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 6
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -445,30 +721,58 @@
             "drawStyle": "bars",
             "fillOpacity": 80,
             "lineWidth": 1,
-            "stacking": { "mode": "normal" },
+            "stacking": {
+              "mode": "normal"
+            },
             "axisLabel": "executions / hour"
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "short"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "success" },
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "error" },
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     }
   ],
@@ -476,7 +780,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",

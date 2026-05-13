@@ -2,7 +2,13 @@
   "uid": "aidra-orbital-resilience",
   "title": "AIDRA — Orbital Resilience",
   "description": "Resilience evidence: bit-flip degradation, autonomous decisions, drift detection, orbit battery simulation. All panels query PostgreSQL (resilience_runs / drift_alerts / orbit_sim_runs) so the dashboard survives Prometheus counter resets between deploys.",
-  "tags": ["aidra", "orbital", "resilience", "bitflip", "autonomy"],
+  "tags": [
+    "aidra",
+    "orbital",
+    "resilience",
+    "bitflip",
+    "autonomy"
+  ],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
@@ -16,21 +22,42 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["10s", "30s", "1m", "5m"]
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
   },
   "templating": {
     "list": [
       {
         "name": "model_variant",
-        "type": "query",
+        "type": "custom",
         "label": "Model Variant",
-        "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-        "query": "SELECT DISTINCT model_variant FROM bitflip_runs ORDER BY model_variant",
-        "includeAll": true,
-        "allValue": "%",
-        "current": { "text": "All", "value": "$__all" },
-        "refresh": 2,
-        "sort": 1,
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,vesseltracker-sar-yolov8,vesseltracker-sar-yolov8-int8-dynamic",
+        "current": {
+          "text": "all",
+          "value": "all"
+        },
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "vesseltracker-sar-yolov8",
+            "value": "vesseltracker-sar-yolov8",
+            "selected": false
+          },
+          {
+            "text": "vesseltracker-sar-yolov8-int8-dynamic",
+            "value": "vesseltracker-sar-yolov8-int8-dynamic",
+            "selected": false
+          }
+        ],
         "multi": false
       }
     ]
@@ -40,7 +67,12 @@
       "id": 100,
       "title": "How to read this dashboard",
       "type": "text",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
       "options": {
         "mode": "markdown",
         "content": "**Orbital resilience** quantifies how AIDRA behaves under spaceflight constraints: cosmic-ray bit-flips on model weights, finite battery during eclipse, drift across long missions, and autonomous fallback decisions when energy is scarce.\n\nNightly refresh populates orbit simulation and drift rows. Bit-flip sweeps are intentionally manual because they load weights and run repeated inference on the OCI ARM A1 tier.\n\n```bash\n# Manual bit-flip sweep\ncurl -X POST $AIDRA_API/api/orbital/resilience/bitflip \\\n  -H 'Authorization: Bearer $TOKEN' \\\n  -d '{\"model\":\"vesseltracker-sar-yolov8\",\"flip_counts\":[0,10,100,1000]}'\n\n# Manual orbit simulation override\ncurl -X POST $AIDRA_API/api/orbital/resilience/simulate-orbit \\\n  -H 'Authorization: Bearer $TOKEN' \\\n  -d '{\"satellite\":\"small_sat\",\"num_images\":30}'\n\n# Manual drift check override\ncurl $AIDRA_API/api/orbital/resilience/drift?window_size=10 \\\n  -H 'Authorization: Bearer $TOKEN'\n```"
@@ -51,12 +83,23 @@
       "title": "Bit-Flip Degradation (max in window)",
       "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU). Higher = more brittle.",
       "type": "gauge",
-      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT COALESCE(LEAST(100, MAX(CASE WHEN degradation_pct > 1 THEN degradation_pct ELSE degradation_pct * 100 END)), 0) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR model_variant LIKE '$model_variant')",
           "format": "table",
           "editorMode": "code"
@@ -67,13 +110,27 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "orange", "value": 20 },
-              { "color": "red", "value": 50 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percent",
           "min": 0,
           "max": 100,
@@ -82,7 +139,13 @@
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showThresholdLabels": true,
         "showThresholdMarkers": true,
         "orientation": "auto"
@@ -93,12 +156,23 @@
       "title": "Battery Level (last sim)",
       "description": "Final battery level (Wh) at the end of the most recent orbit simulation. Coloured by remaining capacity vs. nominal 100 Wh.",
       "type": "gauge",
-      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT final_battery_wh\nFROM orbit_sim_runs\nORDER BY created_at DESC\nLIMIT 1",
           "format": "table",
           "editorMode": "code"
@@ -109,13 +183,27 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 20 },
-              { "color": "yellow", "value": 40 },
-              { "color": "green", "value": 60 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "yellow",
+                "value": 40
+              },
+              {
+                "color": "green",
+                "value": 60
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "watth",
           "min": 0,
           "max": 100,
@@ -124,7 +212,13 @@
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showThresholdLabels": true,
         "showThresholdMarkers": true,
         "orientation": "auto"
@@ -135,12 +229,23 @@
       "title": "Decision Action Counters",
       "description": "Cumulative count of autonomous decisions across all orbit simulations: process (full inference), fallback_cfar (cheap detector), skip.",
       "type": "stat",
-      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT\n  COALESCE(SUM(process_count), 0)        AS process,\n  COALESCE(SUM(fallback_cfar_count), 0)  AS fallback_cfar,\n  COALESCE(SUM(skip_count), 0)           AS skip\nFROM orbit_sim_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()",
           "format": "table",
           "editorMode": "code"
@@ -150,34 +255,74 @@
         "defaults": {
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "blue", "value": null }]
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "noValue": "0"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "process" },
+            "matcher": {
+              "id": "byName",
+              "options": "process"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "fallback_cfar" },
+            "matcher": {
+              "id": "byName",
+              "options": "fallback_cfar"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "skip" },
+            "matcher": {
+              "id": "byName",
+              "options": "skip"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
@@ -190,12 +335,23 @@
       "title": "Bit-Flip Degradation Curve (detections vs num_flips)",
       "description": "Average detections per (model_variant, num_flips) cell across all bit-flip sweeps in the window. The X axis is num_flips (cosmic-ray-event proxy); a sharp drop identifies the model's critical SEU threshold.",
       "type": "barchart",
-      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
           "format": "table",
           "editorMode": "code"
@@ -210,13 +366,23 @@
             "axisPlacement": "auto",
             "axisCenteredZero": false
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "noValue": "No bit-flip sweeps in window — POST /api/orbital/resilience/bitflip"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "avg_confidence" },
-            "properties": [{ "id": "unit", "value": "percentunit" }]
+            "matcher": {
+              "id": "byName",
+              "options": "avg_confidence"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
           }
         ]
       },
@@ -225,8 +391,15 @@
         "barWidth": 0.7,
         "groupWidth": 0.7,
         "stacking": "none",
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
         "xField": "num_flips",
         "showValue": "auto"
       }
@@ -236,12 +409,23 @@
       "title": "Battery Timeline (most recent orbit sim)",
       "description": "Battery level (Wh) at each decision step of the most recent simulated orbit. Drops mark eclipse / heavy inference; recoveries mark sun-lit recharge windows.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "WITH latest AS (\n  SELECT id, created_at, battery_timeline\n  FROM orbit_sim_runs\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT\n  latest.created_at + (ord || ' minute')::interval AS time,\n  battery_wh\nFROM latest, unnest(latest.battery_timeline) WITH ORDINALITY AS t(battery_wh, ord)\nORDER BY ord",
           "format": "time_series",
           "editorMode": "code"
@@ -257,16 +441,29 @@
             "showPoints": "auto",
             "spanNulls": false,
             "gradientMode": "none",
-            "thresholdsStyle": { "mode": "area" }
+            "thresholdsStyle": {
+              "mode": "area"
+            }
           },
-          "color": { "mode": "continuous-GrYlRd" },
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
           "unit": "watth",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 20 },
-              { "color": "green", "value": 50 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
             ]
           },
           "min": 0,
@@ -275,8 +472,14 @@
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     },
     {
@@ -284,12 +487,23 @@
       "title": "Drift Detection Alerts (per-day, by metric)",
       "description": "Daily count of drift checks that flagged a drifting metric. Bars are stacked by which signal drifted (detections / confidence / spatial).",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 18, "w": 12, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT\n  date_trunc('day', created_at) AS time,\n  metric,\n  COUNT(*) FILTER (WHERE is_drifting) AS drifting_alerts\nFROM drift_alerts\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY 1, 2\nORDER BY 1",
           "format": "time_series",
           "editorMode": "code"
@@ -301,35 +515,72 @@
             "drawStyle": "bars",
             "fillOpacity": 80,
             "lineWidth": 1,
-            "stacking": { "mode": "normal" }
+            "stacking": {
+              "mode": "normal"
+            }
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "noValue": "No drift checks recorded — GET /api/orbital/resilience/drift"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "num_detections" },
+            "matcher": {
+              "id": "byName",
+              "options": "num_detections"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "avg_confidence" },
+            "matcher": {
+              "id": "byName",
+              "options": "avg_confidence"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "spatial" },
+            "matcher": {
+              "id": "byName",
+              "options": "spatial"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -337,12 +588,23 @@
       "title": "Autonomous Decision Mix Over Time",
       "description": "Per-day counts of autonomous decisions across simulations.  process = full inference; fallback_cfar = lightweight detector; skip = save energy.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 18, "w": 12, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT\n  date_trunc('day', created_at) AS time,\n  SUM(process_count)        AS process,\n  SUM(fallback_cfar_count)  AS fallback_cfar,\n  SUM(skip_count)           AS skip\nFROM orbit_sim_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY 1\nORDER BY 1",
           "format": "time_series",
           "editorMode": "code"
@@ -357,35 +619,72 @@
             "lineWidth": 2,
             "showPoints": "auto",
             "spanNulls": false,
-            "stacking": { "mode": "normal" }
+            "stacking": {
+              "mode": "normal"
+            }
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "noValue": "No orbit simulations recorded"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "process" },
+            "matcher": {
+              "id": "byName",
+              "options": "process"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "fallback_cfar" },
+            "matcher": {
+              "id": "byName",
+              "options": "fallback_cfar"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "skip" },
+            "matcher": {
+              "id": "byName",
+              "options": "skip"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -393,12 +692,23 @@
       "title": "Drift Check Log (recent)",
       "description": "Most recent drift checks: which metric was tested, the z-score against historical baseline, and the recommended action when drift was flagged.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 7 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT\n  created_at         AS \"When\",\n  metric             AS \"Metric\",\n  is_drifting        AS \"Drifting\",\n  ROUND(z_score::numeric, 2)         AS \"Z-score\",\n  ROUND(recent_mean::numeric, 1)     AS \"Recent\",\n  ROUND(historical_mean::numeric, 1) AS \"Baseline\",\n  recommendation     AS \"Recommended\",\n  window_size        AS \"Window\"\nFROM drift_alerts\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\nORDER BY created_at DESC\nLIMIT 50",
           "format": "table",
           "editorMode": "code"
@@ -406,29 +716,63 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "left", "filterable": true },
+          "custom": {
+            "align": "left",
+            "filterable": true
+          },
           "noValue": "No drift checks recorded"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Drifting" },
+            "matcher": {
+              "id": "byName",
+              "options": "Drifting"
+            },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  { "type": "value", "options": { "true":  { "text": "yes", "color": "red" } } },
-                  { "type": "value", "options": { "false": { "text": "no",  "color": "green" } } }
+                  {
+                    "type": "value",
+                    "options": {
+                      "true": {
+                        "text": "yes",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "false": {
+                        "text": "no",
+                        "color": "green"
+                      }
+                    }
+                  }
                 ]
               },
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
         "showHeader": true,
-        "footer": { "show": false },
-        "sortBy": [{ "displayName": "When", "desc": true }]
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "When",
+            "desc": true
+          }
+        ]
       }
     }
   ],
@@ -436,7 +780,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",

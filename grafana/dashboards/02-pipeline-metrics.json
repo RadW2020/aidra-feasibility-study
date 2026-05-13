@@ -2,7 +2,12 @@
   "uid": "aidra-pipeline-metrics",
   "title": "AIDRA — Pipeline Metrics",
   "description": "Pipeline performance metrics: run rate, inference duration, RAM, CPU, errors and logs.",
-  "tags": ["aidra", "pipeline", "metrics", "prometheus"],
+  "tags": [
+    "aidra",
+    "pipeline",
+    "metrics",
+    "prometheus"
+  ],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
@@ -16,47 +21,89 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["5s", "10s", "15s", "30s", "1m", "5m"]
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "15s",
+      "30s",
+      "1m",
+      "5m"
+    ]
   },
   "templating": {
     "list": [
       {
         "name": "profile",
-        "type": "query",
+        "type": "custom",
         "label": "Profile",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "Prometheus"
-        },
-        "query": "label_values(aidra_pipeline_runs_total, profile)",
-        "includeAll": true,
-        "allValue": ".*",
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,ground,sat-high,sat-mid,sat-low,sat-extreme",
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "text": "all",
+          "value": "all"
         },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "ground",
+            "value": "ground",
+            "selected": false
+          },
+          {
+            "text": "sat-high",
+            "value": "sat-high",
+            "selected": false
+          },
+          {
+            "text": "sat-mid",
+            "value": "sat-mid",
+            "selected": false
+          },
+          {
+            "text": "sat-low",
+            "value": "sat-low",
+            "selected": false
+          },
+          {
+            "text": "sat-extreme",
+            "value": "sat-extreme",
+            "selected": false
+          }
+        ],
+        "multi": false
       },
       {
         "name": "model_variant",
-        "type": "query",
+        "type": "custom",
         "label": "Model Variant",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "Prometheus"
-        },
-        "query": "label_values(aidra_pipeline_runs_total, model_variant)",
-        "includeAll": true,
-        "allValue": ".*",
+        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
+        "query": "all,vesseltracker-sar-yolov8,None",
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "text": "all",
+          "value": "all"
         },
-        "refresh": 2,
-        "sort": 1,
-        "multi": true
+        "options": [
+          {
+            "text": "all",
+            "value": "all",
+            "selected": true
+          },
+          {
+            "text": "vesseltracker-sar-yolov8",
+            "value": "vesseltracker-sar-yolov8",
+            "selected": false
+          },
+          {
+            "text": "None",
+            "value": "None",
+            "selected": false
+          }
+        ],
+        "multi": false
       }
     ]
   },
@@ -65,7 +112,12 @@
       "id": 1,
       "title": "Pipeline Run Rate (runs/hour)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
@@ -92,31 +144,62 @@
             "lineWidth": 2,
             "showPoints": "auto",
             "spanNulls": false,
-            "stacking": { "mode": "none" },
+            "stacking": {
+              "mode": "none"
+            },
             "axisPlacement": "auto",
-            "thresholdsStyle": { "mode": "off" }
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "ops"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "error" },
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "success" },
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -124,12 +207,23 @@
       "title": "Inference Duration (P50 / P95 / P99)",
       "description": "Per-run inference latency, computed from execution_log.inference_ms. The previous Prometheus histogram_quantile() query relied on a counter that resets on every redeploy, so the panel was always empty.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT date_trunc('hour', created_at) AS \"time\",\n       (PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P50\",\n       (PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P95\",\n       (PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P99\"\nFROM execution_log\nWHERE status = 'success' AND inference_ms IS NOT NULL\n  AND $__timeFilter(created_at)\nGROUP BY 1\nORDER BY 1",
           "format": "time_series"
         }
@@ -145,21 +239,38 @@
             "pointSize": 5,
             "spanNulls": true
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "s"
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
       "id": 3,
       "title": "Peak RAM (MB)",
       "type": "gauge",
-      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 6,
+        "h": 6
+      },
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
@@ -181,13 +292,27 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 512 },
-              { "color": "orange", "value": 1024 },
-              { "color": "red", "value": 2048 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 512
+              },
+              {
+                "color": "orange",
+                "value": 1024
+              },
+              {
+                "color": "red",
+                "value": 2048
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "decmbytes",
           "min": 0,
           "max": 4096
@@ -196,7 +321,9 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -210,7 +337,12 @@
       "title": "CPU Usage (% of 4 OCPU)",
       "description": "Process CPU usage during the last inference, expressed as a percentage of the 4-OCPU OCI ARM A1 budget (Linux convention: 100% = one core saturated, 400% = all four cores saturated).",
       "type": "gauge",
-      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 6 },
+      "gridPos": {
+        "x": 6,
+        "y": 8,
+        "w": 6,
+        "h": 6
+      },
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
@@ -232,13 +364,27 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 200 },
-              { "color": "orange", "value": 320 },
-              { "color": "red", "value": 380 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 200
+              },
+              {
+                "color": "orange",
+                "value": 320
+              },
+              {
+                "color": "red",
+                "value": 380
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percent",
           "min": 0,
           "max": 400
@@ -247,7 +393,9 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -261,12 +409,23 @@
       "title": "Detections per Execution",
       "description": "Number of detections per pipeline run, broken down by detector source (yolo / cfar / fused). Sourced from the detections table joined to execution_log; the legacy Prometheus rate counter was always empty after redeploy.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 6,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT e.created_at AS \"time\",\n       d.source AS metric,\n       COUNT(*) AS detections\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE e.status = 'success'\n  AND $__timeFilter(e.created_at)\nGROUP BY e.created_at, d.source\nORDER BY e.created_at",
           "format": "time_series"
         }
@@ -277,16 +436,26 @@
             "drawStyle": "bars",
             "fillOpacity": 80,
             "lineWidth": 1,
-            "stacking": { "mode": "normal" }
+            "stacking": {
+              "mode": "normal"
+            }
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "short"
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -294,12 +463,23 @@
       "title": "Error Rate",
       "description": "Share of execution_log rows that finished with status != 'success'. Sourced from Postgres (the previous Prometheus rate query reset on every redeploy and inflated to 100% with a single failed run).",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 18,
+        "y": 8,
+        "w": 6,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT COALESCE(COUNT(*) FILTER (WHERE status != 'success')::float / NULLIF(COUNT(*), 0), 0) AS error_rate FROM execution_log",
           "format": "table"
         }
@@ -309,12 +489,23 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.05 },
-              { "color": "red", "value": 0.5 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percentunit",
           "min": 0,
           "max": 1,
@@ -324,7 +515,9 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -340,12 +533,23 @@
       "title": "Pipeline Runs Total",
       "description": "Total runs recorded in execution_log (success / total). Sourced from Postgres so the value persists across app restarts; the equivalent Prometheus counter resets on every redeploy.",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 14, "w": 4, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT COUNT(*) FILTER (WHERE status = 'success')::int AS \"success\", COUNT(*)::int AS \"total\" FROM execution_log",
           "format": "table"
         }
@@ -355,15 +559,26 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null }
+              {
+                "color": "blue",
+                "value": null
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "center",
@@ -376,12 +591,23 @@
       "title": "Model Size (MB)",
       "description": "Disk size of each registered model variant. Sourced from models_registry (the equivalent Prometheus gauge aidra_model_size_mb is defined but never populated, so it always reads 0).",
       "type": "bargauge",
-      "gridPos": { "x": 4, "y": 14, "w": 8, "h": 6 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 4,
+        "y": 14,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT (name || ':' || version) AS model_variant, size_mb FROM models_registry ORDER BY size_mb DESC",
           "format": "table"
         }
@@ -391,18 +617,35 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 50 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "decmbytes"
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^size_mb$/", "values": true },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^size_mb$/",
+          "values": true
+        },
         "orientation": "horizontal",
         "displayMode": "gradient",
         "showUnfilled": true,
@@ -417,12 +660,23 @@
       "title": "Recent Pipeline Runs",
       "description": "Last 20 entries of execution_log with key telemetry. Replaces the previous Loki log panel — the Coolify deployment intentionally omits Promtail to avoid mounting docker.sock on a shared host, so Loki never receives the app stdout. Postgres execution_log is the canonical run record anyway.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "postgres", "uid": "PostgreSQL" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
           "rawSql": "SELECT created_at AS \"started_at\",\n       status,\n       constraint_profile AS \"profile\",\n       model_name AS \"model\",\n       model_version AS \"version\",\n       num_detections AS \"detections\",\n       ROUND((inference_ms / 1000.0)::numeric, 2) AS \"inference_s\",\n       peak_ram_mb AS \"peak_ram_mb\",\n       cpu_usage_pct AS \"cpu_pct\",\n       error_message AS \"error\"\nFROM execution_log\nORDER BY created_at DESC\nLIMIT 20",
           "format": "table"
         }
@@ -431,37 +685,73 @@
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": { "type": "auto" },
+            "cellOptions": {
+              "type": "auto"
+            },
             "filterable": true
           }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "status" },
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
             "properties": [
               {
                 "id": "custom.cellOptions",
-                "value": { "type": "color-text", "mode": "basic" }
+                "value": {
+                  "type": "color-text",
+                  "mode": "basic"
+                }
               },
               {
                 "id": "mappings",
                 "value": [
-                  { "type": "value", "options": { "success": { "color": "green", "index": 0 }, "error": { "color": "red", "index": 1 }, "pending": { "color": "yellow", "index": 2 }, "failed": { "color": "red", "index": 3 } } }
+                  {
+                    "type": "value",
+                    "options": {
+                      "success": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "error": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "pending": {
+                        "color": "yellow",
+                        "index": 2
+                      },
+                      "failed": {
+                        "color": "red",
+                        "index": 3
+                      }
+                    }
+                  }
                 ]
               }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "started_at" },
+            "matcher": {
+              "id": "byName",
+              "options": "started_at"
+            },
             "properties": [
-              { "id": "unit", "value": "dateTimeAsIso" }
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
             ]
           }
         ]
       },
       "options": {
         "showHeader": true,
-        "footer": { "show": false }
+        "footer": {
+          "show": false
+        }
       }
     }
   ],
@@ -469,7 +759,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
