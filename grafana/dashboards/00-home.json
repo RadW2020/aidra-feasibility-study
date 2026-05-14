@@ -15,6 +15,9 @@
     "from": "now-24h",
     "to": "now"
   },
+  "timepicker": {
+    "hidden": true
+  },
   "templating": {
     "list": []
   },

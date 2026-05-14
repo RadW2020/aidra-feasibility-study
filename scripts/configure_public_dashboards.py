@@ -27,6 +27,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DASHBOARD_DIR = REPO_ROOT / "grafana" / "dashboards"
 ENV_FILE = REPO_ROOT / ".env"
 
+# Dashboards whose panels are aggregate/snapshot (benchmarks, all-time totals,
+# scenario comparisons): a time-range picker is meaningless and confuses the
+# reader. Disable it for these. Everything else gets the picker enabled.
+AGGREGATE_DASHBOARD_UIDS = {
+    "aidra-home",
+    "aidra-compression-bench",
+    "aidra-constraint-profiles",
+    "aidra-obdp-value",
+    "aidra-orbital-latency",
+}
+
 
 def _load_env() -> None:
     if not ENV_FILE.exists():
@@ -77,16 +88,20 @@ def main() -> int:
             continue
         cfg = r.json()
         pd_uid = cfg.get("uid")
-        already_on = bool(cfg.get("timeSelectionEnabled")) and bool(cfg.get("annotationsEnabled"))
-        if already_on:
-            print(f"[ok]   {title} ({uid}): timeSelection+annotations already enabled")
+        want_time = uid not in AGGREGATE_DASHBOARD_UIDS
+        current_time = bool(cfg.get("timeSelectionEnabled"))
+        current_ann = bool(cfg.get("annotationsEnabled"))
+        if current_time == want_time and current_ann == want_time:
+            state = "enabled" if want_time else "disabled (aggregate)"
+            print(f"[ok]   {title} ({uid}): already {state}")
             continue
 
         patch_url = urljoin(base, f"api/dashboards/uid/{uid}/public-dashboards/{pd_uid}")
-        body = {"timeSelectionEnabled": True, "annotationsEnabled": True}
+        body = {"timeSelectionEnabled": want_time, "annotationsEnabled": want_time}
         pr = session.patch(patch_url, data=json.dumps(body), timeout=15)
         if pr.ok:
-            print(f"[set]  {title} ({uid}): time picker + annotations enabled")
+            action = "enabled" if want_time else "disabled (aggregate)"
+            print(f"[set]  {title} ({uid}): time picker + annotations -> {action}")
         else:
             print(f"[fail] {title} ({uid}): PATCH {pr.status_code} {pr.text[:200]}")
             failures += 1

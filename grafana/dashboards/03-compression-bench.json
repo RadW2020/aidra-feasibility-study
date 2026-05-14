@@ -25,7 +25,8 @@
       "1m",
       "5m",
       "15m"
-    ]
+    ],
+    "hidden": true
   },
   "templating": {
     "list": [
