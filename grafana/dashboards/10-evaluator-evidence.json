@@ -16,7 +16,7 @@
   "editable": false,
   "graphTooltip": 0,
   "time": {
-    "from": "now-30d",
+    "from": "now-24h",
     "to": "now"
   },
   "annotations": {

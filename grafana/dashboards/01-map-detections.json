@@ -12,7 +12,7 @@
   "schemaVersion": 39,
   "version": 1,
   "time": {
-    "from": "now-7d",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {
