@@ -291,7 +291,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT EXTRACT(EPOCH FROM MAX(created_at)) * 1000 AS last_run_ms FROM execution_log WHERE status = 'success'",
+          "rawSql": "SELECT CASE WHEN delta_s IS NULL THEN 'Never' WHEN delta_s < 60 THEN delta_s || 's ago' WHEN delta_s < 3600 THEN (delta_s/60)::int || 'm ago' WHEN delta_s < 86400 THEN (delta_s/3600)::int || 'h ago' ELSE (delta_s/86400)::int || 'd ago' END AS last_run FROM (SELECT EXTRACT(EPOCH FROM (now() - MAX(created_at)))::bigint AS delta_s FROM execution_log WHERE status = 'success') t",
           "format": "table"
         }
       ],
@@ -301,7 +301,7 @@
             "mode": "fixed",
             "fixedColor": "#f3d76b"
           },
-          "unit": "dateTimeFromNow",
+          "unit": "none",
           "noValue": "Never"
         }
       },
