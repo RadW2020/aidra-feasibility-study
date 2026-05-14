@@ -145,3 +145,41 @@ jobs:
           tail -100 uvicorn.log || true
           kill $UVICORN_PID || true
           exit 1
+
+  configure-public-dashboards:
+    # Coolify redeploys on push-to-main outside of GitHub Actions, so this
+    # job runs against the live aidra.uliber.com Grafana to (re)apply the
+    # public-dashboard flags that file-provisioning cannot manage:
+    # `timeSelectionEnabled` and `annotationsEnabled` live in Grafana's
+    # `dashboard_public` table. The script is idempotent.
+    runs-on: ubuntu-latest
+    needs: smoke
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Wait for Coolify redeploy to settle
+        run: sleep 60
+
+      - name: Apply public-dashboard config
+        env:
+          GRAFANA_URL: https://aidra.uliber.com
+          GRAFANA_USER: admin
+          GRAFANA_PASSWORD: ${{ secrets.GRAFANA_PASSWORD }}
+        run: |
+          if [ -z "$GRAFANA_PASSWORD" ]; then
+            echo "::warning::GRAFANA_PASSWORD secret not set — skipping. Add it under Settings → Secrets to enable this step."
+            exit 0
+          fi
+          python scripts/configure_public_dashboards.py
