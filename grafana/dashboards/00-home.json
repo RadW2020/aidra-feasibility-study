@@ -328,7 +328,7 @@
         "x": 0,
         "y": 19,
         "w": 24,
-        "h": 4
+        "h": 3
       },
       "options": {
         "mode": "html",
@@ -342,7 +342,7 @@
       "transparent": true,
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 22,
         "w": 8,
         "h": 6
       },
@@ -358,7 +358,7 @@
       "transparent": true,
       "gridPos": {
         "x": 8,
-        "y": 23,
+        "y": 22,
         "w": 8,
         "h": 6
       },
@@ -374,7 +374,7 @@
       "transparent": true,
       "gridPos": {
         "x": 16,
-        "y": 23,
+        "y": 22,
         "w": 8,
         "h": 6
       },
@@ -390,9 +390,9 @@
       "transparent": true,
       "gridPos": {
         "x": 0,
-        "y": 29,
+        "y": 28,
         "w": 24,
-        "h": 4
+        "h": 3
       },
       "options": {
         "mode": "html",
@@ -406,7 +406,7 @@
       "transparent": true,
       "gridPos": {
         "x": 0,
-        "y": 33,
+        "y": 31,
         "w": 8,
         "h": 6
       },
@@ -422,7 +422,7 @@
       "transparent": true,
       "gridPos": {
         "x": 8,
-        "y": 33,
+        "y": 31,
         "w": 8,
         "h": 6
       },
@@ -438,7 +438,7 @@
       "transparent": true,
       "gridPos": {
         "x": 16,
-        "y": 33,
+        "y": 31,
         "w": 8,
         "h": 6
       },
@@ -454,9 +454,9 @@
       "transparent": true,
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 37,
         "w": 24,
-        "h": 4
+        "h": 3
       },
       "options": {
         "mode": "html",
@@ -470,7 +470,7 @@
       "transparent": true,
       "gridPos": {
         "x": 0,
-        "y": 43,
+        "y": 40,
         "w": 8,
         "h": 6
       },
@@ -486,7 +486,7 @@
       "transparent": true,
       "gridPos": {
         "x": 8,
-        "y": 43,
+        "y": 40,
         "w": 8,
         "h": 6
       },
@@ -502,7 +502,7 @@
       "transparent": true,
       "gridPos": {
         "x": 16,
-        "y": 43,
+        "y": 40,
         "w": 8,
         "h": 6
       },
@@ -518,7 +518,7 @@
       "transparent": true,
       "gridPos": {
         "x": 0,
-        "y": 49,
+        "y": 46,
         "w": 24,
         "h": 5
       },
