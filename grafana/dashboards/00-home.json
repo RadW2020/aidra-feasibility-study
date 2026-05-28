@@ -314,7 +314,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "last_run",
           "values": false
         }
       }
