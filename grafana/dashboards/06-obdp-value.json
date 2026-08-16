@@ -1,7 +1,7 @@
 {
   "uid": "aidra-obdp-value",
   "title": "AIDRA — OBDP Value (Downlink)",
-  "description": "On-board data processing value: compression ratio, bandwidth savings, daily capacity. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency.",
+  "description": "On-board data processing value: compression ratio, bandwidth savings, daily capacity. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency. The without-OBDP downlink scenario is a DECLARED SYNTHETIC MODEL: the reduced product size is estimated as 200 bytes + 300 bytes per detection (GeoJSON), and link speeds / contact windows are tabulated values, not telemetry. Measured inputs: image_size_mb and num_detections from execution_log.",
   "tags": [
     "aidra",
     "obdp",

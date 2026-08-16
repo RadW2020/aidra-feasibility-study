@@ -1,7 +1,7 @@
 {
   "uid": "aidra-orbital-latency",
   "title": "AIDRA — Orbital Latency",
-  "description": "End-to-end latency analysis: from sensor acquisition to result available on ground, with and without OBDP. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency.",
+  "description": "End-to-end latency analysis: from sensor acquisition to result available on ground, with and without OBDP. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency. The without-OBDP chain (orbital wait, downlink, ground processing) is a DECLARED SYNTHETIC SCENARIO built from tabulated orbit/link parameters; only the onboard processing time is measured (inference_ms of full-scene runs on the OCI ARM target).",
   "tags": [
     "aidra",
     "orbital",
