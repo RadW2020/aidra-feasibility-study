@@ -234,30 +234,41 @@ def setup_logging(settings: Settings) -> None:
         settings: Application settings (``log_level``, ``loki_url``,
             ``loki_enabled``).
     """
-    root = logging.getLogger("aidra")
+    # Two namespaces need handlers: "aidra" (StructuredLogger callers) and
+    # "src" (modules using logging.getLogger(__name__), whose names start
+    # with "src." and never propagate to "aidra" — their INFO logs were
+    # silently dropped, including CFAR's sea-mask coverage diagnostics).
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
-    root.setLevel(level)
+    roots = [logging.getLogger("aidra"), logging.getLogger("src")]
+    for root in roots:
+        root.setLevel(level)
 
     # Avoid adding duplicate handlers when called multiple times (e.g. tests).
-    if root.handlers:
+    if any(root.handlers for root in roots):
         return
 
     # Stream handler (stdout -> Docker logs, for `docker logs` inspection)
     stream_handler = logging.StreamHandler(stream=sys.stdout)
     stream_handler.setFormatter(_TextFormatter())
-    root.addHandler(stream_handler)
 
     # JSON handler on stderr for structured local consumption
     json_handler = logging.StreamHandler(stream=sys.stderr)
     json_handler.setFormatter(_JSONFormatter())
-    root.addHandler(json_handler)
+
+    handlers: list[logging.Handler] = [stream_handler, json_handler]
 
     # Direct push to Loki (no Promtail in production — see module docstring)
     if settings.loki_enabled and settings.loki_url:
         loki_handler = LokiHandler(settings.loki_url)
         loki_handler.setFormatter(_JSONFormatter())
-        root.addHandler(loki_handler)
+        handlers.append(loki_handler)
         atexit.register(loki_handler.close)
+
+    # The same handler instances serve both namespaces: a record only
+    # traverses its own ancestry, so nothing is emitted twice.
+    for root in roots:
+        for handler in handlers:
+            root.addHandler(handler)
 
 
 class StructuredLogger:

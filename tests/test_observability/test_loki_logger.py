@@ -203,3 +203,24 @@ def test_emit_never_propagates_formatter_errors(loki_server):
         assert handler.dropped == 1
     finally:
         handler.close()
+
+
+def test_setup_logging_covers_src_namespace(test_settings=None):
+    """Los modulos con getLogger(__name__) viven bajo "src." y no propagan
+    a "aidra": sin handlers propios, sus INFO se perdian (incluido el
+    diagnostico de cobertura de la mascara de mar de CFAR).
+    """
+    from src.config import Settings
+    from src.observability.loki_logger import setup_logging
+
+    aidra, src = logging.getLogger("aidra"), logging.getLogger("src")
+    saved = (aidra.handlers[:], src.handlers[:])
+    aidra.handlers, src.handlers = [], []
+    try:
+        setup_logging(Settings(loki_enabled=False))
+        assert src.handlers, "el namespace 'src' quedo sin handlers"
+        # Las mismas instancias sirven ambos namespaces: un record solo
+        # recorre su propia ascendencia, nada se emite dos veces.
+        assert set(map(id, src.handlers)) == set(map(id, aidra.handlers))
+    finally:
+        aidra.handlers, src.handlers = saved
