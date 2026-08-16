@@ -297,3 +297,58 @@ class TestRotatedAffine:
             c2, r2 = affine_geo_to_pixel(gt, lon, lat)
             assert math.isclose(c2, col, abs_tol=1e-6)
             assert math.isclose(r2, row, abs_tol=1e-6)
+
+
+class TestParseSarMetadata:
+    """Regresion del bug de pixel_spacing NULL en el 100% de los runs.
+
+    rangePixelSpacing vive en annotation/*.xml del SAFE; la heuristica
+    anterior lo buscaba en manifest.safe (donde nunca esta) y dejaba
+    pixel_spacing sin poblar en las 1118 ejecuciones historicas.
+    """
+
+    @staticmethod
+    def _make_safe(tmp_path, annotation_body: str):
+        from src.pipeline.preprocessing import parse_sar_metadata
+
+        product = tmp_path / "S1D_IW_GRDH_TEST.SAFE"
+        (product / "annotation").mkdir(parents=True)
+        (product / "annotation" / "s1d-iw-grd-vv.xml").write_text(annotation_body)
+        return parse_sar_metadata(product)
+
+    def test_pixel_spacing_extracted_from_annotation_xml(self, tmp_path):
+        meta = self._make_safe(
+            tmp_path,
+            """<?xml version="1.0"?>
+            <product>
+              <imageAnnotation><imageInformation>
+                <rangePixelSpacing>1.000000e+01</rangePixelSpacing>
+                <azimuthPixelSpacing>1.000100e+01</azimuthPixelSpacing>
+                <incidenceAngleMidSwath>3.907e+01</incidenceAngleMidSwath>
+              </imageInformation></imageAnnotation>
+              <geolocationGrid><geolocationGridPointList>
+                <geolocationGridPoint><incidenceAngle>30.5</incidenceAngle></geolocationGridPoint>
+                <geolocationGridPoint><incidenceAngle>45.5</incidenceAngle></geolocationGridPoint>
+              </geolocationGridPointList></geolocationGrid>
+            </product>""",
+        )
+        assert meta["pixel_spacing"] == 10.0
+        assert meta["incidence_angle"] == 38.0
+
+    def test_pixel_spacing_absent_stays_unset(self, tmp_path):
+        meta = self._make_safe(
+            tmp_path,
+            """<?xml version="1.0"?>
+            <product><geolocationGrid>
+              <geolocationGridPoint><incidenceAngle>33.0</incidenceAngle></geolocationGridPoint>
+            </geolocationGrid></product>""",
+        )
+        assert "pixel_spacing" not in meta
+
+    def test_malformed_pixel_spacing_does_not_raise(self, tmp_path):
+        meta = self._make_safe(
+            tmp_path,
+            """<?xml version="1.0"?>
+            <product><rangePixelSpacing>not-a-number</rangePixelSpacing></product>""",
+        )
+        assert "pixel_spacing" not in meta

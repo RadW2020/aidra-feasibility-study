@@ -1121,7 +1121,6 @@ def parse_sar_metadata(product_dir: Path) -> dict[str, Any]:
         try:
             tree = ET.parse(manifest)
             root = tree.getroot()
-            text = ET.tostring(root, encoding="unicode")
 
             # Crude but robust: match SAFE namespace fields by local name.
             # Avoids juggling ns prefixes that vary across product versions.
@@ -1151,18 +1150,13 @@ def parse_sar_metadata(product_dir: Path) -> dict[str, Any]:
                     pol_modes.append(elem.text.strip().upper())
             if pol_modes:
                 meta["polarisation"] = "+".join(sorted(set(pol_modes)))
-
-            # heuristic for ground range pixel spacing
-            if "rangePixelSpacing>" in text:
-                idx = text.index("rangePixelSpacing>")
-                end = text.index("<", idx)
-                snippet = text[idx + len("rangePixelSpacing>") : end]
-                with contextlib.suppress(ValueError):
-                    meta["pixel_spacing"] = float(snippet)
         except (ET.ParseError, OSError) as exc:
             _log.warning("manifest.safe parse failed: %s", exc)
 
-    # 3. annotation XML (incidence angle as average over geolocation grid)
+    # 3. annotation XML (incidence angle as average over geolocation grid,
+    # and pixel spacing). Note: rangePixelSpacing lives HERE, not in
+    # manifest.safe — a previous heuristic searched the manifest and left
+    # pixel_spacing NULL on every run.
     ann = next(product_dir.rglob("annotation/*.xml"), None)
     if ann is not None:
         try:
@@ -1176,6 +1170,13 @@ def parse_sar_metadata(product_dir: Path) -> dict[str, Any]:
                         angles.append(float(elem.text))
                     except ValueError:
                         continue
+                elif (
+                    tag == "rangePixelSpacing"
+                    and elem.text
+                    and "pixel_spacing" not in meta
+                ):
+                    with contextlib.suppress(ValueError):
+                        meta["pixel_spacing"] = float(elem.text.strip())
             if angles:
                 meta["incidence_angle"] = float(sum(angles) / len(angles))
             if "polarisation" not in meta:
