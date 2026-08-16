@@ -131,7 +131,10 @@ class Settings(BaseSettings):
     # auto-marked 'failed' by a scheduled job. Default 60 min comfortably
     # exceeds pipeline_timeout_seconds (10 min) plus download/preprocess
     # retries so a legitimately slow run is never killed by the reaper.
-    orphan_reaper_threshold_minutes: int = 60
+    # Debe superar la ejecucion legitima mas lenta: sat-extreme tarda
+    # ~150 min en escena completa. Con 60 min el reaper marco failed un
+    # run sat-extreme vivo y sano (2026-08-16, exec e52ad118).
+    orphan_reaper_threshold_minutes: int = 240
     orphan_reaper_interval_minutes: int = 15
 
     class Config:
