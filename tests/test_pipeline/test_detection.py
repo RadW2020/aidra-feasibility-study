@@ -344,3 +344,86 @@ class TestSeaMaskHelper:
             f"Strait of Gibraltar tile should be mixed sea/land, "
             f"got sea_fraction={sea_fraction:.2%}"
         )
+
+
+class TestSeaMaskAffine:
+    """Mascara de mar proyectada por el affine rotation-aware.
+
+    Las escenas S1 GRD en geometria de imagen van rotadas ~13 grados del
+    norte. La variante bbox (_build_sea_mask) muestrea un rectangulo
+    lat/lon alineado al norte y en costa desplaza pixeles hasta ~1.4 km:
+    la tasa on_land de CFAR se estanco en ~55% tras introducirla. La
+    variante afin proyecta cada celda por el mismo affine que usa la
+    geolocalizacion de detecciones, quedando alineada por construccion.
+
+    Puntos de referencia lejos de costa (inmunes a la resolucion ~1.85 km
+    del dataset NOAA; notese que p.ej. la peninsula de Ceuta es mas
+    pequena que esa resolucion y figura como oceano en la fuente):
+    mar de Alboran (36.0, -4.5) = ocean; interior de Marruecos
+    (34.5, -5.0) = land.
+    """
+
+    @staticmethod
+    def _affine(origin_lon, origin_lat, px_deg, rot_deg):
+        import math
+
+        c, s = math.cos(math.radians(rot_deg)), math.sin(math.radians(rot_deg))
+        # GDAL-style: lon = x0 + col*b + row*c ; lat = y0 + col*e + row*f
+        return (
+            origin_lon, px_deg * c, px_deg * s,
+            origin_lat, -px_deg * s, -px_deg * c,
+        )
+
+    def test_matches_pointwise_projection_under_rotation(self):
+        from global_land_mask import globe
+
+        from src.pipeline.detection import _build_sea_mask_from_affine
+
+        # Tile de 64 px cruzando la frontera mar/tierra, rotado 13 grados
+        # como una escena S1 real. Celda coarse = 2 px -> el nearest
+        # upsample introduce como mucho 1 px de desalineacion.
+        gt = self._affine(-5.0, 36.2, px_deg=0.03, rot_deg=13.0)
+        shape = (64, 64)
+        mask = _build_sea_mask_from_affine(gt, 0, 0, shape, coarse=32)
+        assert mask is not None and mask.shape == shape
+
+        rng = range(1, 64, 7)
+        agree = total = 0
+        for r in rng:
+            for c in rng:
+                lon = gt[0] + c * gt[1] + r * gt[2]
+                lat = gt[3] + c * gt[4] + r * gt[5]
+                agree += mask[r, c] == bool(globe.is_ocean(lat, lon))
+                total += 1
+        assert agree / total >= 0.9, f"solo {agree}/{total} celdas coinciden"
+        # El tile cruza la frontera: debe haber mar Y tierra.
+        assert mask.any() and not mask.all()
+
+    def test_orientation_row_zero_is_grid_origin(self):
+        from src.pipeline.detection import _build_sea_mask_from_affine
+
+        # Sin rotacion, origen en el mar de Alboran, avanzando hacia el
+        # sur (pixel_h<0): las primeras filas son mar, las ultimas caen
+        # en el interior de Marruecos (tierra). Un flip erroneo del eje
+        # de filas invertiria el resultado.
+        gt = (-4.5, 0.001, 0.0, 36.2, 0.0, -0.027)  # fila 63 -> lat ~34.5
+        mask = _build_sea_mask_from_affine(gt, 0, 0, (64, 64), coarse=32)
+        assert mask is not None
+        assert mask[0].all(), "fila 0 (36.2N, Alboran) debe ser mar"
+        assert not mask[-1].any(), "fila 63 (~34.5N, Marruecos) debe ser tierra"
+
+    def test_offsets_shift_the_window(self):
+        from src.pipeline.detection import _build_sea_mask_from_affine
+
+        gt = (-4.5, 0.001, 0.0, 36.2, 0.0, -0.027)
+        at_sea = _build_sea_mask_from_affine(gt, 0, 0, (16, 16), coarse=16)
+        inland = _build_sea_mask_from_affine(gt, 0, 60, (16, 16), coarse=16)
+        assert at_sea is not None and inland is not None
+        assert at_sea.all(), "sin offset: ventana en el mar"
+        assert not inland.any(), "row_offset=60 (~34.6N): ventana en tierra"
+
+    def test_returns_none_without_affine(self):
+        from src.pipeline.detection import _build_sea_mask_from_affine
+
+        assert _build_sea_mask_from_affine(None, 0, 0, (8, 8)) is None
+        assert _build_sea_mask_from_affine((1.0, 2.0), 0, 0, (8, 8)) is None

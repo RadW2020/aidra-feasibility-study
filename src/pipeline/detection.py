@@ -107,6 +107,54 @@ def _build_sea_mask(
     return coarse_sea[np.ix_(row_idx, col_idx)]
 
 
+def _build_sea_mask_from_affine(
+    geo_transform: tuple[float, ...] | None,
+    col_offset: int,
+    row_offset: int,
+    tile_shape: tuple[int, int],
+    coarse: int = 32,
+) -> NDArray[np.bool_] | None:
+    """Build a sea-only mask by projecting the tile grid through the affine.
+
+    Sentinel-1 GRD scenes in image geometry are rotated ~13 deg from
+    north (track angle).  :func:`_build_sea_mask` samples an axis-aligned
+    lat/lon rectangle from the tile's bounding box, which misplaces
+    pixels by up to ~1.4 km on a 640-px tile — combined with the ~1.85 km
+    resolution of the NOAA land mask, coastal tiles were filtered almost
+    at random and CFAR's on-land rate plateaued at ~55% instead of
+    dropping.  Here each coarse cell is projected through the same
+    rotation-aware affine used for detection geolocation, so the mask is
+    aligned with the actual pixels by construction (no flip needed: row i
+    of the grid IS row i of the tile).
+
+    Returns None when the land-mask package or the affine is unavailable.
+    """
+    globe = _get_globe()
+    if globe is None or geo_transform is None or len(geo_transform) < 6:
+        return None
+
+    rows, cols = tile_shape
+    rr = np.linspace(0, rows - 1, coarse) + row_offset
+    cc = np.linspace(0, cols - 1, coarse) + col_offset
+    col_grid, row_grid = np.meshgrid(cc, rr)  # (coarse, coarse), row-major
+
+    origin_x, pixel_w, rot_lon, origin_y, rot_lat, pixel_h = geo_transform[:6]
+    lons = origin_x + col_grid * pixel_w + row_grid * rot_lon
+    lats = origin_y + col_grid * rot_lat + row_grid * pixel_h
+    try:
+        coarse_sea = np.asarray(globe.is_ocean(lats, lons), dtype=bool)
+    except Exception:
+        return None
+
+    row_idx = np.clip(
+        (np.arange(rows) * coarse / rows).astype(np.int64), 0, coarse - 1
+    )
+    col_idx = np.clip(
+        (np.arange(cols) * coarse / cols).astype(np.int64), 0, coarse - 1
+    )
+    return coarse_sea[np.ix_(row_idx, col_idx)]
+
+
 # ====================================================================
 # Pydantic models
 # ====================================================================
@@ -254,14 +302,23 @@ class DetectionEngine:
             for tile in tiles:
                 tile_data: NDArray = tile.get("data", tile.get("array"))
                 tile_idx: int = tile.get("tile_index", 0)
-                # Build a sea-only mask from the tile's geocoded bounds so
-                # CFAR's Rayleigh sea-clutter assumption holds — without
-                # this, ~90% of CFAR detections fall on land features
-                # (buildings, terrain) on mixed-coverage scenes.
-                sea_mask = _build_sea_mask(
-                    tile.get("geo_bounds", {}),
+                # Build a sea-only mask so CFAR's Rayleigh sea-clutter
+                # assumption holds — without it, ~90% of CFAR detections
+                # fall on land features (buildings, terrain) on
+                # mixed-coverage scenes. Prefer the rotation-aware affine
+                # (S1 scenes are ~13 deg off north; the axis-aligned bbox
+                # variant misplaces coastal pixels by up to ~1.4 km).
+                sea_mask = _build_sea_mask_from_affine(
+                    tile.get("geo_transform"),
+                    tile.get("col_offset", 0),
+                    tile.get("row_offset", 0),
                     tile_data.shape,
                 )
+                if sea_mask is None:
+                    sea_mask = _build_sea_mask(
+                        tile.get("geo_bounds", {}),
+                        tile_data.shape,
+                    )
                 if sea_mask is not None:
                     cfar_land_masked_tiles += 1
                 # Tighter clustering + SNR gate suppresses sea/edge clutter.
