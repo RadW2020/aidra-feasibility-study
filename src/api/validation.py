@@ -153,3 +153,89 @@ async def list_runs(
             rec["created_at"] = rec["created_at"].isoformat()
         out.append(rec)
     return out
+
+
+class ImportValidationRequest(BaseModel):
+    """Externally computed validation report to persist.
+
+    Mirror of ``src.validation.metrics.ValidationReport`` plus provenance
+    fields. Covers the case where the heavy harness runs offline (e.g.
+    ``scripts/validate_xview3_serial.py`` against real xView3-SAR scenes
+    on a workstation) and production only needs the outcome persisted so
+    dashboards stop falling back to synthetic-only metrics.
+    Derived metrics (precision/Pd/FAR/mAP) are recomputed server-side
+    from the counts and PR curve, never trusted from the client.
+    """
+
+    model_name: str
+    iou_threshold: float = Field(ge=0.0, le=1.0)
+    confidence_threshold: float = Field(ge=0.0, le=1.0)
+    num_scenes: int = Field(ge=1)
+    num_ground_truth: int = Field(ge=0)
+    num_predictions: int = Field(ge=0)
+    true_positives: int = Field(ge=0)
+    false_positives: int = Field(ge=0)
+    false_negatives: int = Field(ge=0)
+    total_area_km2: float = Field(ge=0.0)
+    pr_curve: list[dict[str, float]] = Field(default_factory=list)
+    match_mode: str = Field("center", pattern="^(iou|center)$")
+    center_tolerance_px: float = Field(20.0, ge=0.0, le=512.0)
+    dataset: str = Field(min_length=1)
+    dataset_split: str | None = None
+    model_version: str = "unknown"
+    model_hash: str | None = None
+    compression_technique: str = "none"
+    notes: str | None = None
+
+
+@router.post("/import")
+async def import_report(request: ImportValidationRequest) -> dict[str, Any]:
+    """Persist an externally computed validation report.
+
+    Protected by the same bearer-token middleware as every state-changing
+    ``/api`` route. Returns the persisted row id plus the server-side
+    recomputed metrics.
+    """
+    from src.validation.metrics import ValidationReport
+
+    report = ValidationReport(
+        model_name=request.model_name,
+        iou_threshold=request.iou_threshold,
+        confidence_threshold=request.confidence_threshold,
+        num_scenes=request.num_scenes,
+        num_ground_truth=request.num_ground_truth,
+        num_predictions=request.num_predictions,
+        true_positives=request.true_positives,
+        false_positives=request.false_positives,
+        false_negatives=request.false_negatives,
+        total_area_km2=request.total_area_km2,
+        pr_curve=request.pr_curve,
+        match_mode=request.match_mode,
+        center_tolerance_px=request.center_tolerance_px,
+    )
+    new_id = await persist_report(
+        report,
+        dataset=request.dataset,
+        dataset_split=request.dataset_split,
+        model_version=request.model_version,
+        model_hash=request.model_hash,
+        compression_technique=request.compression_technique,
+        notes=request.notes,
+    )
+    logger.info(
+        "Imported external validation report",
+        extra={
+            "validation_run_id": str(new_id),
+            "dataset": request.dataset,
+            "model": request.model_name,
+        },
+    )
+    return {
+        "validation_run_id": str(new_id),
+        "dataset": request.dataset,
+        "model_name": request.model_name,
+        "precision": round(report.precision, 4),
+        "pd_recall": round(report.pd_recall, 4),
+        "far_per_km2": round(report.far_per_km2, 4),
+        "map_at_iou": round(report.map_at_iou, 4),
+    }
