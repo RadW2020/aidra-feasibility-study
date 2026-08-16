@@ -13,6 +13,12 @@
 [![CI](https://github.com/RadW2020/aidra-feasibility-study/actions/workflows/ci.yml/badge.svg)](https://github.com/RadW2020/aidra-feasibility-study/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)]()
+[![Grafana Dashboard of the Month](https://img.shields.io/badge/Grafana-Dashboard%20of%20the%20Month-F46800?logo=grafana&logoColor=white)](https://play.grafana.org/)
+
+> 🏆 **Featured as Grafana "Dashboard of the Month"** on
+> [play.grafana.org](https://play.grafana.org/) — AIDRA's observability
+> stack simulating AI-driven, on-board vessel detection from real
+> Sentinel-1 SAR. Read the [write-up](https://aidra.uliber.com/).
 
 ---
 
