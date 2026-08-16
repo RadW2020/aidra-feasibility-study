@@ -1,7 +1,7 @@
 {
   "uid": "aidra-compression-bench",
   "title": "AIDRA — Compression Benchmarks",
-  "description": "Comparison of model variants across size, latency, RAM and accuracy.",
+  "description": "Comparison of model variants across size, latency, RAM and accuracy. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency.",
   "tags": [
     "aidra",
     "compression",
@@ -79,7 +79,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Model Size per Variant (MB)",
+      "title": "Model Size per Variant (MB) · full-scene runs",
       "description": "Model file size per compression variant.",
       "type": "barchart",
       "gridPos": {
@@ -99,7 +99,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    model_size_mb\nFROM execution_log\nWHERE (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique, model_size_mb\nORDER BY model_size_mb DESC",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    model_size_mb\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique, model_size_mb\nORDER BY model_size_mb DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -138,7 +138,7 @@
     },
     {
       "id": 2,
-      "title": "Total Inference Time per Variant (minutes)",
+      "title": "Total Inference Time per Variant (minutes) · full-scene runs",
       "description": "Total wall-clock time (minutes) to process the full scene across all tiles. Both variants take tens of minutes because this is full-scene time, not per-tile latency. The key metric is the ratio: INT8 ÷ FP32 ≈ 1.5x speedup.",
       "type": "barchart",
       "gridPos": {
@@ -158,7 +158,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric / 60000.0, 1) AS avg_inference_min\nFROM execution_log\nWHERE (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_inference_min DESC",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric / 60000.0, 1) AS avg_inference_min\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_inference_min DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -197,7 +197,7 @@
     },
     {
       "id": 3,
-      "title": "Operational Proxy: Confidence vs Latency",
+      "title": "Operational Proxy: Confidence vs Latency · full-scene runs",
       "description": "Runtime proxy only. Confidence is useful for operational drift, but compression acceptance still requires persisted validation metrics: mAP@0.5, Pd and FAR/km2.",
       "type": "table",
       "gridPos": {
@@ -217,7 +217,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n    (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n    (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n    (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n    CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS validation_gap\nFROM execution_log\nWHERE (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_latency_ms",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n    (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n    (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n    (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n    CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS validation_gap\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_latency_ms",
           "format": "table",
           "editorMode": "code"
         }
@@ -366,7 +366,7 @@
     },
     {
       "id": 4,
-      "title": "Peak RAM per Variant (MB)",
+      "title": "Peak RAM per Variant (MB) · full-scene runs",
       "description": "Peak RSS during inference per model variant. NOT a hard limit — measured after removing RLIMIT_AS enforcement (which killed the host process). Budget breaches are recorded in execution_log.notes. Variation between variants is real: INT8 loads a smaller weight blob but ONNX Runtime allocates additional buffers.",
       "type": "barchart",
       "gridPos": {
@@ -386,7 +386,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb\nFROM execution_log\nWHERE (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_peak_ram_mb DESC",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_peak_ram_mb DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -423,7 +423,7 @@
     },
     {
       "id": 5,
-      "title": "Benchmark Comparison Table (Runtime + Validation Gap)",
+      "title": "Benchmark Comparison Table (Runtime + Validation Gap) · full-scene runs",
       "description": "Full runtime comparison. The AIDRA invariant for compression also requires mAP@0.5, Pd and FAR/km2; those validation metrics are currently documented in model cards/offline artefacts and should be persisted for a fully self-contained dashboard.",
       "type": "table",
       "gridPos": {
@@ -443,7 +443,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name,\n    model_version,\n    compression_technique,\n    model_size_mb,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    COUNT(*) AS num_runs,\n    (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n    (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n    (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n    CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS validation_gap\nFROM execution_log\nWHERE (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY model_name, model_version, compression_technique, model_size_mb\nORDER BY model_size_mb",
+          "rawSql": "SELECT\n    model_name,\n    model_version,\n    compression_technique,\n    model_size_mb,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    COUNT(*) AS num_runs,\n    (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n    (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n    (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n    CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS validation_gap\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY model_name, model_version, compression_technique, model_size_mb\nORDER BY model_size_mb",
           "format": "table",
           "editorMode": "code"
         }

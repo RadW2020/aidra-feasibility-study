@@ -224,7 +224,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT date_trunc('hour', created_at) AS \"time\",\n       (PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P50\",\n       (PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P95\",\n       (PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P99\"\nFROM execution_log\nWHERE status = 'success' AND inference_ms IS NOT NULL\n  AND $__timeFilter(created_at)\nGROUP BY 1\nORDER BY 1",
+          "rawSql": "SELECT date_trunc('hour', created_at) AS \"time\",\n  CASE WHEN trigger_type = 'cue' THEN 'crop' ELSE 'full-scene' END AS regime,\n       (PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P50\",\n       (PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P95\",\n       (PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY inference_ms) / 1000.0)::float AS \"P99\"\nFROM execution_log\nWHERE status = 'success' AND inference_ms IS NOT NULL\n  AND $__timeFilter(created_at)\nGROUP BY 1, 2\nORDER BY 1",
           "format": "time_series"
         }
       ],
@@ -426,7 +426,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT e.created_at AS \"time\",\n       d.source AS metric,\n       COUNT(*) AS detections\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE e.status = 'success'\n  AND $__timeFilter(e.created_at)\nGROUP BY e.created_at, d.source\nORDER BY e.created_at",
+          "rawSql": "SELECT e.created_at AS \"time\",\n       d.source || ' · ' || CASE WHEN e.trigger_type = 'cue' THEN 'crop' ELSE 'full' END AS metric,\n       COUNT(*) AS detections\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE e.status = 'success'\n  AND $__timeFilter(e.created_at)\nGROUP BY e.created_at, d.source, e.trigger_type\nORDER BY e.created_at",
           "format": "time_series"
         }
       ],

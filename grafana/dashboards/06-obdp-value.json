@@ -1,8 +1,14 @@
 {
   "uid": "aidra-obdp-value",
   "title": "AIDRA — OBDP Value (Downlink)",
-  "description": "On-board data processing value: compression ratio, bandwidth savings, daily capacity.",
-  "tags": ["aidra", "obdp", "downlink", "compression", "value"],
+  "description": "On-board data processing value: compression ratio, bandwidth savings, daily capacity. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency.",
+  "tags": [
+    "aidra",
+    "obdp",
+    "downlink",
+    "compression",
+    "value"
+  ],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
@@ -16,7 +22,12 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["30s", "1m", "5m", "15m"],
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ],
     "hidden": true
   },
   "templating": {
@@ -25,10 +36,15 @@
   "panels": [
     {
       "id": 1,
-      "title": "Data Compression Ratio",
+      "title": "Data Compression Ratio · full-scene runs",
       "description": "Image bytes vs. realistic GeoJSON result bytes (~200 B envelope + 300 B per detection). Empty runs (zero detections) are excluded so the ratio reflects scenes where the OBDP value chain actually produced an output.",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -40,7 +56,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ROUND(AVG(\n        (e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        )\n    )::numeric, 0) AS compression_ratio\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0",
+          "rawSql": "SELECT\n    ROUND(AVG(\n        (e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        )\n    )::numeric, 0) AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0",
           "format": "table",
           "editorMode": "code"
         }
@@ -50,11 +66,19 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "yellow", "value": null },
-              { "color": "green", "value": 1000 }
+              {
+                "color": "yellow",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1000
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "short",
           "decimals": 1,
           "displayName": "× compression"
@@ -63,7 +87,9 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -80,10 +106,15 @@
     },
     {
       "id": 2,
-      "title": "Total Bandwidth Saved (GB)",
+      "title": "Total Bandwidth Saved (GB) · full-scene runs",
       "description": "Total bandwidth saved by transmitting only results instead of full images.",
       "type": "stat",
-      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -95,7 +126,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ROUND((\n        SUM(e.image_size_mb)\n        - SUM((200.0 + GREATEST(e.num_detections, 0) * 300.0) / (1024.0 * 1024.0))\n    )::numeric / 1024.0, 2) AS bandwidth_saved_gb\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0",
+          "rawSql": "SELECT\n    ROUND((\n        SUM(e.image_size_mb)\n        - SUM((200.0 + GREATEST(e.num_detections, 0) * 300.0) / (1024.0 * 1024.0))\n    )::numeric / 1024.0, 2) AS bandwidth_saved_gb\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0",
           "format": "table",
           "editorMode": "code"
         }
@@ -105,17 +136,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null },
-              { "color": "green", "value": 1 }
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
             ]
           },
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "decgbytes"
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
@@ -125,10 +170,15 @@
     },
     {
       "id": 3,
-      "title": "Images Processed",
+      "title": "Images Processed · full-scene runs",
       "description": "Total images processed with OBDP.",
       "type": "stat",
-      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 6
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -140,7 +190,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(*) AS total_processed\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL",
+          "rawSql": "SELECT COUNT(*) AS total_processed\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL",
           "format": "table",
           "editorMode": "code"
         }
@@ -150,15 +200,26 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "purple", "value": null }
+              {
+                "color": "purple",
+                "value": null
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "center",
@@ -168,10 +229,15 @@
     },
     {
       "id": 4,
-      "title": "Downlink Time: Without vs With OBDP",
+      "title": "Downlink Time: Without vs With OBDP · full-scene runs",
       "description": "Downlink time comparison by satellite/link profile: without OBDP (full image) vs with OBDP (results only).",
       "type": "barchart",
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -183,7 +249,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_types AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5),\n        ('X-band (50 Mbps)', 50.0),\n        ('Ka-band (300 Mbps)', 300.0),\n        ('Laser (1800 Mbps)', 1800.0)\n    ) AS t(link_type, mbps)\n)\nSELECT\n    d.link_type,\n    ROUND((a.avg_image_mb * 8 / d.mbps)::numeric, 2) AS \"Without OBDP (sec)\",\n    ROUND((a.avg_result_mb * 8 / d.mbps)::numeric, 4) AS \"With OBDP (sec)\"\nFROM avg_sizes a\nCROSS JOIN downlink_types d\nORDER BY d.mbps",
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_types AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5),\n        ('X-band (50 Mbps)', 50.0),\n        ('Ka-band (300 Mbps)', 300.0),\n        ('Laser (1800 Mbps)', 1800.0)\n    ) AS t(link_type, mbps)\n)\nSELECT\n    d.link_type,\n    ROUND((a.avg_image_mb * 8 / d.mbps)::numeric, 2) AS \"Without OBDP (sec)\",\n    ROUND((a.avg_result_mb * 8 / d.mbps)::numeric, 4) AS \"With OBDP (sec)\"\nFROM avg_sizes a\nCROSS JOIN downlink_types d\nORDER BY d.mbps",
           "format": "table",
           "editorMode": "code"
         }
@@ -195,20 +261,40 @@
             "gradientMode": "none",
             "lineWidth": 1
           },
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "s"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Without OBDP (sec)" },
+            "matcher": {
+              "id": "byName",
+              "options": "Without OBDP (sec)"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "With OBDP (sec)" },
+            "matcher": {
+              "id": "byName",
+              "options": "With OBDP (sec)"
+            },
             "properties": [
-              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
@@ -220,16 +306,27 @@
         "barWidth": 0.7,
         "groupWidth": 0.7,
         "stacking": "none",
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
       "id": 5,
-      "title": "Daily Capacity (images/day) by Downlink Profile",
+      "title": "Daily Capacity (images/day) by Downlink Profile · full-scene runs",
       "description": "Daily image-processing capacity per downlink profile.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -241,7 +338,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND(\n        FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0))::numeric\n        / NULLIF(FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 0),\n        0\n    ) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND(\n        FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0))::numeric\n        / NULLIF(FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 0),\n        0\n    ) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
           "format": "table",
           "editorMode": "code"
         }
@@ -250,32 +347,73 @@
         "defaults": {
           "custom": {
             "align": "center",
-            "cellOptions": { "type": "auto" },
+            "cellOptions": {
+              "type": "auto"
+            },
             "inspect": false,
             "filterable": false
           }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Link Speed (Mbps)" },
-            "properties": [{ "id": "custom.hidden", "value": true }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Without OBDP (img/day)" },
+            "matcher": {
+              "id": "byName",
+              "options": "Link Speed (Mbps)"
+            },
             "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "With OBDP (img/day)" },
+            "matcher": {
+              "id": "byName",
+              "options": "Without OBDP (img/day)"
+            },
             "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Improvement Factor" },
+            "matcher": {
+              "id": "byName",
+              "options": "With OBDP (img/day)"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Improvement Factor"
+            },
             "properties": [
               {
                 "id": "custom.cellOptions",
@@ -289,12 +427,23 @@
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "yellow", "value": null },
-                    { "color": "green", "value": 100 }
+                    {
+                      "color": "yellow",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 100
+                    }
                   ]
                 }
               },
-              { "id": "color", "value": { "mode": "thresholds" } }
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
             ]
           }
         ]
@@ -302,15 +451,22 @@
       "options": {
         "showHeader": true,
         "cellHeight": "md",
-        "footer": { "show": false }
+        "footer": {
+          "show": false
+        }
       }
     },
     {
       "id": 6,
-      "title": "Compression Ratio Over Time",
+      "title": "Compression Ratio Over Time · full-scene runs",
       "description": "Time series of the compression ratio per execution.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 8
+      },
       "datasource": {
         "type": "postgres",
         "uid": "PostgreSQL"
@@ -322,7 +478,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        ((e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        ))::numeric\n    , 0) AS compression_ratio\nFROM execution_log e\nWHERE e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
+          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        ((e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        ))::numeric\n    , 0) AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
           "format": "time_series",
           "editorMode": "code"
         }
@@ -338,14 +494,23 @@
             "pointSize": 6,
             "spanNulls": false
           },
-          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "unit": "none"
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     }
   ],
@@ -353,7 +518,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
