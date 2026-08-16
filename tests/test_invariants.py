@@ -351,3 +351,115 @@ class TestSARMetadataParser:
         # Polarisation aggregates VV + VH alphabetically.
         assert meta.get("polarisation") in {"VH+VV", "VV+VH"}
         assert meta.get("incidence_angle") == pytest.approx(35.0)
+
+
+# =====================================================================
+# I-MOD-3: variantes degradadas se marcan rejected, nunca se borran
+# =====================================================================
+
+
+@pytest.mark.invariant
+class TestIMOD3RejectedVariants:
+    """I-MOD-3: el esquema debe poder marcar variantes rechazadas.
+
+    Hasta la migracion 015 models_registry no tenia columna de estado,
+    haciendo el invariante incumplible: la variante int8-dynamic que
+    produjo x4.5 detecciones sobre el baseline quedo registrada sin
+    marca alguna.
+    """
+
+    MIGRATION = Path("src/db/migrations/015_model_status.sql")
+
+    def test_status_migration_exists_with_constraints(self):
+        sql = self.MIGRATION.read_text()
+        assert "ADD COLUMN IF NOT EXISTS status" in sql
+        assert "rejection_reason" in sql
+        # Un rejected sin justificacion violaria I-MOD-3.
+        assert "status <> 'rejected' OR rejection_reason IS NOT NULL" in sql
+
+    def test_upsert_does_not_clobber_status(self):
+        """Un rescan de modelos (UPSERT) no debe resucitar un rejected."""
+        from src.db.queries import UPSERT_MODEL
+
+        _, update_clause = UPSERT_MODEL.split("DO UPDATE SET", 1)
+        assert "status" not in update_clause, (
+            "I-MOD-3 violado: el UPSERT sobreescribe status y un rescan "
+            "borraria la marca rejected"
+        )
+
+    def test_rejected_variant_keeps_evidence(self):
+        """Marcar, no borrar: la migracion 015 usa UPDATE, nunca DELETE."""
+        sql = self.MIGRATION.read_text().upper()
+        assert "DELETE" not in sql
+        assert "DROP TABLE" not in sql
+
+
+# =====================================================================
+# Gate de paneles: agregados de execution_log controlan regimen de
+# procesado (auditoria 2026-08-16)
+# =====================================================================
+
+
+@pytest.mark.invariant
+class TestDashboardRegimeControl:
+    """Los agregados sobre execution_log deben controlar el regimen.
+
+    Un run 'cue' procesa un recorte de AOI (9-56 tiles); un 'scheduled'
+    o 'manual' procesa la escena completa (~1350 tiles). Mezclarlos en un
+    AVG/PERCENTILE invierte conclusiones: el benchmark de compresion
+    llego a mostrar el int8 2x MAS LENTO que el baseline cuando en igual
+    regimen es un 23% mas rapido. Este gate parsea los dashboards y exige
+    que toda agregacion sobre metricas por-run de execution_log filtre o
+    desglose por trigger_type / num_tiles.
+    """
+
+    DASHBOARDS = Path("grafana/dashboards")
+    # Metricas por-run cuya media/percentil depende del tamano del AOI.
+    REGIME_SENSITIVE = (
+        "inference_ms",
+        "num_detections",
+        "peak_ram_mb",
+        "cpu_usage_pct",
+        "total_duration_ms",
+        "image_size_mb",
+    )
+    AGGREGATES = ("AVG(", "PERCENTILE_CONT", "STDDEV")
+
+    @staticmethod
+    def _iter_sql(dashboard: dict):
+        def walk(panel):
+            for target in panel.get("targets", []) or []:
+                sql = target.get("rawSql")
+                if sql:
+                    yield panel.get("title", "?"), sql
+            for sub in panel.get("panels", []) or []:
+                yield from walk(sub)
+
+        for panel in dashboard.get("panels", []):
+            yield from walk(panel)
+
+    def test_aggregates_over_execution_log_control_regime(self):
+        import json as _json
+
+        offenders = []
+        for path in sorted(self.DASHBOARDS.glob("*.json")):
+            dash = _json.loads(path.read_text())
+            for title, sql in self._iter_sql(dash):
+                if "execution_log" not in sql:
+                    continue
+                upper = sql.upper()
+                aggregated = any(
+                    f"{agg.upper()}" in upper.replace(" ", "")
+                    or agg.upper() in upper
+                    for agg in self.AGGREGATES
+                ) and any(col in sql for col in self.REGIME_SENSITIVE)
+                if not aggregated:
+                    continue
+                controls_regime = "trigger_type" in sql or "num_tiles" in sql
+                if not controls_regime:
+                    offenders.append(f"{path.name} :: {title}")
+        assert not offenders, (
+            "Paneles que agregan metricas por-run sin controlar el regimen "
+            "crop/full (anadir trigger_type <> 'cue' o desglose): "
+            + "; ".join(offenders)
+        )
