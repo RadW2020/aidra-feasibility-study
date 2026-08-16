@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     # ---- Observabilidad ----
     prometheus_enabled: bool = True
     loki_url: str = "http://aidra-loki:3100"
+    # Direct HTTP push to Loki. Production has no Promtail (mounting
+    # docker.sock on a shared host was rejected), so this is Loki's only
+    # ingestion path — turning it off leaves I-TRACE-3 unsatisfied.
+    loki_enabled: bool = True
     log_level: str = "INFO"
 
     # ---- API protection ----

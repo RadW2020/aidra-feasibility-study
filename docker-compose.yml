@@ -1,6 +1,6 @@
 # ---- docker-compose.yml ----
 # AIDRA - Artificial Intelligence In-orbit Data pRocessing Assessment
-# All 6 services: app, db, grafana, prometheus, loki, promtail
+# All 5 services: app, db, grafana, prometheus, loki
 
 services:
   # ====== APP PRINCIPAL ======
@@ -147,24 +147,10 @@ services:
         reservations:
           memory: 128M
 
-  # ====== PROMTAIL ======
-  aidra-promtail:
-    image: grafana/promtail:3.1.0
-    container_name: aidra-promtail
-    restart: unless-stopped
-    volumes:
-      - ./promtail/promtail-config.yml:/etc/promtail/config.yml
-      - /var/log:/var/log:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/config.yml
-    networks:
-      - aidra-net
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-        reservations:
-          memory: 64M
+  # Promtail retirado: la app empuja a Loki directamente vía LOKI_URL
+  # (src/observability/loki_logger.LokiHandler). Mantenerlo aqui duplicaria
+  # cada linea en Loki y divergiria de produccion, que nunca lo tuvo por no
+  # montar docker.sock en un host compartido. Ver docker-compose.coolify.yml.
 
 volumes:
   aidra-db-data:        # Persistencia PostgreSQL

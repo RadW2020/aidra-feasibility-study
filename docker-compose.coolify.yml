@@ -4,7 +4,10 @@
 # - no host port bindings, so it cannot collide with Coolify or other apps
 # - only aidra-app and aidra-grafana are meant to be routed by Coolify
 # - Postgres, Prometheus and Loki stay inside the application network
-# - promtail is omitted to avoid mounting host logs or docker.sock on a shared server
+# - promtail is omitted to avoid mounting host logs or docker.sock on a shared
+#   server; aidra-app pushes to Loki directly over LOKI_URL instead
+#   (src/observability/loki_logger.LokiHandler), which is Loki's only
+#   ingestion path here and what keeps invariant I-TRACE-3 satisfied
 
 services:
   aidra-app:

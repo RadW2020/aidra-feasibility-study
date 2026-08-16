@@ -11,11 +11,18 @@ Cada log incluye:
 Formato: JSON para Loki, texto para stdout.
 
 Architecture note:
-    Promtail (running as a sidecar container) collects Docker stdout logs
-    automatically and pushes them to Loki.  Therefore this module does NOT
-    open an HTTP connection to Loki directly.  Instead it formats log records
-    as JSON so that Loki / Promtail can parse structured fields from the log
-    stream.
+    Production (``docker-compose.coolify.yml``) deliberately omits Promtail:
+    shipping Docker logs would require mounting ``docker.sock`` on a shared
+    host, exposing sibling projects' containers.  Without Promtail the
+    stdout -> Loki chain has no transport, so this module pushes to Loki
+    itself over the internal network (``LOKI_URL``), closing **I-TRACE-3**.
+
+    Label cardinality: only ``service``, ``level`` and ``logger`` become Loki
+    stream labels.  ``execution_id`` / ``run_id`` stay inside the JSON line
+    body — a unique label per run would create one Loki stream per pipeline
+    execution and degrade the index.  The run is still reachable with::
+
+        {service="aidra"} | json | execution_id="<uuid>"
 
 Usage:
     from src.observability.loki_logger import setup_logging, StructuredLogger
@@ -30,11 +37,17 @@ Usage:
 
 from __future__ import annotations
 
+import atexit
+import contextlib
 import json
 import logging
+import queue
 import sys
+import threading
 from datetime import UTC, datetime
 from typing import Any
+
+import requests
 
 from src.config import Settings
 
@@ -43,6 +56,11 @@ class _JSONFormatter(logging.Formatter):
     """Formats log records as single-line JSON for Loki / Promtail ingestion."""
 
     def format(self, record: logging.LogRecord) -> str:
+        # ``formatMessage`` reads ``record.message``, which the stdlib sets in
+        # ``Formatter.format``. Since we override ``format`` we must set it
+        # ourselves: relying on another handler having formatted the record
+        # first makes this formatter silently order-dependent.
+        record.message = record.getMessage()
         log_entry: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(
                 record.created, tz=UTC
@@ -87,23 +105,134 @@ class _TextFormatter(logging.Formatter):
         super().__init__(fmt=self.FORMAT)
 
 
+class LokiHandler(logging.Handler):
+    """Ships log records to Loki's push API from a background thread.
+
+    Design constraints, in priority order:
+
+    1. **Never block the caller.**  ``emit`` only enqueues; all I/O happens on
+       the worker thread.  The pipeline's latency measurements must not
+       include log shipping.
+    2. **Never raise into the caller.**  A dead or slow Loki degrades
+       observability, never the detection run itself.  Failures increment
+       :attr:`dropped` and are otherwise silent.
+    3. **Bounded memory.**  The queue is capped; once full, new records are
+       dropped rather than growing without limit while Loki is unreachable.
+
+    Labels are intentionally low-cardinality (see module docstring).
+    """
+
+    #: Loki stream labels; everything else travels in the JSON line body.
+    _LABEL_FIELDS = ("level", "logger")
+
+    def __init__(
+        self,
+        url: str,
+        service: str = "aidra",
+        batch_size: int = 100,
+        flush_interval: float = 2.0,
+        queue_size: int = 10_000,
+        timeout: float = 5.0,
+    ) -> None:
+        super().__init__()
+        self.url = url.rstrip("/") + "/loki/api/v1/push"
+        self.service = service
+        self.batch_size = batch_size
+        self.flush_interval = flush_interval
+        self.timeout = timeout
+        self.dropped = 0
+        self._queue: queue.Queue[tuple[str, dict[str, str], str]] = queue.Queue(
+            maxsize=queue_size
+        )
+        self._stopping = threading.Event()
+        self._session = requests.Session()
+        self._thread = threading.Thread(
+            target=self._run, name="loki-shipper", daemon=True
+        )
+        self._thread.start()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Enqueue a record. Drops it if the queue is saturated."""
+        try:
+            line = self.format(record)
+            labels = {
+                "service": self.service,
+                "level": record.levelname,
+                "logger": record.name,
+            }
+            # Loki timestamps are nanoseconds since epoch, as a string.
+            ts = str(int(record.created * 1_000_000_000))
+            self._queue.put_nowait((ts, labels, line))
+        except queue.Full:
+            self.dropped += 1
+        except Exception:  # noqa: BLE001 - logging must never break callers
+            self.dropped += 1
+
+    def _run(self) -> None:
+        """Worker loop: drain the queue and push batches to Loki."""
+        batch: list[tuple[str, dict[str, str], str]] = []
+        while not self._stopping.is_set() or not self._queue.empty():
+            with contextlib.suppress(queue.Empty):
+                batch.append(self._queue.get(timeout=self.flush_interval))
+            if batch and (
+                len(batch) >= self.batch_size or self._queue.empty()
+            ):
+                self._push(batch)
+                batch = []
+        if batch:
+            self._push(batch)
+
+    def _push(self, batch: list[tuple[str, dict[str, str], str]]) -> None:
+        """POST one batch, grouping entries into streams by label set."""
+        streams: dict[tuple[tuple[str, str], ...], list[list[str]]] = {}
+        for ts, labels, line in batch:
+            key = tuple(sorted(labels.items()))
+            streams.setdefault(key, []).append([ts, line])
+
+        payload = {
+            "streams": [
+                {"stream": dict(key), "values": values}
+                for key, values in streams.items()
+            ]
+        }
+        try:
+            resp = self._session.post(
+                self.url,
+                json=payload,
+                timeout=self.timeout,
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code >= 300:
+                self.dropped += len(batch)
+        except Exception:  # noqa: BLE001 - Loki being down must not propagate
+            self.dropped += len(batch)
+
+    def close(self) -> None:
+        """Flush pending records and stop the worker thread."""
+        self._stopping.set()
+        self._thread.join(timeout=self.timeout + self.flush_interval)
+        with contextlib.suppress(Exception):
+            self._session.close()
+        super().close()
+
+
 def setup_logging(settings: Settings) -> None:
     """Configure logging for the entire AIDRA application.
 
     Steps:
         1. Root logger ``aidra``: level set from ``settings.log_level``.
-        2. Stream handler: human-readable text to stdout.  Docker captures
-           stdout, and Promtail ships it to Loki.
-        3. A JSON formatter is attached so that structured fields can be
-           parsed by Loki even when consumed via Promtail.
+        2. Stream handler: human-readable text to stdout (Docker log inspection).
+        3. JSON handler on stderr: structured fields for local consumption.
+        4. :class:`LokiHandler`: pushes the same JSON lines to Loki over HTTP
+           when ``settings.loki_enabled`` is on and ``loki_url`` is set.
 
-    Note:
-        Promtail collects Docker container logs automatically, so there is
-        no need for an HTTP handler pushing directly to Loki.  The JSON
-        format in the stream handler allows Loki to parse structured fields.
+    Step 4 is what satisfies **I-TRACE-3**: without it Loki has no ingestion
+    path in production (Promtail is intentionally absent) and ``run_id``
+    never reaches the log store.
 
     Args:
-        settings: Application settings (used for ``log_level``).
+        settings: Application settings (``log_level``, ``loki_url``,
+            ``loki_enabled``).
     """
     root = logging.getLogger("aidra")
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
@@ -113,15 +242,22 @@ def setup_logging(settings: Settings) -> None:
     if root.handlers:
         return
 
-    # Stream handler (stdout -> Docker logs -> Promtail -> Loki)
+    # Stream handler (stdout -> Docker logs, for `docker logs` inspection)
     stream_handler = logging.StreamHandler(stream=sys.stdout)
     stream_handler.setFormatter(_TextFormatter())
     root.addHandler(stream_handler)
 
-    # JSON handler on stderr for Promtail structured ingestion
+    # JSON handler on stderr for structured local consumption
     json_handler = logging.StreamHandler(stream=sys.stderr)
     json_handler.setFormatter(_JSONFormatter())
     root.addHandler(json_handler)
+
+    # Direct push to Loki (no Promtail in production — see module docstring)
+    if settings.loki_enabled and settings.loki_url:
+        loki_handler = LokiHandler(settings.loki_url)
+        loki_handler.setFormatter(_JSONFormatter())
+        root.addHandler(loki_handler)
+        atexit.register(loki_handler.close)
 
 
 class StructuredLogger:

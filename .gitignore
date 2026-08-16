@@ -32,6 +32,7 @@ docker-compose.override.yml
 models/*.pt
 models/*.onnx
 models/*.bin
+models/.cache/
 data/
 images/
 *.tiff
