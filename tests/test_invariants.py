@@ -463,3 +463,49 @@ class TestDashboardRegimeControl:
             "crop/full (anadir trigger_type <> 'cue' o desglose): "
             + "; ".join(offenders)
         )
+
+
+# =====================================================================
+# I-DET-1 / GEOINT: la ruta multi-perfil persiste los metadatos SAR
+# =====================================================================
+
+
+@pytest.mark.invariant
+class TestRunAllProfilesSarMetadata:
+    """run_all_profiles debe persistir sar_meta y fijar _current_metadata.
+
+    Hasta 2026-08-16 solo engine.run() lo hacia: cada fila de
+    trigger-all-profiles quedaba sin incidence_angle/pixel_spacing (los
+    NULL de la auditoria) y _run_detection clippaba el footprint contra
+    el metadata rancio de la ULTIMA escena procesada por run().
+    """
+
+    @staticmethod
+    def _source_of_run_all_profiles() -> str:
+        import ast
+        import inspect
+
+        from src.pipeline.engine import PipelineEngine
+
+        tree = ast.parse(inspect.getsource(PipelineEngine))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.AsyncFunctionDef)
+                and node.name == "run_all_profiles"
+            ):
+                return ast.unparse(node)
+        raise AssertionError("run_all_profiles no encontrado")
+
+    def test_persists_sar_metadata_per_profile(self):
+        src = self._source_of_run_all_profiles()
+        assert "update_sar_metadata" in src, (
+            "run_all_profiles dejo de persistir metadatos SAR: las filas "
+            "multi-perfil vuelven a quedar sin incidence_angle/pixel_spacing"
+        )
+
+    def test_sets_current_metadata_for_footprint_clipping(self):
+        src = self._source_of_run_all_profiles()
+        assert "self._current_metadata" in src, (
+            "run_all_profiles no fija _current_metadata: el footprint "
+            "clipping usaria la escena del run() anterior"
+        )

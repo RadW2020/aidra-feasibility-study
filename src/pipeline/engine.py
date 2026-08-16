@@ -705,6 +705,15 @@ class PipelineEngine:
             tiles = preprocessed["tiles"]
             num_tiles = preprocessed["metadata"]["num_tiles"]
 
+            # Same-scene metadata for footprint clipping in _run_detection
+            # and SAR provenance persistence. Without this the multi-profile
+            # path reused whatever _current_metadata the last run() left
+            # behind — footprint clipping against a DIFFERENT scene — and
+            # never persisted incidence_angle / pixel_spacing (the audited
+            # NULLs on every trigger-all-profiles row).
+            self._current_metadata = preprocessed.get("metadata", {})
+            sar_meta = self._current_metadata.get("sar") or {}
+
             # Run detection for each profile
             from src.profiles.definitions import PROFILE_ORDER
 
@@ -773,6 +782,26 @@ class PipelineEngine:
                         commit_sha=commit_sha,
                     )
                     await self.recorder.update_status(execution_id, "running")
+
+                    if sar_meta:
+                        try:
+                            await self.recorder.update_sar_metadata(
+                                execution_id=execution_id,
+                                incidence_angle=sar_meta.get("incidence_angle"),
+                                polarisation=sar_meta.get("polarisation"),
+                                orbit_direction=sar_meta.get("orbit_direction"),
+                                relative_orbit=sar_meta.get("relative_orbit"),
+                                product_type=sar_meta.get("product_type"),
+                                pixel_spacing=sar_meta.get("pixel_spacing"),
+                            )
+                        except Exception as exc:
+                            self._log.warning(
+                                "Could not persist SAR metadata",
+                                extra={
+                                    "execution_id": str(execution_id),
+                                    "error": str(exc),
+                                },
+                            )
 
                     # Run detection under this profile
                     detection_result = await self._run_detection(
