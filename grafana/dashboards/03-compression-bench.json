@@ -1,7 +1,7 @@
 {
   "uid": "aidra-compression-bench",
   "title": "AIDRA — Compression Benchmarks",
-  "description": "Comparison of model variants across size, latency, RAM and accuracy. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency.",
+  "description": "Comparison of model variants across size, latency, RAM and accuracy. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency. Benchmark rows date from the pre-affine-mask era (May 2026), when both variants ran under the same flawed sea mask: fp32-vs-int8 comparisons are internally consistent, but detection counts are not comparable with post-2026-08-16 runs.",
   "tags": [
     "aidra",
     "compression",

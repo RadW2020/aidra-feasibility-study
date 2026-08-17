@@ -1,7 +1,7 @@
 {
   "uid": "aidra-obdp-value",
   "title": "AIDRA — OBDP Value (Downlink)",
-  "description": "On-board data processing value: compression ratio, bandwidth savings, daily capacity. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency. The without-OBDP downlink scenario is a DECLARED SYNTHETIC MODEL: the reduced product size is estimated as 200 bytes + 300 bytes per detection (GeoJSON), and link speeds / contact windows are tabulated values, not telemetry. Measured inputs: image_size_mb and num_detections from execution_log.",
+  "description": "On-board data processing value: compression ratio, bandwidth savings, daily capacity. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency. The without-OBDP downlink scenario is a DECLARED SYNTHETIC MODEL: the reduced product size is estimated as 200 bytes + 300 bytes per detection (GeoJSON), and link speeds / contact windows are tabulated values, not telemetry. Measured inputs: image_size_mb and num_detections from execution_log. Compression-ratio aggregates exclude the pre-affine-mask era, whose inflated land-artifact detection counts overstated the reduced-product size.",
   "tags": [
     "aidra",
     "obdp",
@@ -56,7 +56,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ROUND(AVG(\n        (e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        )\n    )::numeric, 0) AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0",
+          "rawSql": "SELECT\n    ROUND(AVG(\n        (e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        )\n    )::numeric, 0) AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND (e.notes IS NULL OR e.notes NOT LIKE '%methodology:pre-affine-mask%') AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0",
           "format": "table",
           "editorMode": "code"
         }
@@ -126,7 +126,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ROUND((\n        SUM(e.image_size_mb)\n        - SUM((200.0 + GREATEST(e.num_detections, 0) * 300.0) / (1024.0 * 1024.0))\n    )::numeric / 1024.0, 2) AS bandwidth_saved_gb\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0",
+          "rawSql": "SELECT\n    ROUND((\n        SUM(e.image_size_mb)\n        - SUM((200.0 + GREATEST(e.num_detections, 0) * 300.0) / (1024.0 * 1024.0))\n    )::numeric / 1024.0, 2) AS bandwidth_saved_gb\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND (e.notes IS NULL OR e.notes NOT LIKE '%methodology:pre-affine-mask%') AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0",
           "format": "table",
           "editorMode": "code"
         }
@@ -249,7 +249,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_types AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5),\n        ('X-band (50 Mbps)', 50.0),\n        ('Ka-band (300 Mbps)', 300.0),\n        ('Laser (1800 Mbps)', 1800.0)\n    ) AS t(link_type, mbps)\n)\nSELECT\n    d.link_type,\n    ROUND((a.avg_image_mb * 8 / d.mbps)::numeric, 2) AS \"Without OBDP (sec)\",\n    ROUND((a.avg_result_mb * 8 / d.mbps)::numeric, 4) AS \"With OBDP (sec)\"\nFROM avg_sizes a\nCROSS JOIN downlink_types d\nORDER BY d.mbps",
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_types AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5),\n        ('X-band (50 Mbps)', 50.0),\n        ('Ka-band (300 Mbps)', 300.0),\n        ('Laser (1800 Mbps)', 1800.0)\n    ) AS t(link_type, mbps)\n)\nSELECT\n    d.link_type,\n    ROUND((a.avg_image_mb * 8 / d.mbps)::numeric, 2) AS \"Without OBDP (sec)\",\n    ROUND((a.avg_result_mb * 8 / d.mbps)::numeric, 4) AS \"With OBDP (sec)\"\nFROM avg_sizes a\nCROSS JOIN downlink_types d\nORDER BY d.mbps",
           "format": "table",
           "editorMode": "code"
         }
@@ -338,7 +338,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND(\n        FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0))::numeric\n        / NULLIF(FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 0),\n        0\n    ) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(num_detections, 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND(\n        FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0))::numeric\n        / NULLIF(FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 0),\n        0\n    ) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
           "format": "table",
           "editorMode": "code"
         }
@@ -478,7 +478,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        ((e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        ))::numeric\n    , 0) AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
+          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        ((e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(e.num_detections, 0) * 300, 0\n        ))::numeric\n    , 0) AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND (e.notes IS NULL OR e.notes NOT LIKE '%methodology:pre-affine-mask%') AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND e.num_detections > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
           "format": "time_series",
           "editorMode": "code"
         }

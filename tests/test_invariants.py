@@ -509,3 +509,29 @@ class TestRunAllProfilesSarMetadata:
             "run_all_profiles no fija _current_metadata: el footprint "
             "clipping usaria la escena del run() anterior"
         )
+
+
+@pytest.mark.invariant
+class TestPreAffineMaskMarking:
+    """Migracion 016: la era pre-mascara-afin se marca, nunca se borra (§8)."""
+
+    MIGRATION = Path("src/db/migrations/016_mark_pre_affine_mask.sql")
+
+    def test_migration_marks_and_never_deletes(self):
+        sql = self.MIGRATION.read_text()
+        assert "methodology:pre-affine-mask" in sql
+        upper = sql.upper()
+        assert "DELETE" not in upper and "DROP" not in upper and "TRUNCATE" not in upper
+        # Idempotente: no re-marca filas ya marcadas.
+        assert "NOT LIKE '%methodology:pre-affine-mask%'" in sql
+
+    def test_panels_04_06_exclude_marked_era(self):
+        import json as _json
+
+        for stem in ("04-constraint-profiles", "06-obdp-value"):
+            dash = _json.loads(Path(f"grafana/dashboards/{stem}.json").read_text())
+            found = _json.dumps(dash).count("pre-affine-mask")
+            assert found >= 2, (
+                f"{stem}: los agregados dejaron de excluir la era "
+                "pre-affine-mask (recuentos no comparables)"
+            )
