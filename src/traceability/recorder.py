@@ -127,8 +127,8 @@ class ExecutionRecorder:
         search_zone: str | None = None,
         model_format: str = "pytorch",
         compression_technique: str = "none",
-        confidence_threshold: float = 0.25,
-        iou_threshold: float = 0.45,
+        confidence_threshold: float | None = None,
+        iou_threshold: float | None = None,
         constraint_profile: str = "ground",
         cpu_limit: float | None = None,
         memory_limit_mb: int | None = None,
@@ -205,6 +205,13 @@ class ExecutionRecorder:
         UUID
             ID del registro creado.
         """
+        if confidence_threshold is None or iou_threshold is None:
+            # I-DET-4: the persisted thresholds must be the ones actually
+            # used; there is no literal fallback at the persistence layer.
+            raise ValueError(
+                "create_pending requires explicit confidence_threshold and "
+                "iou_threshold (resolve them from Settings upstream)"
+            )
         if execution_id is None:
             execution_id = uuid4()
         hostname = socket.gethostname()
@@ -614,8 +621,8 @@ class ExecutionRecorder:
             model_size_mb=row["model_size_mb"],
             model_format=row.get("model_format", "pytorch"),
             compression_technique=row.get("compression_technique", "none"),
-            confidence_threshold=row.get("confidence_threshold", 0.25),
-            iou_threshold=row.get("iou_threshold", 0.45),
+            confidence_threshold=row.get("confidence_threshold"),
+            iou_threshold=row.get("iou_threshold"),
             constraint_profile=row.get("constraint_profile", "ground"),
             cpu_limit=row.get("cpu_limit"),
             memory_limit_mb=row.get("memory_limit_mb"),

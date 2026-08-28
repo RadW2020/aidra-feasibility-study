@@ -121,6 +121,7 @@ def _build_engine(settings: Settings):
 
         detector_engine = DetectionEngine(
             fusion_iou_threshold=settings.fusion_iou_threshold,
+            fusion_yolo_weight=settings.fusion_yolo_weight,
             edge_buffer_px=settings.edge_buffer_px,
             cfar_min_cluster_size=settings.cfar_min_cluster_size,
             cfar_cluster_eps=settings.cfar_cluster_eps,

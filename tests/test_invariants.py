@@ -130,6 +130,106 @@ def _find_all(haystack: str, needle: str) -> list[int]:
 
 
 # =====================================================================
+# I-DET-4 — thresholds proceden de Settings, nunca de literales
+# =====================================================================
+
+
+@pytest.mark.invariant
+class TestIDET4ThresholdsFromSettings:
+    """I-DET-4: ``confidence_threshold`` / ``iou_threshold`` salen de
+    ``Settings`` o de una request explicita. Ningun literal 0.25/0.45
+    duplicado fuera de ``src/config.py`` decide una inferencia."""
+
+    def test_pipeline_request_leaves_thresholds_unset(self):
+        from src.pipeline.engine import PipelineRequest
+
+        req = PipelineRequest()
+        assert req.confidence_threshold is None
+        assert req.iou_threshold is None
+
+    def test_engine_resolves_thresholds_from_settings(self):
+        from src.config import Settings
+        from src.pipeline.engine import PipelineEngine, PipelineRequest
+
+        settings = Settings(
+            _env_file=None, confidence_threshold=0.9, iou_threshold=0.1
+        )
+        engine = object.__new__(PipelineEngine)
+        engine.config = settings
+
+        resolved = engine._apply_settings_defaults(PipelineRequest(zone="gibraltar"))
+        assert resolved.confidence_threshold == 0.9
+        assert resolved.iou_threshold == 0.1
+
+        explicit = engine._apply_settings_defaults(
+            PipelineRequest(zone="gibraltar", confidence_threshold=0.5, iou_threshold=0.2)
+        )
+        assert explicit.confidence_threshold == 0.5
+        assert explicit.iou_threshold == 0.2
+
+    def test_validate_request_rejects_unresolved_thresholds(self):
+        from src.pipeline.engine import PipelineEngine, PipelineError, PipelineRequest
+
+        engine = object.__new__(PipelineEngine)
+        with pytest.raises(PipelineError, match="I-DET-4"):
+            engine._validate_request(PipelineRequest(zone="gibraltar"))
+
+    def test_background_callers_do_not_pin_thresholds(self):
+        """Cron y Tip & Cue construyen PipelineRequest sin thresholds:
+        heredan Settings via _apply_settings_defaults."""
+        for path in ("src/pipeline/scheduler_jobs.py", "src/tipcue/scheduler.py"):
+            src = Path(path).read_text()
+            assert "confidence_threshold=" not in src, path
+            assert "iou_threshold=" not in src, path
+
+    def test_no_duplicated_threshold_literals_outside_settings(self):
+        import re
+
+        pattern = re.compile(r"(confidence_threshold|iou_threshold)\W{0,25}0\.(25|45)\b")
+        offenders: list[str] = []
+        for path in Path("src").rglob("*.py"):
+            if path.as_posix() == "src/config.py":
+                continue
+            for lineno, line in enumerate(path.read_text().splitlines(), 1):
+                if pattern.search(line):
+                    offenders.append(f"{path}:{lineno}: {line.strip()}")
+        assert not offenders, "I-DET-4 violado (literal duplicado):\n" + "\n".join(offenders)
+
+    def test_fusion_weights_come_from_settings(self):
+        from src.config import Settings
+        from src.pipeline.detection import DetectionEngine
+
+        engine = DetectionEngine(
+            fusion_iou_threshold=0.3,
+            cfar_min_cluster_size=5,
+            cfar_cluster_eps=1.5,
+            cfar_min_mean_snr=2.0,
+            fusion_yolo_weight=Settings(_env_file=None, fusion_yolo_weight=0.8).fusion_yolo_weight,
+        )
+        assert engine.fusion_yolo_weight == 0.8
+        src = Path("src/pipeline/detection.py").read_text()
+        assert "0.5 * y_det" not in src, "pesos de fusion hardcodeados"
+
+    def test_recorder_refuses_implicit_thresholds(self):
+        import asyncio
+
+        from src.traceability.recorder import ExecutionRecorder
+
+        recorder = ExecutionRecorder(db=None)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="I-DET-4|explicit"):
+            asyncio.run(
+                recorder.create_pending(
+                    image_id="x",
+                    image_hash="h",
+                    model_name="m",
+                    model_version="v",
+                    model_hash="mh",
+                    model_size_mb=1.0,
+                )
+            )
+
+
+# =====================================================================
 # I-SAR / I-DET — flags on_land y cluster_anomaly no se pierden
 # =====================================================================
 

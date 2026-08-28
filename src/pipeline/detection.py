@@ -231,6 +231,19 @@ class DetectionResult(BaseModel):
 # ====================================================================
 
 
+def _settings_if_needed(*values: Any) -> Any:
+    """Instantiate ``Settings`` only when some constructor arg is ``None``.
+
+    Keeps ``DetectionEngine(...)`` free of any ``.env`` read when every
+    threshold is injected explicitly (as ``main.py`` does).
+    """
+    if all(v is not None for v in values):
+        return None
+    from src.config import Settings
+
+    return Settings()
+
+
 class DetectionEngine:
     """Orchestrates dynamic multimodal detection pipelines.
 
@@ -240,13 +253,37 @@ class DetectionEngine:
 
     def __init__(
         self,
-        fusion_iou_threshold: float = 0.3,
+        fusion_iou_threshold: float | None = None,
         edge_buffer_px: int = 0,
-        cfar_min_cluster_size: int = 5,
-        cfar_cluster_eps: float = 1.5,
-        cfar_min_mean_snr: float = 2.0,
+        cfar_min_cluster_size: int | None = None,
+        cfar_cluster_eps: float | None = None,
+        cfar_min_mean_snr: float | None = None,
+        fusion_yolo_weight: float | None = None,
     ) -> None:
-        self.fusion_iou_threshold = fusion_iou_threshold
+        # I-DET-4: ``None`` resolves to Settings instead of a literal that
+        # would silently diverge from config.py. ``edge_buffer_px`` keeps
+        # its explicit ``0`` (filter disabled) because callers opt in.
+        _s = _settings_if_needed(
+            fusion_iou_threshold,
+            cfar_min_cluster_size,
+            cfar_cluster_eps,
+            cfar_min_mean_snr,
+            fusion_yolo_weight,
+        )
+        if fusion_iou_threshold is None:
+            fusion_iou_threshold = _s.fusion_iou_threshold
+        if cfar_min_cluster_size is None:
+            cfar_min_cluster_size = _s.cfar_min_cluster_size
+        if cfar_cluster_eps is None:
+            cfar_cluster_eps = _s.cfar_cluster_eps
+        if cfar_min_mean_snr is None:
+            cfar_min_mean_snr = _s.cfar_min_mean_snr
+        if fusion_yolo_weight is None:
+            fusion_yolo_weight = _s.fusion_yolo_weight
+        if not 0.0 <= fusion_yolo_weight <= 1.0:
+            raise ValueError(f"fusion_yolo_weight must be in [0, 1], got {fusion_yolo_weight}")
+        self.fusion_iou_threshold = float(fusion_iou_threshold)
+        self.fusion_yolo_weight = float(fusion_yolo_weight)
         # I-SAR-2: pixel buffer around scene edges. Detections whose
         # pixel center falls inside the buffer are dropped before
         # geolocation. ``0`` disables the filter (legacy behaviour).
@@ -521,9 +558,11 @@ class DetectionEngine:
             if best_iou >= self.fusion_iou_threshold and best_yi is not None:
                 y_det = yolo_dets[best_yi]
                 # Fused: boost confidence
+                w = self.fusion_yolo_weight
                 fused_conf = min(
                     1.0,
-                    0.5 * y_det["confidence"] + 0.5 * _snr_to_confidence(c_det["mean_snr"]),
+                    w * y_det["confidence"]
+                    + (1.0 - w) * _snr_to_confidence(c_det["mean_snr"]),
                 )
                 fused.append(
                     Detection(

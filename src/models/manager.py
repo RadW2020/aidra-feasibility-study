@@ -237,8 +237,8 @@ class ModelManager:
         self,
         name: str,
         version: str | None = None,
-        confidence_threshold: float = 0.25,
-        iou_threshold: float = 0.45,
+        confidence_threshold: float | None = None,
+        iou_threshold: float | None = None,
         device: str = "cpu",
     ) -> BaseDetector:
         """Return a detector for the requested model variant.

@@ -344,12 +344,13 @@ def _run_inference(
                 f"{manager.models_dir}. Did you archive it?"
             )
         manager._require_model_card(model_name, model_path)
+        from src.config import Settings
         from src.models.yolo import YOLODetector
 
         detector = YOLODetector(
             model_path=model_path,
             confidence_threshold=confidence_threshold,
-            iou_threshold=0.45,
+            iou_threshold=Settings().iou_threshold,
         )
 
     if raster_in_db is None:

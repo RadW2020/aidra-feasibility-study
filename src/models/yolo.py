@@ -66,16 +66,25 @@ class YOLODetector(BaseDetector):
     def __init__(
         self,
         model_path: Path | str,
-        confidence_threshold: float = 0.25,
-        iou_threshold: float = 0.45,
+        confidence_threshold: float | None = None,
+        iou_threshold: float | None = None,
         device: str = "cpu",
     ) -> None:
         self.model_path = Path(model_path)
         if not self.model_path.exists():
             raise FileNotFoundError(f"Model weights not found: {self.model_path}")
 
-        self.confidence_threshold = confidence_threshold
-        self.iou_threshold = iou_threshold
+        # I-DET-4: no literal fallback; ``None`` resolves to Settings.
+        if confidence_threshold is None or iou_threshold is None:
+            from src.config import Settings
+
+            _settings = Settings()
+            if confidence_threshold is None:
+                confidence_threshold = _settings.confidence_threshold
+            if iou_threshold is None:
+                iou_threshold = _settings.iou_threshold
+        self.confidence_threshold = float(confidence_threshold)
+        self.iou_threshold = float(iou_threshold)
         self.device = device
 
         # Derived metadata

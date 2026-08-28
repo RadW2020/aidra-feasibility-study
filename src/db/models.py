@@ -35,8 +35,10 @@ class ExecutionRecord(BaseModel):
     model_size_mb: float
     model_format: str = "pytorch"
     compression_technique: str = "none"
-    confidence_threshold: float = 0.25
-    iou_threshold: float = 0.45
+    # Read model: None only when a partial SELECT omitted the column.
+    # Inserts always carry explicit values (I-DET-4, see recorder).
+    confidence_threshold: float | None = None
+    iou_threshold: float | None = None
     constraint_profile: str = "ground"
     cpu_limit: float | None = None
     memory_limit_mb: int | None = None
@@ -177,7 +179,8 @@ class PipelineTriggerRequest(BaseModel):
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None
     aoi_bbox: list[float] | None = None
-    confidence_threshold: float = 0.25
+    # None -> Settings.confidence_threshold (I-DET-4).
+    confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class PipelineTriggerResponse(BaseModel):

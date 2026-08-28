@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # detection in the same tile and fused into a single Detection
     # with source='fused'. Below the threshold both survive separately.
     fusion_iou_threshold: float = 0.3
+    # Weight of the YOLO score in a fused detection's confidence; the
+    # CFAR SNR-derived confidence gets ``1 - fusion_yolo_weight``.
+    # I-DET-4: lives here so input_params_hash captures it.
+    fusion_yolo_weight: float = 0.5
     # I-DET-3: cluster_anomaly heuristic. A detection is flagged if at
     # least ``cluster_anomaly_min_neighbours`` other detections sit
     # within ``cluster_anomaly_radius_deg`` (great-circle approximation

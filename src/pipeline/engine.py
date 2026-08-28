@@ -180,8 +180,12 @@ class PipelineRequest(BaseModel):
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None
     aoi_bbox: list[float] | None = None
-    confidence_threshold: float = 0.25
-    iou_threshold: float = 0.45
+    # I-DET-4: ``None`` means "use Settings". Resolved once by
+    # ``PipelineEngine._apply_settings_defaults`` so cron, Tip & Cue and
+    # API callers that omit them all pick up AIDRA_CONFIDENCE_THRESHOLD /
+    # AIDRA_IOU_THRESHOLD instead of a literal buried in code.
+    confidence_threshold: float | None = None
+    iou_threshold: float | None = None
     date_from: datetime | None = None
     date_to: datetime | None = None
     trigger_type: str = "manual"
@@ -312,6 +316,7 @@ class PipelineEngine:
         image_path: Path | None = None
         extract_path: Path | None = None
         start_time = time.monotonic()
+        request = self._apply_settings_defaults(request)
 
         try:
             # ---- Step 1: Validate request ----
@@ -680,6 +685,8 @@ class PipelineEngine:
         image_path: Path | None = None
         extract_path: Path | None = None
 
+        request = self._apply_settings_defaults(request)
+
         try:
             # Search and download once
             product = await self._search_image(request)
@@ -920,6 +927,21 @@ class PipelineEngine:
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _apply_settings_defaults(self, request: PipelineRequest) -> PipelineRequest:
+        """Fill ``None`` thresholds from ``Settings`` (I-DET-4).
+
+        Returns a copy; the caller's request object is left untouched.
+        Every entry point (``run``, ``run_all_profiles``) goes through
+        this so the value persisted in ``execution_log`` and hashed into
+        ``input_params_hash`` is always the one actually used.
+        """
+        update: dict[str, Any] = {}
+        if request.confidence_threshold is None:
+            update["confidence_threshold"] = self.config.confidence_threshold
+        if request.iou_threshold is None:
+            update["iou_threshold"] = self.config.iou_threshold
+        return request.model_copy(update=update) if update else request
+
     def _build_input_params(
         self, request: PipelineRequest, model_info: dict[str, Any]
     ) -> dict[str, Any]:
@@ -957,6 +979,7 @@ class PipelineEngine:
                 "cfar_cluster_eps": self.config.cfar_cluster_eps,
                 "cfar_min_mean_snr": self.config.cfar_min_mean_snr,
                 "fusion_iou_threshold": self.config.fusion_iou_threshold,
+                "fusion_yolo_weight": self.config.fusion_yolo_weight,
                 "edge_buffer_px": self.config.edge_buffer_px,
                 "cluster_anomaly_radius_deg": self.config.cluster_anomaly_radius_deg,
                 "cluster_anomaly_min_neighbours": self.config.cluster_anomaly_min_neighbours,
@@ -1023,6 +1046,10 @@ class PipelineEngine:
                 "aoi_bbox must have exactly 4 elements [lon_min, lat_min, lon_max, lat_max]"
             )
 
+        if request.confidence_threshold is None or request.iou_threshold is None:
+            raise PipelineError(
+                "thresholds unresolved: call _apply_settings_defaults first (I-DET-4)"
+            )
         if not 0.0 <= request.confidence_threshold <= 1.0:
             raise PipelineError(
                 f"confidence_threshold must be in [0, 1], got {request.confidence_threshold}"
