@@ -439,6 +439,49 @@ def _tile_geo_bounds(
     }
 
 
+def valid_data_distance_map(
+    src: Any, *, raster_in_db: bool, downsample: int = 8
+) -> tuple[np.ndarray, int]:
+    """Distance (px, full-res units) from every pixel to the nearest nodata.
+
+    xView3 rasters are UTM-projected, so the swath edge is a rotated
+    boundary running through the raster interior, not the raster border.
+    CFAR's training window straddling that step (sea -> nodata zeros) fires
+    along the whole boundary; production removes those with footprint
+    clipping (I-SAR-3) plus the edge buffer (I-SAR-2) in
+    ``_save_detections``. Computed on a ``downsample``-times smaller grid;
+    the result is in full-resolution pixels.
+    """
+    from rasterio.enums import Resampling
+    from scipy.ndimage import distance_transform_edt
+
+    h = max(1, int(src.height) // downsample)
+    w = max(1, int(src.width) // downsample)
+    small = src.read(1, out_shape=(h, w), resampling=Resampling.nearest).astype(np.float32)
+    if raster_in_db:
+        nodata = small <= -1000.0
+    elif src.nodata is not None:
+        nodata = small == src.nodata
+    else:
+        nodata = small == 0.0
+    if not nodata.any():
+        return np.full(small.shape, np.inf, dtype=np.float32), downsample
+    dist = distance_transform_edt(~nodata) * float(downsample)
+    return dist.astype(np.float32), downsample
+
+
+def _swath_edge_flags(
+    dist_map: np.ndarray, downsample: int, centres_px: np.ndarray, buffer_px: int
+) -> np.ndarray:
+    """True where a ``(col, row)`` centre is inside nodata or within ``buffer_px`` of it."""
+    pts = np.asarray(centres_px, dtype=np.float64).reshape(-1, 2)
+    if pts.shape[0] == 0:
+        return np.zeros(0, dtype=bool)
+    rr = np.clip((pts[:, 1] // downsample).astype(int), 0, dist_map.shape[0] - 1)
+    cc = np.clip((pts[:, 0] // downsample).astype(int), 0, dist_map.shape[1] - 1)
+    return dist_map[rr, cc] < float(buffer_px)
+
+
 def run_full_pipeline(
     image_path: Path,
     *,
@@ -474,8 +517,10 @@ def run_full_pipeline(
     with rasterio.open(image_path) as src:
         height, width = int(src.height), int(src.width)
         affine = lonlat_affine_from_raster(src)
+        dist_map, dist_ds = valid_data_distance_map(src, raster_in_db=raster_in_db)
 
     scene_shape = (height, width)
+    edge_buffer_px = int(getattr(engine, "edge_buffer_px", 0) or 0)
     windows = tile_indices(height, width, tile_size, tile_overlap)
     # Group windows by their row offset -> bands of tile rows.
     row_offsets = sorted({w[0] for w in windows})
@@ -594,6 +639,23 @@ def run_full_pipeline(
         if det.source == "fused":
             sets["fused_only"].append(dict(pred))
 
+    # Footprint clipping against the valid-data boundary (I-SAR-3) with the
+    # production edge buffer (I-SAR-2). Production applies this in
+    # _save_detections; the harness mirrors it here so CFAR streaks along
+    # the rotated nodata edge of projected rasters are not scored as FP.
+    swath_dropped: dict[str, int] = {}
+    if edge_buffer_px > 0:
+        for name, preds in sets.items():
+            if not preds:
+                swath_dropped[name] = 0
+                continue
+            centres = np.array(
+                [[(p["bbox"][0] + p["bbox"][2]) / 2.0, (p["bbox"][1] + p["bbox"][3]) / 2.0] for p in preds]
+            )
+            flags = _swath_edge_flags(dist_map, dist_ds, centres, edge_buffer_px)
+            sets[name] = [p for p, f in zip(preds, flags, strict=True) if not f]
+            swath_dropped[name] = int(flags.sum())
+
     # on_land for every prediction (I-DET-2), same land mask as production.
     for preds in sets.values():
         if not preds:
@@ -618,6 +680,8 @@ def run_full_pipeline(
             "aidra_before_seam_dedup": before,
             "aidra": len(all_dets),
             "fused_only": len(sets["fused_only"]),
+            "swath_edge_buffer_px": edge_buffer_px,
+            "swath_edge_dropped": swath_dropped,
         },
         timings_s={
             "preprocess": round(t_prep, 3),
@@ -637,6 +701,7 @@ FULL_PIPELINE_STEPS: list[str] = [
     "yolo_uint8_db_stretch",
     "fusion_iou_settings",
     "edge_swath_filter_settings",
+    "footprint_clip_valid_data_boundary_edge_buffer",
     "cross_tile_geo_dedup",
     "on_land_flag_global_land_mask",
 ]

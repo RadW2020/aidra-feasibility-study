@@ -172,6 +172,53 @@ class TestFullPipelinePath:
         assert scene.timings_s["total"] >= scene.timings_s["engine"] > 0
 
 
+class TestFootprintClipping:
+    def test_streaks_on_nodata_boundary_are_dropped(self, tmp_path: Path):
+        """A target hugging the nodata edge is clipped (I-SAR-2/3); a far one survives."""
+        from src.models.cfar import CFARDetector
+        from src.pipeline.detection import DetectionEngine
+        from src.validation.harness import _swath_edge_flags, valid_data_distance_map
+
+        raster = tmp_path / "scene_VH_dB.tif"
+        _write_synthetic_scene(raster, size=520)
+        # Carve a nodata triangle in the top-left corner (rotated swath edge).
+        with rasterio.open(raster, "r+") as dst:
+            arr = dst.read(1)
+            rr, cc = np.indices(arr.shape)
+            arr[rr + cc < 300] = -32768.0
+            # Bright target 12 px outside the nodata edge, inside the 32 px buffer.
+            arr[158:163, 148:153] = 7.0
+            dst.write(arr, 1)
+        with rasterio.open(raster) as src:
+            dist, ds = valid_data_distance_map(src, raster_in_db=True)
+        assert dist.shape == (520 // ds, 520 // ds)
+        # (120,140): row+col=260 < 300 -> inside nodata; (410,90) far from it.
+        flags = _swath_edge_flags(dist, ds, np.array([[140.0, 120.0], [90.0, 410.0]]), 32)
+        assert flags.tolist() == [True, False]
+
+        engine = DetectionEngine(
+            fusion_iou_threshold=0.3, edge_buffer_px=32, cfar_min_cluster_size=5,
+            cfar_cluster_eps=1.5, cfar_min_mean_snr=2.0, fusion_yolo_weight=0.5,
+        )
+        scene = run_full_pipeline(
+            raster, engine=engine, yolo=_NoYolo(), cfar=CFARDetector(),
+            confidence_threshold=0.25, tile_size=256, tile_overlap=32, band_tile_rows=1,
+        )
+        assert scene.stats["swath_edge_buffer_px"] == 32
+        assert scene.stats["swath_edge_dropped"]["cfar"] >= 1  # the planted edge target
+        for p in scene.sets["aidra"]:
+            cx, cy = (p["bbox"][0] + p["bbox"][2]) / 2, (p["bbox"][1] + p["bbox"][3]) / 2
+            assert cx + cy >= 300 + 32 - ds  # nothing survives inside the buffer
+        # The two open-sea targets are still recovered.
+        from src.validation.metrics import match_predictions
+
+        tp, _, _, _ = match_predictions(
+            scene.sets["aidra"], [{"bbox": [257, 297, 263, 303]}, {"bbox": [87, 407, 93, 413]}],
+            0.5, match_mode="center", center_tolerance_px=20.0,
+        )
+        assert tp == 2
+
+
 class TestAveragePrecisionEnvelope:
     def test_perfect_curve_is_one(self):
         curve = [
