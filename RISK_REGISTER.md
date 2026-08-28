@@ -146,6 +146,19 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
   3. Documentar el ratio land/total como sesgo conocido en `MODEL_CARD.md` de cada modelo SAR.
 - **Trigger:** ratio `valid_sea_target / total > 0.05` durante > 24h (deteccion de mejora) o caida de `valid_sea_target` absoluto en una zona conocida.
 
+## R13 — Validacion D2 desacoplada del pipeline y no comparable entre detectores
+
+- **Severidad:** M · **Probabilidad:** A (se cumple hoy) · **Estado:** abierto (registrado 2026-08-28, autoauditoria)
+- **Descripcion:** `scripts/run_validation.py::_run_inference` lee los rasters `VH_dB.tif` ya preprocesados por xView3 y ejecuta el detector directamente: sin `preprocess_full()` (Lee, sea mask, edge filter), sin flags `on_land`. Ademas CFAR y YOLO se validaron con parametros distintos (conf 0.10 / tiles 1024 vs conf 0.25 / tiles 640) y la fusion CFAR ∩ YOLO —modo operativo real— no se ha medido nunca contra GT. Los JSON de `reports/validation_*.json` no llevan `model_hash`, `image_hash`, `commit_sha` ni seed. `map_at_iou` no aplica envolvente monotona y con `match_mode=center` no es mAP@IoU0.5 (I-MOD-2).
+- **Impacto:** Las cifras publicadas describen los detectores aislados, no el sistema AIDRA (I-SAR-1 no ejercitado en la evidencia). Los ratios "3× mas vessels / 25× mas detecciones" no son una comparacion controlada. La decision arquitectural central (fusion) carece de evidencia. README y card lo declaran desde 2026-08-28.
+- **Mitigacion:**
+  1. Harness homogeneo: mismos `tile_size` y `confidence_threshold` (desde `Settings`) para CFAR, YOLO y fusion; `--match-mode` e `--iou` explicitos.
+  2. Ruta `--pipeline-path full` que aplique `preprocess_full()` (o Lee + edge filter + sea mask sobre el raster xView3) y reporte metricas raw y solo-mar.
+  3. Validar `--model fused` y publicar `validation_xview3_med_fused.json`; sustituir el parrafo de hipotesis de la card por la fila medida.
+  4. `map_at_iou` con envolvente monotona; reportar `mAP@0.5(IoU)` y `F1@center-20px` por separado.
+  5. Anclas de trazabilidad en cada reporte (`model_hash`, `image_hashes[]`, `commit_sha`, `settings_hash`, `seed`); `POST /api/validation/import` las exige.
+- **Trigger de cierre:** existe `validation_xview3_med_fused.json` con `pipeline_path=full`, parametros identicos a los reportes CFAR/YOLO regenerados y anclas de trazabilidad completas.
+
 ## Plan de contingencia consolidado
 
 1. **Backup diario** de `aidra` DB + `models/` + bundles D3 a S3-compatible UE.

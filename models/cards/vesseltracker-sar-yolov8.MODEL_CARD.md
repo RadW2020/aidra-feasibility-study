@@ -97,15 +97,18 @@ totales, **1 997 vessels etiquetados** — confianza ≥ MEDIUM,
 |---|---:|---:|---:|---:|
 | CFAR-only (cfar-default, baseline) | 0.4226 | 0.1157 | 0.0153 | 55 064 |
 | **vesseltracker-sar-yolov8 (este)** | 0.1432 | **0.0041** | **0.1305** | 2 191 |
-| Fusión esperada CFAR ∩ YOLO (no medida aquí) | ~0.1-0.15 | ~0.001 | >0.5 | ~500 |
 
 ### Lecturas
 
 1. **Trade-off CFAR ↔ YOLO confirmado en datos reales**: CFAR caza
    3× más vessels pero genera 25× más detecciones. YOLO filtra
-   clutter pero pierde vessels pequeños o de baja confianza. La
-   **fusión** del pipeline producción AIDRA combina lo mejor de
-   ambos — ese es el modo operativo.
+   clutter pero pierde vessels pequeños o de baja confianza. Los dos
+   harness NO corrieron con los mismos parámetros (CFAR conf ≥ 0.10 y
+   tiles 1024; YOLO conf ≥ 0.25 y tiles 640), así que los ratios
+   3×/25× son indicativos, no una comparación controlada. La
+   **fusión** del pipeline producción AIDRA combina ambos — ese es el
+   modo operativo — pero **no está medida** (ver *Hipótesis
+   pendientes*).
 2. **Pd 0.143 con YOLO solo es bajo**: causas plausibles:
    - El confidence threshold 0.25 es alto. Bajarlo a 0.1 subiría Pd
      pero llenaría de FP. Es trade-off conocido.
@@ -117,6 +120,18 @@ totales, **1 997 vessels etiquetados** — confianza ≥ MEDIUM,
 3. **Mejora cuantificable post-MVP**: re-tuning del threshold y del
    stretch dB→uint8 sobre xView3 train (240 escenas) podría subir
    Pd a 0.4-0.6 sin sacrificar precision.
+
+### Hipótesis pendientes (no medidas)
+
+- **Fusión CFAR ∩ YOLO**: se espera Pd intermedio (~0.1–0.15), FAR
+  muy inferior a CFAR (~0.001/km²) y precisión > 0.5 por el doble
+  criterio. Es una hipótesis de diseño, **no un resultado**: no hay
+  `validation_xview3_med_fused.json`. Hasta que exista, ninguna tabla
+  de métricas de esta ficha incluye la fusión.
+- **Harness a través de `preprocess_full()`**: la validación D2 lee
+  los rasters `VH_dB.tif` de xView3 sin Lee, sin máscara de mar ni
+  edge filter, por lo que mide el detector aislado y no el pipeline
+  AIDRA completo (R13 en `RISK_REGISTER.md`).
 
 ### Caveats AI Act (Anexo IV)
 

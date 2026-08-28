@@ -55,6 +55,17 @@ efecto de las restricciones de hardware:
 Datos extraídos de `execution_log` el 2026-05-07 (commit `42585be`),
 queryable directamente en el dashboard `aidra-compression-bench`.
 
+> **Nota sobre los límites de RAM de los perfiles (2026-08-28).** Los
+> presupuestos de memoria de `sat-high/mid/low/extreme` (4 096 / 2 048 /
+> 1 024 / 512 MB) son **declarados, no aplicados**: `ProfileManager`
+> dejó de usar `RLIMIT_AS` porque mataba el proceso con los mapeos de
+> memoria virtual de PyTorch; ahora mide el pico RSS y anota el exceso
+> en `notes`. En producción el pico RSS FP32 ronda 4,4 GB en todos los
+> perfiles `sat-*` e INT8 llegó a 6,97 GB en `sat-extreme`, es decir,
+> **por encima del presupuesto** en tres de los cuatro perfiles. Las
+> filas de latencia por perfil miden throttle de CPU simulado, no un
+> dispositivo con esa RAM.
+
 ## Comportamiento bajo perfiles más restrictivos
 
 | Profile | FP32 latency | INT8 latency | INT8/FP32 |

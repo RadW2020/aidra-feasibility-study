@@ -45,23 +45,35 @@ A working end-to-end pipeline that:
 
 ---
 
-## Real validation numbers (xView3-SAR Mediterranean / Adriatic, 11 scenes)
+## Real validation numbers (xView3-SAR Adriatic, 11 scenes)
 
 Measured on `468 575 km²` of Sentinel-1 GRD, **1 997 ground-truth
 vessels** (xView3 confidence ≥ MEDIUM, `is_vessel=True`), match
 mode `center` ≤ 20 px (the official xView3-SAR scoring convention).
+All 11 scenes come from the xView3 *validation* split, a single
+Adriatic track, VH polarisation only — they characterise the
+detectors in one basin, not "the Mediterranean".
 
 | Detector | mAP | Pd (recall) | FAR / km² | Precision | Predictions |
 |---|---:|---:|---:|---:|---:|
 | `cfar-default` (baseline) | 0.0104 | **0.4226** | 0.1157 | 0.0153 | 55 064 |
 | `vesseltracker-sar-yolov8` | 0.0242 | 0.1432 | **0.0041** | **0.1305** | 2 191 |
 
-CFAR catches 3× more vessels but emits 25× more detections; YOLO
-filters port/glint clutter at the cost of recall. The
-**production fusion** path of AIDRA combines both — the architectural
-decision behind that combination is now backed by real measurements,
-not just a hunch. Full per-scene tables and caveats live in the
-[MODEL_CARDs](models/cards/).
+CFAR catches more vessels but emits far more detections; YOLO
+filters port/glint clutter at the cost of recall. Note that the two
+rows were **not** produced under identical settings (CFAR: conf ≥ 0.10,
+1024 px tiles; YOLO: conf ≥ 0.25, 640 px tiles), so the ratios between
+them are indicative, not a controlled comparison.
+
+Both numbers are **untuned baselines** (no fine-tuning on xView3, no
+threshold calibration) and sit far below the xView3 leaderboard
+(F1 ≈ 0.6–0.7). The **production fusion** path (CFAR ∩ YOLO) is what
+AIDRA actually runs, and it has **not yet been measured against ground
+truth** — only its two components have. The validation harness also
+bypasses `preprocess_full()` (it reads the xView3-provided VH dB
+rasters), so these figures describe the detectors in isolation, not
+the end-to-end AIDRA pipeline. Full per-scene tables and caveats live
+in the [MODEL_CARDs](models/cards/).
 
 ---
 
@@ -75,9 +87,17 @@ not just a hunch. Full per-scene tables and caveats live in the
 | `sat-low` | 0.5 | 1 GB | 2.5 | Raspberry Pi 4 class |
 | `sat-extreme` | 0.25 | 512 MB | 1.5 | Cortex-M / RP2040 break-point |
 
-Resource caps are enforced via `setrlimit` and CPU affinity (`sched_setaffinity` on Linux). `ResourceCollector` samples
-RAM/CPU at 100 ms cadence and emits `latency_p95_ms` and
-`energy_estimated_j` (`avg_cpu_fraction × tdp_watts × duration`).
+**What is actually enforced.** CPU is constrained with
+`sched_setaffinity` (whole cores) plus a soft duty-cycle throttle for
+sub-core fractions (Linux only; a no-op on macOS/Windows). **RAM limits
+are declared, not enforced**: the earlier `RLIMIT_AS` approach killed
+the process on PyTorch's virtual-memory mappings, so memory is now
+*measured* (peak RSS) and a breach is recorded in the run's `notes`.
+Observed peak RSS on the FP32 model is ≈ 4.4 GB on every `sat-*`
+profile — i.e. above the declared budget of `sat-mid`, `sat-low` and
+`sat-extreme`. `ResourceCollector` samples RAM/CPU at 100 ms cadence
+and emits `latency_p95_ms` and `energy_estimated_j`
+(`avg_cpu_fraction × tdp_watts × duration`).
 
 ---
 
