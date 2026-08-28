@@ -556,6 +556,7 @@ class PipelineEngine:
             await self.recorder.update(
                 execution_id=execution_id,
                 num_detections=persisted_detections,
+                num_valid_targets=save_stats.get("valid_targets", 0),
                 avg_confidence=det_stats.get("avg_confidence"),
                 max_confidence=det_stats.get("max_confidence"),
                 min_confidence=det_stats.get("min_confidence"),
@@ -852,6 +853,7 @@ class PipelineEngine:
                     await self.recorder.update(
                         execution_id=execution_id,
                         num_detections=persisted_detections,
+                        num_valid_targets=save_stats.get("valid_targets", 0),
                         avg_confidence=det_stats.get("avg_confidence"),
                         max_confidence=det_stats.get("max_confidence"),
                         min_confidence=det_stats.get("min_confidence"),
@@ -1517,6 +1519,8 @@ class PipelineEngine:
             "skipped_edge": skipped_edge,
             "confidences": saved_confidences,
             "quality_verdicts": verdict_counts,
+            # I-DET-2 / R11: what the operational dashboards should count.
+            "valid_targets": verdict_counts.get("valid_sea_target", 0),
         }
 
     @staticmethod

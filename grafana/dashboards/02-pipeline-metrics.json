@@ -677,7 +677,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT created_at AS \"started_at\",\n       status,\n       constraint_profile AS \"profile\",\n       model_name AS \"model\",\n       model_version AS \"version\",\n       num_detections AS \"detections\",\n       ROUND((inference_ms / 1000.0)::numeric, 2) AS \"inference_s\",\n       peak_ram_mb AS \"peak_ram_mb\",\n       cpu_usage_pct AS \"cpu_pct\",\n       error_message AS \"error\"\nFROM execution_log\nORDER BY created_at DESC\nLIMIT 20",
+          "rawSql": "SELECT created_at AS \"started_at\",\n       status,\n       constraint_profile AS \"profile\",\n       model_name AS \"model\",\n       model_version AS \"version\",\n       num_detections AS \"detections\",\n       num_valid_targets AS \"valid_targets\",\n       ROUND((inference_ms / 1000.0)::numeric, 2) AS \"inference_s\",\n       peak_ram_mb AS \"peak_ram_mb\",\n       cpu_usage_pct AS \"cpu_pct\",\n       error_message AS \"error\"\nFROM execution_log\nORDER BY created_at DESC\nLIMIT 20",
           "format": "table"
         }
       ],

@@ -86,7 +86,9 @@ UPDATE_EXECUTION_FIELDS = """
             WHEN $16 = 'success' THEN NULL
             ELSE COALESCE($17, error_message)
         END,
-        notes = COALESCE($18, notes)
+        notes = COALESCE($18, notes),
+        -- I-DET-2 / R11: valid sea targets, separate from the raw count.
+        num_valid_targets = COALESCE($19, num_valid_targets)
     WHERE id = $1
 """
 
@@ -296,6 +298,7 @@ class ExecutionRecorder:
         status: str | None = None,
         error_message: str | None = None,
         notes: str | None = None,
+        num_valid_targets: int | None = None,
     ) -> None:
         """Actualiza campos de resultado de una ejecucion existente.
 
@@ -338,6 +341,8 @@ class ExecutionRecorder:
             Estado de la ejecucion.
         error_message:
             Mensaje de error (si aplica).
+        num_valid_targets:
+            Detecciones con ``quality_verdict='valid_sea_target'`` (I-DET-2).
         """
         await self._db.execute(
             UPDATE_EXECUTION_FIELDS,
@@ -359,6 +364,7 @@ class ExecutionRecorder:
             status,             # $16
             error_message,      # $17
             notes,              # $18
+            num_valid_targets,  # $19
         )
 
         logger.debug("Execution %s updated", execution_id)
@@ -629,6 +635,7 @@ class ExecutionRecorder:
             tile_size=row.get("tile_size", 640),
             tile_overlap=row.get("tile_overlap", 64),
             num_detections=row.get("num_detections", 0),
+            num_valid_targets=row.get("num_valid_targets"),
             avg_confidence=row.get("avg_confidence"),
             max_confidence=row.get("max_confidence"),
             min_confidence=row.get("min_confidence"),

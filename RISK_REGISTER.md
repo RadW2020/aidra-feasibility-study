@@ -137,12 +137,12 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
 
 ## R11 — Inflacion de detecciones por land artifacts (88% del total)
 
-- **Severidad:** M · **Probabilidad:** A · **Estado:** abierto (registrado 2026-05-08)
+- **Severidad:** M · **Probabilidad:** A · **Estado:** mitigado parcialmente (2026-08-28: columna `num_valid_targets` + dashboards 02/06 sobre ella; pendiente verificar en prod tras deploy de migracion 017)
 - **Descripcion:** Auditoria contra prod muestra que 88% (59,059 de 66,985) de las detecciones persistidas son `land_artifact`. CFAR genera ruido masivo sobre tierra (mascara coarse 32×32 ≈ 200 m), todas se persisten para auditoria pero los dashboards `02-pipeline-metrics` (panel "Detection Counts") y `06-obdp-value` (panel "Compression Ratio") usan `num_detections` raw de `execution_log` — inflando metricas operacionales 40×.
 - **Impacto:** Un evaluador externo lee "5391 vesseles detectados" y "INT8 detecta el doble que FP32" cuando la realidad es ruido CFAR sobre tierra. Las graficas de "ahorro de bandwidth" del dashboard `06-obdp-value` quedan infladas y no representan operacion real.
 - **Mitigacion:**
   1. Filtrar dashboards operacionales por `quality_verdict='valid_sea_target'`.
-  2. Anadir columna `num_valid_targets` en `execution_log` poblada por `_save_detections()`, separada del raw `num_detections`.
+  2. ✓ (2026-08-28) Columna `num_valid_targets` en `execution_log` (migracion 017, backfill idempotente desde `detections.quality_verdict`), poblada por `_save_detections()` -> `ExecutionRecorder.update`; exportada en el bundle D3. Dashboards `02` (columna `valid_targets`) y `06` (`COALESCE(num_valid_targets, num_detections)` en las 5 consultas) la usan.
   3. Documentar el ratio land/total como sesgo conocido en `MODEL_CARD.md` de cada modelo SAR.
 - **Trigger:** ratio `valid_sea_target / total > 0.05` durante > 24h (deteccion de mejora) o caida de `valid_sea_target` absoluto en una zona conocida.
 

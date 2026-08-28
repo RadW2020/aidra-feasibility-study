@@ -45,6 +45,10 @@ class ExecutionRecord(BaseModel):
     tile_size: int = 640
     tile_overlap: int = 64
     num_detections: int = 0
+    # I-DET-2 / R11: subset of num_detections with quality_verdict =
+    # 'valid_sea_target'. None for rows persisted before migration 017
+    # that had no detections to backfill from.
+    num_valid_targets: int | None = None
     avg_confidence: float | None = None
     max_confidence: float | None = None
     min_confidence: float | None = None

@@ -113,6 +113,7 @@ _SELECT_EXECUTIONS_BUNDLE = """
         e.tile_size,
         e.tile_overlap,
         e.num_detections,
+        e.num_valid_targets,
         e.avg_confidence,
         e.total_duration_ms,
         e.peak_ram_mb,
