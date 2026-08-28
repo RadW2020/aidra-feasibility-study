@@ -349,7 +349,15 @@ def main(argv: list[str] | None = None) -> int:
         "iou_threshold_nms": settings.iou_threshold,
         "edge_buffer_px": settings.edge_buffer_px if full else None,
         "fusion_iou_threshold": settings.fusion_iou_threshold if full else None,
+        "fusion_mode": settings.fusion_mode if full else None,
+        "fusion_center_tolerance_px": settings.fusion_center_tolerance_px if full else None,
         "fusion_yolo_weight": settings.fusion_yolo_weight if full else None,
+        "yolo_input": settings.yolo_input if full else None,
+        "cfar_window": {
+            "guard_size": settings.cfar_guard_size,
+            "training_size": settings.cfar_training_size,
+            "pfa": settings.cfar_pfa,
+        },
         "cfar_cluster": {
             "min_cluster_size": settings.cfar_min_cluster_size,
             "eps": settings.cfar_cluster_eps,

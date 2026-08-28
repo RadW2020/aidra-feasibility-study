@@ -354,11 +354,19 @@ class ModelManager:
 
     async def _load_cfar_detector(self, name: str, version: str | None) -> BaseDetector:
         """Specialized loader for CFAR algorithm."""
+        from src.config import Settings
         from src.models.cfar import CFARDetector
 
-        logger.info("Loading dynamic CFAR detector: %s", name)
-        # Note: CFARDetector should implement BaseDetector
-        return CFARDetector()  # type: ignore
+        settings = Settings()
+        logger.info(
+            "Loading dynamic CFAR detector: %s (guard=%d, training=%d, pfa=%g)",
+            name,
+            settings.cfar_guard_size,
+            settings.cfar_training_size,
+            settings.cfar_pfa,
+        )
+        # I-DET-4: window geometry from Settings, not the class defaults.
+        return CFARDetector.from_settings(settings)  # type: ignore[return-value]
 
     def unload_model(self, cache_key: str) -> None:
         """Manually remove a model from memory."""

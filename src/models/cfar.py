@@ -125,6 +125,19 @@ class CFARDetector:
     # Public API
     # ------------------------------------------------------------------
 
+    @classmethod
+    def from_settings(cls, settings: Any) -> CFARDetector:
+        """Build the production CFAR from ``Settings`` (single source of truth).
+
+        Used by ``ModelManager`` and by the validation harness so both run
+        the same window geometry and false-alarm rate (I-DET-4).
+        """
+        return cls(
+            guard_size=int(settings.cfar_guard_size),
+            training_size=int(settings.cfar_training_size),
+            pfa=float(settings.cfar_pfa),
+        )
+
     def detect(
         self,
         image: NDArray[np.floating],

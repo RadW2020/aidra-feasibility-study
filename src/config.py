@@ -46,8 +46,15 @@ class Settings(BaseSettings):
     iou_threshold: float = 0.45
 
     # ---- CFAR defaults ----
-    cfar_guard_size: int = 3
-    cfar_training_size: int = 15
+    # Window geometry of the production CA-CFAR. Until 2026-08-29
+    # ModelManager instantiated ``CFARDetector()`` with the class defaults
+    # (guard 8 / training 20) and silently ignored these fields, which said
+    # 3 / 15. The fields now drive the detector (single source of truth,
+    # I-DET-4) and their defaults are set to what actually ran, so every
+    # historical run and the xView3 validation of 2026-08-28 remain
+    # comparable. Changing them is a benchmarked decision, not a default.
+    cfar_guard_size: int = 8
+    cfar_training_size: int = 20
     cfar_pfa: float = 1e-5
     # Per-tile DBSCAN clustering of raw CFAR pixel hits. Defaults match
     # the previously hardcoded values in detection.py: a single bright
@@ -64,10 +71,24 @@ class Settings(BaseSettings):
     # detection in the same tile and fused into a single Detection
     # with source='fused'. Below the threshold both survive separately.
     fusion_iou_threshold: float = 0.3
+    # How a CFAR cluster is matched to a YOLO box before fusing (R14).
+    # "center": Euclidean distance between bbox centres <=
+    # ``fusion_center_tolerance_px`` (xView3-style; 20 px = 200 m at 10 m
+    # GRD spacing). "iou": legacy IoU >= ``fusion_iou_threshold`` — measured
+    # to never fire on xView3 (CFAR clusters ~4 px vs YOLO boxes ~40 px,
+    # median IoU 0.07): 0 fused detections over 1 997 vessels.
+    fusion_mode: str = "center"
+    fusion_center_tolerance_px: float = 20.0
     # Weight of the YOLO score in a fused detection's confidence; the
     # CFAR SNR-derived confidence gets ``1 - fusion_yolo_weight``.
     # I-DET-4: lives here so input_params_hash captures it.
     fusion_yolo_weight: float = 0.5
+    # What YOLO sees (R15). "unfiltered": the calibrated linear sigma0
+    # BEFORE the Lee filter, converted with the standard dB stretch — the
+    # Lee filter is right for CFAR's multiplicative-noise model but cost
+    # vesseltracker-sar-yolov8 35 % of its recall on xView3 (Pd 0.143 ->
+    # 0.093, 11/11 scenes). "filtered": legacy, YOLO sees the Lee output.
+    yolo_input: str = "unfiltered"
     # I-DET-3: cluster_anomaly heuristic. A detection is flagged if at
     # least ``cluster_anomaly_min_neighbours`` other detections sit
     # within ``cluster_anomaly_radius_deg`` (great-circle approximation

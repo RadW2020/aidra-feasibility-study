@@ -990,6 +990,22 @@ def preprocess_full(
                 tile = np.zeros((tile_size, tile_size), dtype=np.float32)
                 tile[: center.shape[0], : center.shape[1]] = center
 
+                # R15: YOLO input from the UNFILTERED calibrated tile (the Lee
+                # filter cost the CNN 35 % of its recall on xView3). Stored as
+                # uint8 gray (0.4 MB per 640 px tile) so the extra memory stays
+                # small; DetectionEngine stacks it to RGB when
+                # Settings.yolo_input == "unfiltered".
+                from src.pipeline.detection import sar_linear_to_uint8_gray
+
+                center_raw = calibrated_linear[
+                    margin_top : margin_top + tile_size,
+                    margin_left : margin_left + tile_size,
+                ]
+                yolo_gray = np.zeros((tile_size, tile_size), dtype=np.uint8)
+                yolo_gray[: center_raw.shape[0], : center_raw.shape[1]] = (
+                    sar_linear_to_uint8_gray(center_raw)
+                )
+
                 # Geo bounds — compute from the four rotated corners
                 abs_row = row_start_aoi + row_offset
                 abs_col = col_start_aoi + col_offset
@@ -998,6 +1014,7 @@ def preprocess_full(
                 tiles.append(
                     {
                         "array": tile,
+                        "yolo_input": yolo_gray,
                         "row_offset": abs_row,
                         "col_offset": abs_col,
                         "geo_bounds": geo_bounds,

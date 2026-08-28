@@ -259,6 +259,9 @@ class DetectionEngine:
         cfar_cluster_eps: float | None = None,
         cfar_min_mean_snr: float | None = None,
         fusion_yolo_weight: float | None = None,
+        fusion_mode: str | None = None,
+        fusion_center_tolerance_px: float | None = None,
+        yolo_input: str | None = None,
     ) -> None:
         # I-DET-4: ``None`` resolves to Settings instead of a literal that
         # would silently diverge from config.py. ``edge_buffer_px`` keeps
@@ -269,6 +272,9 @@ class DetectionEngine:
             cfar_cluster_eps,
             cfar_min_mean_snr,
             fusion_yolo_weight,
+            fusion_mode,
+            fusion_center_tolerance_px,
+            yolo_input,
         )
         if fusion_iou_threshold is None:
             fusion_iou_threshold = _s.fusion_iou_threshold
@@ -280,10 +286,29 @@ class DetectionEngine:
             cfar_min_mean_snr = _s.cfar_min_mean_snr
         if fusion_yolo_weight is None:
             fusion_yolo_weight = _s.fusion_yolo_weight
+        if fusion_mode is None:
+            fusion_mode = _s.fusion_mode
+        if fusion_center_tolerance_px is None:
+            fusion_center_tolerance_px = _s.fusion_center_tolerance_px
+        if yolo_input is None:
+            yolo_input = _s.yolo_input
         if not 0.0 <= fusion_yolo_weight <= 1.0:
             raise ValueError(f"fusion_yolo_weight must be in [0, 1], got {fusion_yolo_weight}")
+        if fusion_mode not in ("center", "iou"):
+            raise ValueError(f"fusion_mode must be 'center' or 'iou', got {fusion_mode!r}")
+        if yolo_input not in ("unfiltered", "filtered"):
+            raise ValueError(f"yolo_input must be 'unfiltered' or 'filtered', got {yolo_input!r}")
         self.fusion_iou_threshold = float(fusion_iou_threshold)
         self.fusion_yolo_weight = float(fusion_yolo_weight)
+        # R14: CFAR clusters are point-like (~4 px) while YOLO boxes span the
+        # whole vessel (~40 px); IoU never reaches a usable threshold, so the
+        # default match is by centre distance.
+        self.fusion_mode = str(fusion_mode)
+        self.fusion_center_tolerance_px = float(fusion_center_tolerance_px)
+        # R15: YOLO sees the unfiltered calibrated tile when the preprocessing
+        # provides it under ``tile["yolo_input"]``; the Lee output otherwise.
+        self.yolo_input = str(yolo_input)
+        self._yolo_input_fallbacks = 0
         # I-SAR-2: pixel buffer around scene edges. Detections whose
         # pixel center falls inside the buffer are dropped before
         # geolocation. ``0`` disables the filter (legacy behaviour).
@@ -295,9 +320,13 @@ class DetectionEngine:
         self.cfar_cluster_eps = float(cfar_cluster_eps)
         self.cfar_min_mean_snr = float(cfar_min_mean_snr)
         logger.info(
-            "DetectionEngine initialised (fusion IoU=%.2f, edge_buffer_px=%d, "
-            "cfar_min_cluster_size=%d, cfar_cluster_eps=%.2f, cfar_min_mean_snr=%.2f)",
+            "DetectionEngine initialised (fusion=%s tol=%.0fpx iou=%.2f, yolo_input=%s, "
+            "edge_buffer_px=%d, cfar_min_cluster_size=%d, cfar_cluster_eps=%.2f, "
+            "cfar_min_mean_snr=%.2f)",
+            self.fusion_mode,
+            self.fusion_center_tolerance_px,
             fusion_iou_threshold,
+            self.yolo_input,
             self.edge_buffer_px,
             self.cfar_min_cluster_size,
             self.cfar_cluster_eps,
@@ -391,11 +420,21 @@ class DetectionEngine:
             tile_data = tile.get("data", tile.get("array"))
             tile_idx = tile.get("tile_index", 0)
 
+            # R15: prefer the unfiltered uint8 stretch prepared by the
+            # preprocessing (``yolo_input``) when configured; fall back to the
+            # Lee-filtered tile and count the fallback so it shows in notes.
+            input_data = tile_data
+            if self.yolo_input == "unfiltered":
+                unfiltered = tile.get("yolo_input")
+                if unfiltered is not None:
+                    input_data = unfiltered
+                else:
+                    self._yolo_input_fallbacks += 1
+
             # Adapt input shape and dtype for YOLO.
             # SAR tiles are float32 linear sigma0 (positive, ~0..10);
             # YOLO expects uint8 [0,255] RGB.  Apply a SAR-standard log
             # stretch (sigma0_dB ∈ [-25, 0]) and scale to 0..255.
-            input_data = tile_data
             if input_data.ndim == 2 and input_data.dtype != np.uint8:
                 input_data = _sar_linear_to_uint8_rgb(input_data)
             elif input_data.ndim == 2:
@@ -513,11 +552,25 @@ class DetectionEngine:
             metrics.peak_ram_mb,
         )
 
+        notes: str | None = None
+        if self.yolo_input == "unfiltered" and self._yolo_input_fallbacks:
+            notes = (
+                f"yolo_input:fallback_filtered={self._yolo_input_fallbacks}/{len(tiles)}"
+            )
+            logger.warning(
+                "yolo_input='unfiltered' but %d/%d tiles carried no 'yolo_input'; "
+                "YOLO saw the Lee-filtered tile there",
+                self._yolo_input_fallbacks,
+                len(tiles),
+            )
+            self._yolo_input_fallbacks = 0
+
         return DetectionResult(
             detections=all_detections,
             metrics=metrics,
             cfar_raw=all_cfar_raw,
             yolo_raw=all_yolo_raw,
+            notes=notes,
         )
 
     # ------------------------------------------------------------------
@@ -532,30 +585,45 @@ class DetectionEngine:
     ) -> list[Detection]:
         """Merge CFAR and YOLO detections for a single tile.
 
-        Matching rules:
-        - CFAR bbox overlapping a YOLO bbox (IoU >= threshold) are fused
-          into a single high-confidence detection.
+        Matching rules (``fusion_mode``):
+        - ``"center"`` (default, R14): a CFAR cluster whose centre lies within
+          ``fusion_center_tolerance_px`` of a YOLO box centre is fused with
+          the nearest such box.
+        - ``"iou"`` (legacy): CFAR bbox overlapping a YOLO bbox with IoU >=
+          ``fusion_iou_threshold``.
         - Unmatched YOLO detections are kept with their original score.
         - Unmatched CFAR detections are kept with reduced confidence.
         """
         fused: list[Detection] = []
         matched_cfar: set[int] = set()
         matched_yolo: set[int] = set()
+        by_center = self.fusion_mode == "center"
 
         for ci, c_det in enumerate(cfar_dets):
             c_bbox = c_det["bbox"]
-            best_iou = 0.0
             best_yi: int | None = None
+            if by_center:
+                best_d = self.fusion_center_tolerance_px
+                for yi, y_det in enumerate(yolo_dets):
+                    if yi in matched_yolo:
+                        continue
+                    d = _center_distance(c_bbox, y_det["bbox"])
+                    if d <= best_d:
+                        best_d = d
+                        best_yi = yi
+                matched = best_yi is not None
+            else:
+                best_iou = 0.0
+                for yi, y_det in enumerate(yolo_dets):
+                    if yi in matched_yolo:
+                        continue
+                    iou = _compute_iou(c_bbox, y_det["bbox"])
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_yi = yi
+                matched = best_yi is not None and best_iou >= self.fusion_iou_threshold
 
-            for yi, y_det in enumerate(yolo_dets):
-                if yi in matched_yolo:
-                    continue
-                iou = _compute_iou(c_bbox, y_det["bbox"])
-                if iou > best_iou:
-                    best_iou = iou
-                    best_yi = yi
-
-            if best_iou >= self.fusion_iou_threshold and best_yi is not None:
+            if matched and best_yi is not None:
                 y_det = yolo_dets[best_yi]
                 # Fused: boost confidence
                 w = self.fusion_yolo_weight
@@ -745,12 +813,30 @@ def _sar_linear_to_uint8_rgb(
     visualization range produces a well-conditioned uint8 image YOLO can
     actually process.
     """
+    gray = sar_linear_to_uint8_gray(tile, db_min=db_min, db_max=db_max)
+    return np.stack([gray, gray, gray], axis=-1)
+
+
+def _center_distance(box_a: list[float], box_b: list[float]) -> float:
+    """Euclidean distance (px) between the centres of two ``[x0, y0, x1, y1]`` boxes."""
+    ax = (box_a[0] + box_a[2]) / 2.0
+    ay = (box_a[1] + box_a[3]) / 2.0
+    bx = (box_b[0] + box_b[2]) / 2.0
+    by = (box_b[1] + box_b[3]) / 2.0
+    return float(((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5)
+
+
+def sar_linear_to_uint8_gray(
+    tile: NDArray[np.floating],
+    db_min: float = -25.0,
+    db_max: float = 0.0,
+) -> NDArray[np.uint8]:
+    """Single-channel version of the SAR dB stretch used for YOLO input."""
     safe = np.clip(tile.astype(np.float32), 1e-10, None)
     db = 10.0 * np.log10(safe)
     db = np.clip(db, db_min, db_max)
-    norm = (db - db_min) / (db_max - db_min)  # 0..1
-    gray = (norm * 255.0).astype(np.uint8)
-    return np.stack([gray, gray, gray], axis=-1)
+    norm = (db - db_min) / (db_max - db_min)
+    return (norm * 255.0).astype(np.uint8)
 
 
 def _compute_iou(box_a: list[float], box_b: list[float]) -> float:

@@ -221,16 +221,14 @@ def load_yolo(settings: Any, model_name: str, confidence_threshold: float) -> tu
 def load_cfar(settings: Any, model_name: str = "cfar-default") -> Any:
     """Build the CFAR detector exactly as ``ModelManager._load_cfar_detector`` does.
 
-    Production instantiates ``CFARDetector()`` with the class defaults, not
-    the ``Settings.cfar_*`` window parameters. The harness mirrors that so
-    the numbers describe what actually runs; the discrepancy itself is
-    recorded via :func:`cfar_params_of` in the provenance block.
+    Both go through ``CFARDetector.from_settings`` (I-DET-4); the window
+    geometry actually used is recorded via :func:`cfar_params_of`.
     """
     from src.models.cfar import CFARDetector
 
     manager = _offline_manager(settings)
     manager._require_model_card(model_name, manager.models_dir / f"{model_name}.pt")
-    return CFARDetector()
+    return CFARDetector.from_settings(settings)
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +505,11 @@ def run_full_pipeline(
     import rasterio
     import rasterio.windows
 
-    from src.pipeline.detection import _dedup_geo_detections, _snr_to_confidence
+    from src.pipeline.detection import (
+        _dedup_geo_detections,
+        _snr_to_confidence,
+        sar_linear_to_uint8_gray,
+    )
     from src.pipeline.preprocessing import apply_lee_filter
 
     t0 = time.perf_counter()
@@ -560,9 +562,16 @@ def run_full_pipeline(
                 center = filtered[r_off - r0 : r_off - r0 + h, c_off - c0 : c_off - c0 + w]
                 tile = np.zeros((tile_size, tile_size), dtype=np.float32)
                 tile[: center.shape[0], : center.shape[1]] = center
+                # R15 parity with preprocess_full: unfiltered uint8 for YOLO.
+                raw_center = linear[r_off - r0 : r_off - r0 + h, c_off - c0 : c_off - c0 + w]
+                yolo_gray = np.zeros((tile_size, tile_size), dtype=np.uint8)
+                yolo_gray[: raw_center.shape[0], : raw_center.shape[1]] = (
+                    sar_linear_to_uint8_gray(raw_center)
+                )
                 tiles.append(
                     {
                         "data": tile,
+                        "yolo_input": yolo_gray,
                         "tile_index": tile_index,
                         "row_offset": r_off,
                         "col_offset": c_off,
@@ -682,6 +691,9 @@ def run_full_pipeline(
             "fused_only": len(sets["fused_only"]),
             "swath_edge_buffer_px": edge_buffer_px,
             "swath_edge_dropped": swath_dropped,
+            "fusion_mode": getattr(engine, "fusion_mode", None),
+            "fusion_center_tolerance_px": getattr(engine, "fusion_center_tolerance_px", None),
+            "yolo_input": getattr(engine, "yolo_input", None),
         },
         timings_s={
             "preprocess": round(t_prep, 3),
@@ -693,13 +705,14 @@ def run_full_pipeline(
 
 FULL_PIPELINE_STEPS: list[str] = [
     "db_to_linear_sigma0",
-    "lee_filter_7x7_linear",
+    "lee_filter_7x7_linear (CFAR input)",
+    "yolo_input_uint8_from_unfiltered_or_filtered_per_Settings.yolo_input",
     "tiles_settings_tile_size_overlap",
     "lonlat_affine_rotation_aware",
     "cfar_sea_mask_pre_inference",
     "cfar_dbscan_clustering",
     "yolo_uint8_db_stretch",
-    "fusion_iou_settings",
+    "fusion_per_Settings.fusion_mode (center|iou)",
     "edge_swath_filter_settings",
     "footprint_clip_valid_data_boundary_edge_buffer",
     "cross_tile_geo_dedup",
