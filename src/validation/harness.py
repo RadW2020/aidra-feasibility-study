@@ -199,12 +199,30 @@ def _offline_manager(settings: Any) -> Any:
     return manager
 
 
+def resolve_model_path(manager: Any, model_name: str) -> Path | None:
+    """Find the weight for a base name or a full variant name.
+
+    ``ModelManager._find_model_file`` takes ``(base, version)``; callers of the
+    harness pass names such as ``vesseltracker-sar-yolov8`` (base -> the
+    ``.pt`` is preferred) or ``vesseltracker-sar-yolov8-int8-static`` (base +
+    compression tag, parsed exactly like ``_parse_model_name`` does for
+    filenames, so the same suffix table rules both).
+    """
+    found = manager._find_model_file(model_name, version=None)
+    if found is not None:
+        return found
+    base, version, _fmt = manager._parse_model_name(f"{model_name}.onnx")
+    if base != model_name:
+        return manager._find_model_file(base, version=version)
+    return None
+
+
 def load_yolo(settings: Any, model_name: str, confidence_threshold: float) -> tuple[Any, Path]:
     """Resolve ``model_name`` under ``Settings.models_dir`` behind the I-AIA-1 gate."""
     from src.models.yolo import YOLODetector
 
     manager = _offline_manager(settings)
-    model_path = manager._find_model_file(model_name, version=None)
+    model_path = resolve_model_path(manager, model_name)
     if model_path is None:
         raise FileNotFoundError(
             f"No model file matching '{model_name}' under {manager.models_dir}."

@@ -268,3 +268,17 @@ class TestScriptsUseSharedModule:
             assert "class ValidationReport" not in src, path
             assert "def _match_predictions" not in src, path
             assert "src.validation" in src, path
+
+
+class TestResolveModelPath:
+    def test_base_prefers_pt_and_variant_resolves_by_suffix(self, tmp_path: Path):
+        from src.config import Settings
+        from src.validation.harness import _offline_manager, resolve_model_path
+
+        for name in ("m.pt", "m.onnx", "m-int8-static.onnx", "m-int8-dynamic.onnx"):
+            (tmp_path / name).write_bytes(b"x")
+        mgr = _offline_manager(Settings(_env_file=None, models_dir=str(tmp_path)))
+        assert resolve_model_path(mgr, "m").name == "m.pt"
+        assert resolve_model_path(mgr, "m-int8-static").name == "m-int8-static.onnx"
+        assert resolve_model_path(mgr, "m-int8-dynamic").name == "m-int8-dynamic.onnx"
+        assert resolve_model_path(mgr, "does-not-exist") is None
