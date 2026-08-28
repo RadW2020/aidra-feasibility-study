@@ -172,16 +172,8 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 cp .env.example .env                          # edit Copernicus creds, etc.
 docker compose up -d aidra-db                  # local PostGIS
-psql "$DATABASE_URL" -f src/db/migrations/001_init.sql
-psql "$DATABASE_URL" -f src/db/migrations/002_indexes.sql
-psql "$DATABASE_URL" -f src/db/migrations/003_tipcue.sql
-psql "$DATABASE_URL" -f src/db/migrations/004_traceability.sql
-psql "$DATABASE_URL" -f src/db/migrations/005_thumbnails.sql
-psql "$DATABASE_URL" -f src/db/migrations/006_resilience.sql
-psql "$DATABASE_URL" -f src/db/migrations/007_normalize_compression.sql
-psql "$DATABASE_URL" -f src/db/migrations/008_detection_quality.sql
-psql "$DATABASE_URL" -f src/db/migrations/009_sanitize_detection_scores.sql
-psql "$DATABASE_URL" -f src/db/migrations/010_reconcile_execution_detection_stats.sql
+# schema: 18 migrations under src/db/migrations/, applied idempotently at
+# startup by Database.run_migrations (tracked in the _migrations table)
 ./scripts/download-models.sh                   # pulls vesseltracker-sar-yolov8.pt
 python -m src.main                             # FastAPI on :8000
 ```
@@ -275,8 +267,8 @@ tests/
 | Gate | Command | Status |
 |---|---|---|
 | Lint | `ruff check src/ tests/ scripts/` | ✅ All checks passed |
-| Tests | `pytest -q` | ✅ 245 / 245 |
-| Invariants | `pytest -k invariant -x` | ✅ Enforced (I-SAR-1..3, I-DET-2..3, I-MOD-4, I-TRACE-1..4, I-AIA-1) |
+| Tests | `pytest -q` | ✅ 499 / 499 |
+| Invariants | `pytest -k invariant -x` | ✅ Enforced (I-SAR-1..3, I-DET-2..4, I-MOD-3..4, I-TRACE-1..4, I-AIA-1) |
 | Reproducibility | `pytest -k reproducibility -x` | ✅ Same input → same `output_hash` end-to-end |
 | AI Act gate | `ModelManager` refuses any weight without a `MODEL_CARD.md` | ✅ Tested |
 

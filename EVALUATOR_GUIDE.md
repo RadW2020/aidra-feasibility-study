@@ -12,8 +12,9 @@
 | The vessel detection map | http://localhost:3000 → `AIDRA — Detection Map` |
 | The Tip & Cue autonomous re-tasking demo | http://localhost:3000 → `AIDRA — Tip & Cue Replay` |
 | One AI-explained detection (Grad-CAM + CFAR) | [`D4_INTERPRETABILITY_ANNEX.md`](D4_INTERPRETABILITY_ANNEX.md) |
-| The full evidence bundle (D3) | `docker exec aidra-app python -m src.traceability bundle --out /tmp/d3` |
-| Verify a bundle offline | `docker exec aidra-app python -m src.traceability verify-bundle <path>` |
+| The full evidence bundle (D3) | `POST /api/traceability/bundle` (bearer token) — see `EVIDENCE.md`; latest bundle mirrored under `evidence_bundles/` |
+| Verify a bundle offline | `python -m src.traceability verify-bundle <extracted-bundle-dir>` on the downloaded tarball |
+| Detection quality against real ground truth (D2) | `reports/validation_xview3_adriatic_full_vessels_*.json` + README table |
 | Honest self-assessment vs the rubric | read this guide §6 |
 
 ---
@@ -30,9 +31,10 @@
 | Quality gate `quality=invalid` if any pre-step missing (I-SAR-1) | `src/pipeline/preprocessing.py:_evaluate_scene_quality` + Prometheus counter `aidra_scenes_processed_total{quality}` |
 | EPSG:4326 enforced everywhere (I-SAR-4) | grep `EPSG:4326` |
 | SAR metadata persisted (`incidence_angle`, `polarisation`, `orbit_direction`, `relative_orbit`, `product_type`, `pixel_spacing`) | `src/pipeline/preprocessing.py:parse_sar_metadata` + DB column on `execution_log` |
-| Constraint profiles (ground / sat-mid / sat-low / sat-extreme) | `src/profiles/definitions.py` and `src/profiles/manager.py` |
+| Constraint profiles (ground / sat-high / sat-mid / sat-low / sat-extreme) | `src/profiles/definitions.py` and `src/profiles/manager.py` |
+| Validation harness that runs the production `DetectionEngine` on labelled xView3 scenes and anchors every report to `commit_sha` / `model_hash` / `settings_hash` / seed | `src/validation/harness.py`, `scripts/validate_xview3_serial.py` |
 
-> **Honest gap (documented in scoring):** Range-Doppler terrain correction with DEM is scaffolded in `src/pipeline/terrain_correction.py` but **not yet wired in** — the production geo-referencing uses a linear affine over GCPs, which is acceptable for flat-sea AOI like Gibraltar. Constraint profiles only enforce RAM/CPU limits on Linux; on macOS dev hosts the system logs a warning at startup and runs without enforcement. Both gaps are tracked in `RISK_REGISTER.md`.
+> **Honest gap (documented in scoring):** Range-Doppler terrain correction with DEM is scaffolded in `src/pipeline/terrain_correction.py` but **not yet wired in** — the production geo-referencing uses a linear affine over GCPs, which is acceptable for flat-sea AOI like Gibraltar. Constraint profiles enforce **CPU** only (affinity + duty-cycle throttle, Linux only); **RAM budgets are measured, not enforced** — peak RSS above the budget is recorded in the run's `notes` (R6/R9 context). Both gaps are tracked in `RISK_REGISTER.md`.
 
 ---
 
@@ -49,9 +51,9 @@
 | **PNG thumbnails** of the SAR crop around each detection | `GET /api/detections/{id}/thumbnail.png` |
 | Ready for QGIS, ArcGIS, pystac, ogr2ogr (verified) | n/a |
 
-> **Honest gap:** no WMS/MVT tile service yet. STAC Item Search and OGC API
-> Features conformance endpoints are implemented; map-tile serving remains out
-> of scope for this POC.
+> **Honest gap:** no WMS/MVT tile service yet. STAC Item Search
+> (`POST /api/stac/search`) and OGC API Features conformance endpoints are
+> implemented; map-tile serving remains out of scope for this POC.
 
 ---
 
@@ -65,10 +67,11 @@
 | `commit_sha` per run (build-arg → ENV → DB) | `execution_log.commit_sha` |
 | `pending → success/error/invalid` state machine (failed runs are kept) | `execution_log.status` |
 | `run_id` propagated to logs (Loki) | every Loki log line carries `execution_id` |
-| Migration history | `src/db/migrations/00{1..5}_*.sql` |
-| **D3 bundler** packs everything for offline audit | `docker exec aidra-app python -m src.traceability bundle --out /tmp/d3 --no-archive` |
+| Migration history | `src/db/migrations/001..018_*.sql`, applied idempotently by `Database.run_migrations` (`_migrations` table) |
+| **D3 bundler** packs everything for offline audit | `POST /api/traceability/bundle` (same orchestration as `scripts/build_d3_bundle.py`) |
 | Bundle includes: `executions.csv`, `detections.csv`, `detections.geojson`, `settings.json` (secrets redacted), `models/*.MODEL_CARD.md` (matched by name and by `model_hash`), `prometheus_snapshot.txt`, `thumbnails/*.png`, `MANIFEST.json` (per-file SHA256 + `settings_hash` + `commit_sha`), and `MANIFEST.sha256` (root signature) | inspect `/tmp/d3/d3-<timestamp>/` |
-| **Offline bundle verifier** | `docker exec aidra-app python -m src.traceability verify-bundle /tmp/d3/d3-<timestamp>` → `Result: PASS` |
+| **Offline bundle verifier** | `python -m src.traceability verify-bundle <extracted dir>` → `Result: PASS` (last run: 22 243/22 243 files OK, see `EVIDENCE.md`) |
+| **Validation reports** carry `commit_sha`, `model_hash`, `settings_hash`, seed and per-scene input SHA256; `POST /api/validation/import` refuses a report without `commit_sha` | `reports/*.json` → `provenance`, migration 018 |
 
 ### 3.2 AI Act conformity
 
@@ -77,14 +80,16 @@
 | **Classification + base legal + human oversight** (no Anexo III argument) | [`AI_ACT_DECLARATION.md`](AI_ACT_DECLARATION.md) (1 page) |
 | **MODEL_CARD per registered model** | `models/cards/*.MODEL_CARD.md` (5 cards) |
 | **Gate**: no MODEL_CARD → no registration (no silent fallback) | `src/models/manager.py:_require_model_card` + `tests/test_invariants.py:TestIAIA1AICardGate` |
-| **Validation metrics** on the primary YOLO and CFAR cards (mAP, Pd, FAR/km2, precision) | `models/cards/vesseltracker-sar-yolov8.MODEL_CARD.md` and `models/cards/cfar-default.MODEL_CARD.md` § D2 oficial |
+| **Validation metrics** on the primary YOLO and CFAR cards (AP, Pd, FAR/km², precision, F1; raw and sea-only) | `models/cards/vesseltracker-sar-yolov8.MODEL_CARD.md` and `models/cards/cfar-default.MODEL_CARD.md` § *D2 — pipeline completo (2026-08-28)* |
 | **Interpretability D4 annex**: 20 × {Grad-CAM, CFAR score map} on real detections, with manifest (commit_sha + model_hash + per-PNG SHA256) | [`D4_INTERPRETABILITY_ANNEX.md`](D4_INTERPRETABILITY_ANNEX.md) + `/data/interpretability/<run>/` |
-| Reproducible: `docker exec aidra-app python /app/scripts/run_interpretability.py --n 20` | n/a |
+| Reproducible: `POST /api/interpretability/run` `{"n_samples": 20}` (same orchestration as `scripts/run_interpretability.py`) | n/a |
 
-> **Honest gap:** validation is real but still geographically narrow: 11
-> Mediterranean / Adriatic xView3-SAR validation scenes, not a global SAR
-> benchmark and not a Strait-of-Gibraltar-specific labelled set. The model cards
-> document this as a lower-bound transfer measurement.
+> **Honest gap:** validation is real (1 997 xView3 vessels, production
+> `DetectionEngine`, identical settings for every detector) but geographically
+> narrow: 11 Adriatic scenes from one track, VH only — not a global SAR
+> benchmark and not a Strait-of-Gibraltar labelled set. It also exposed two
+> design defects that are being re-validated: the IoU-based CFAR∩YOLO fusion
+> never fired (R14) and the Lee filter cost YOLO 35 % of its recall (R15).
 
 ---
 
@@ -95,8 +100,8 @@
 | Plan operativo de despliegue (OCI ARM A1 Free Tier, fases) | `mvp_oci.md` (477 lines) |
 | Especificación técnica completa | `TECHNICAL_SPEC.md` |
 | Engineering operating notes (gates, invariants, anti-patterns) | `CLAUDE.md` |
-| **Risk register** con 7 riesgos, severidad/probabilidad/mitigación/trigger/plan B | [`RISK_REGISTER.md`](RISK_REGISTER.md) |
-| Tests automáticos de invariantes | `pytest -k invariant`; full suite: `pytest -q` (245 tests) |
+| **Risk register** con 15 riesgos (R1–R15), severidad/probabilidad/mitigación/trigger/plan B; los fallos de auditoría propios (R6, R9, R11, R12, R13) están registrados, no borrados | [`RISK_REGISTER.md`](RISK_REGISTER.md) |
+| Tests automáticos de invariantes | `pytest -k invariant`; full suite: `pytest -q` (499 tests) |
 
 ---
 
@@ -125,7 +130,7 @@ TOTAL Q-técnico (Q2+Q3):              45/55  (banda 80%+, "muy buena")
                                               mínimo para pasar = 30/55
 ```
 
-Top remaining levers if more time: SAR TC real (+1), STAC API search (+1.5), AI Act tests + métricas formales (+1.5).
+Top remaining levers if more time: SAR TC real (+1), real RAM enforcement in the constraint profiles (+1), a complete compression triplet with ΔmAP on the same scenes (+1.5).
 
 ---
 
@@ -136,11 +141,7 @@ git clone <repo>
 cd AIDRA
 cp .env.example .env  # fill COPERNICUS_USER, COPERNICUS_PASSWORD, DB_PASSWORD, GRAFANA_PASSWORD
 AIDRA_COMMIT_SHA="$(git rev-parse HEAD)" docker compose up -d
-docker exec -i aidra-db psql -U aidra -d aidra < src/db/migrations/001_init.sql
-docker exec -i aidra-db psql -U aidra -d aidra < src/db/migrations/002_indexes.sql
-docker exec -i aidra-db psql -U aidra -d aidra < src/db/migrations/003_tipcue.sql
-docker exec -i aidra-db psql -U aidra -d aidra < src/db/migrations/004_traceability.sql
-docker exec -i aidra-db psql -U aidra -d aidra < src/db/migrations/005_thumbnails.sql
+# the app applies the 18 migrations itself at startup (Database.run_migrations)
 
 # Trigger one pipeline run on Gibraltar:
 curl -X POST http://localhost:8000/api/pipeline/trigger \
@@ -150,11 +151,12 @@ curl -X POST http://localhost:8000/api/pipeline/trigger \
 # Watch the result on Grafana:
 open http://localhost:3000
 
-# Build the D3 evidence bundle:
-docker exec aidra-app python -m src.traceability bundle --out /tmp/d3 --no-archive
-docker exec aidra-app python -m src.traceability verify-bundle /tmp/d3/d3-<timestamp>
+# Build the D3 evidence bundle through the API, then verify the download locally:
+curl -X POST http://localhost:8000/api/traceability/bundle -H "Authorization: Bearer $AIDRA_API_TOKEN" \
+  -H "Content-Type: application/json" -d '{"out_dir": "/data/interpretability/d3_bundles", "archive": true}'
+python -m src.traceability verify-bundle <extracted bundle dir>
 ```
 
 ---
 
-*Last updated: 2026-04-26. Generated commit: `0cc8ccd`.*
+*Last updated: 2026-08-29 (Phase 0–2 of the 2026-08-28 improvement plan). Commit: see `git log -1 -- EVALUATOR_GUIDE.md`.*

@@ -196,149 +196,147 @@ volumes:
 
 ## 3. Estructura de Directorios
 
+Generado desde el arbol real el 2026-08-29 (profundidad 2 en `src/`).
+
 ```
 AIDRA/
-├── docker-compose.yml              # Orquestacion de todos los servicios
-├── .env                            # Variables de entorno (NO commitear)
-├── .env.example                    # Plantilla de variables de entorno
-├── Dockerfile                      # Imagen de la app Python
-├── pyproject.toml                  # Dependencias Python (uv/pip)
-├── README.md                       # Documentacion del proyecto
-├── TECHNICAL_SPEC.md               # Este documento
-│
-├── src/                            # Codigo fuente principal
+├── README.md · TECHNICAL_SPEC.md · CLAUDE.md · EVIDENCE.md · EVALUATOR_GUIDE.md · RISK_REGISTER.md · AI_ACT_DECLARATION.md · D4_INTERPRETABILITY_ANNEX.md
+├── pyproject.toml · Dockerfile* · docker-compose*.yml · .env.example
+├── src/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── benchmarks.py
+│   │   ├── detections.py
+│   │   ├── health.py
+│   │   ├── interpretability.py
+│   │   ├── metrics.py
+│   │   ├── models_api.py
+│   │   ├── ogc_features.py
+│   │   ├── orbital.py
+│   │   ├── pipeline.py
+│   │   ├── router.py
+│   │   ├── stac.py
+│   │   ├── tasking.py
+│   │   ├── tipcue_replay.py
+│   │   ├── traceability.py
+│   │   └── validation.py
+│   ├── db/
+│   │   ├── migrations/
+│   │   ├── __init__.py
+│   │   ├── connection.py
+│   │   ├── models.py
+│   │   └── queries.py
+│   ├── models/
+│   │   ├── compression/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── cfar.py
+│   │   ├── interpretability.py
+│   │   ├── manager.py
+│   │   └── yolo.py
+│   ├── observability/
+│   │   ├── __init__.py
+│   │   ├── loki_logger.py
+│   │   └── prometheus_metrics.py
+│   ├── orbital/
+│   │   ├── __init__.py
+│   │   ├── decision_engine.py
+│   │   ├── downlink.py
+│   │   ├── energy.py
+│   │   ├── latency.py
+│   │   ├── orbit_params.py
+│   │   └── resilience.py
+│   ├── pipeline/
+│   │   ├── __init__.py
+│   │   ├── cleanup.py
+│   │   ├── detection.py
+│   │   ├── engine.py
+│   │   ├── ingestion.py
+│   │   ├── postprocessing.py
+│   │   ├── preprocessing.py
+│   │   ├── scheduler_jobs.py
+│   │   ├── terrain_correction.py
+│   │   └── thumbnails.py
+│   ├── profiles/
+│   │   ├── __init__.py
+│   │   ├── definitions.py
+│   │   ├── manager.py
+│   │   ├── metrics_collector.py
+│   │   └── throttle.py
+│   ├── tipcue/
+│   │   ├── __init__.py
+│   │   ├── evaluator.py
+│   │   ├── scheduler.py
+│   │   └── zones.py
+│   ├── traceability/
+│   │   ├── __init__.py
+│   │   ├── __main__.py
+│   │   ├── bundler.py
+│   │   ├── hasher.py
+│   │   ├── recorder.py
+│   │   └── verifier.py
+│   ├── validation/
+│   │   ├── __init__.py
+│   │   ├── harness.py
+│   │   ├── metrics.py
+│   │   ├── persistence.py
+│   │   └── synthetic.py
 │   ├── __init__.py
-│   ├── main.py                     # Entrypoint FastAPI + lifespan
-│   ├── config.py                   # Configuracion centralizada (pydantic-settings)
-│   │
-│   ├── api/                        # Endpoints REST
-│   │   ├── __init__.py
-│   │   ├── router.py               # Router principal
-│   │   ├── health.py               # GET /api/health
-│   │   ├── detections.py           # GET /api/detections, GET /api/detections/{id}
-│   │   ├── pipeline.py             # POST /api/pipeline/trigger, trigger-all-profiles
-│   │   ├── benchmarks.py           # GET /api/benchmarks, /api/benchmarks/compare
-│   │   ├── traceability.py         # GET /api/traceability/{execution_id}
-│   │   ├── tasking.py              # GET /api/tasking/queue, POST /api/tasking/cue
-│   │   └── metrics.py              # GET /api/metrics (Prometheus)
-│   │
-│   ├── pipeline/                   # Motor del pipeline de procesamiento
-│   │   ├── __init__.py
-│   │   ├── engine.py               # Orquestador del pipeline completo
-│   │   ├── ingestion.py            # Descarga de imagenes Copernicus
-│   │   ├── preprocessing.py        # Calibracion, correccion geometrica SAR
-│   │   ├── detection.py            # Inferencia: CFAR + YOLO
-│   │   ├── postprocessing.py       # NMS, filtrado, geolocalizacion de detecciones
-│   │   └── cleanup.py              # Limpieza de imagenes temporales
-│   │
-│   ├── models/                     # Gestion de modelos IA
-│   │   ├── __init__.py
-│   │   ├── manager.py              # Carga, versionado, hashing de modelos
-│   │   ├── yolo.py                 # Wrapper para ultralytics YOLO
-│   │   ├── cfar.py                 # Implementacion CFAR (Constant False Alarm Rate)
-│   │   └── compression/            # Tecnicas de compresion
-│   │       ├── __init__.py
-│   │       ├── quantization.py     # Quantizacion FP32 → INT8 (PyTorch + ONNX)
-│   │       ├── pruning.py          # Pruning estructurado y no estructurado
-│   │       └── distillation.py     # Knowledge distillation
-│   │
-│   ├── profiles/                   # Perfiles de restriccion de hardware
-│   │   ├── __init__.py
-│   │   ├── manager.py              # Gestion de perfiles, lanzamiento Docker
-│   │   ├── definitions.py          # Definicion de perfiles (ground, sat-high, etc.)
-│   │   └── metrics_collector.py    # Recoleccion de metricas bajo perfil
-│   │
-│   ├── tipcue/                     # Logica Tip & Cue
-│   │   ├── __init__.py
-│   │   ├── evaluator.py            # Evalua detecciones → genera tips
-│   │   ├── scheduler.py            # Gestiona la cola de cues
-│   │   └── zones.py                # Definicion de zonas de interes
-│   │
-│   ├── orbital/                    # Modulos de valor orbital (diferenciadores)
-│   │   ├── __init__.py
-│   │   ├── energy.py               # M9: Perfil energetico (joules/inferencia, TOPS/W)
-│   │   ├── downlink.py             # M10: Analisis de downlink (ratio compresion, ahorro BW)
-│   │   ├── latency.py              # M11: Latencia orbital (sensor → resultado)
-│   │   ├── resilience.py           # M12: Resiliencia (bit-flips, fallback, drift)
-│   │   ├── decision_engine.py      # M12: Motor de decision autonomo
-│   │   └── orbit_params.py         # Parametros orbitales (LEO, SSO, altitudes)
-│   │
-│   ├── traceability/               # Sistema de trazabilidad
-│   │   ├── __init__.py
-│   │   ├── hasher.py               # Calculo SHA256 de archivos
-│   │   ├── recorder.py             # Escritura de registros en execution_log
-│   │   └── verifier.py             # Verificacion de reproducibilidad
-│   │
-│   ├── observability/              # Metricas y logs
-│   │   ├── __init__.py
-│   │   ├── prometheus_metrics.py   # Definicion de metricas Prometheus
-│   │   └── loki_logger.py          # Logger estructurado para Loki
-│   │
-│   └── db/                         # Capa de base de datos
-│       ├── __init__.py
-│       ├── connection.py           # Pool de conexiones asyncpg
-│       ├── models.py               # Modelos Pydantic para la API
-│       ├── queries.py              # Consultas SQL parametrizadas
-│       └── migrations/             # Migraciones SQL
-│           ├── 001_init.sql        # Esquema inicial
-│           ├── 002_indexes.sql     # Indices y optimizaciones
-│           └── 003_tipcue.sql      # Tablas Tip & Cue
-│
-├── models/                         # Pesos de modelos (gitignored, volumen Docker)
-│   ├── .gitkeep
-│   └── README.md                   # Instrucciones para descargar modelos
-│
-├── grafana/                        # Configuracion Grafana
-│   ├── provisioning/
-│   │   ├── datasources/
-│   │   │   └── datasources.yml     # PostgreSQL + Prometheus + Loki
-│   │   └── dashboards/
-│   │       └── dashboards.yml      # Provider de dashboards
-│   └── dashboards/
-│       ├── 01-map-detections.json  # Dashboard mapa GeoMap
-│       ├── 02-pipeline-metrics.json # Dashboard metricas pipeline
-│       ├── 03-compression-bench.json # Dashboard benchmarks compresion
-│       ├── 04-constraint-profiles.json # Dashboard perfiles restriccion
-│       ├── 05-traceability.json    # Dashboard trazabilidad
-│       ├── 06-obdp-value.json      # Dashboard valor OBDP (downlink)
-│       ├── 07-orbital-latency.json # Dashboard latencia orbital
-│       └── 08-orbital-resilience.json # Dashboard resiliencia (bit-flips, decisiones)
-│
-├── prometheus/
-│   └── prometheus.yml              # Configuracion scrape
-│
-├── loki/
-│   └── loki-config.yml             # Configuracion Loki
-│
-├── promtail/
-│   └── promtail-config.yml         # Configuracion Promtail
-│
-├── scripts/                        # Scripts de utilidad
-│   ├── setup-oci.sh                # Provisioning OCI ARM A1
-│   ├── download-models.sh          # Descarga de modelos preentrenados
-│   ├── download-dataset.sh         # Descarga de dataset xView3-SAR
-│   ├── fine-tune.py                # Script de fine-tuning YOLOv8
-│   └── seed-db.sh                  # Seed datos de prueba
-│
-└── tests/                          # Tests
-    ├── __init__.py
-    ├── conftest.py                 # Fixtures compartidas
-    ├── test_api/                   # Tests de endpoints
-    │   ├── test_health.py
-    │   ├── test_detections.py
-    │   ├── test_pipeline.py
-    │   └── test_traceability.py
-    ├── test_pipeline/              # Tests del motor de pipeline
-    │   ├── test_ingestion.py
-    │   ├── test_detection.py
-    │   └── test_postprocessing.py
-    ├── test_models/                # Tests de modelos
-    │   ├── test_yolo.py
-    │   ├── test_cfar.py
-    │   └── test_compression.py
-    └── test_traceability/          # Tests de trazabilidad
-        ├── test_hasher.py
-        └── test_recorder.py
+│   ├── config.py
+│   └── main.py
+├── scripts/
+│   ├── analyze_prediction_dumps.py
+│   ├── build_d3_bundle.py
+│   ├── build_synthetic_manifest.py
+│   ├── build_xview3_manifest.py
+│   ├── capture_grafana_dashboards.sh
+│   ├── cleanup-bad-detections.sql
+│   ├── configure_public_dashboards.py
+│   ├── download-models.sh
+│   ├── filter_xview3_med.py
+│   ├── fine-tune.py
+│   ├── operational_metrics.py
+│   ├── quantize_to_int8.py
+│   ├── run_interpretability.py
+│   ├── run_validation.py
+│   ├── setup-oci.sh
+│   └── validate_xview3_serial.py
+├── tests/
+│   ├── test_api/
+│   ├── test_models/
+│   ├── test_observability/
+│   ├── test_orbital/
+│   ├── test_pipeline/
+│   ├── test_profiles/
+│   ├── test_tipcue/
+│   ├── test_traceability/
+│   ├── test_validation/
+│   ├── __init__.py
+│   ├── conftest.py
+│   └── test_invariants.py
+├── grafana/dashboards/
+│   ├── 00-home.json
+│   ├── 01-map-detections.json
+│   ├── 02-pipeline-metrics.json
+│   ├── 03-compression-bench.json
+│   ├── 04-constraint-profiles.json
+│   ├── 05-traceability.json
+│   ├── 06-obdp-value.json
+│   ├── 07-orbital-latency.json
+│   ├── 08-orbital-resilience.json
+│   ├── 09-tipcue-replay.json
+│   └── 10-evaluator-evidence.json
+├── models/                          # weights gitignored; cards/ versioned
+│   ├── archived/
+│   ├── cards/
+│   ├── README.md
+│   ├── vesseltracker-sar-yolov8.pt
+│   └── yolov8n.pt
+├── reports/                         # validation reports (force-added), predictions/, archived/
+├── evidence_bundles/                # D3 MANIFEST + settings snapshot mirrored from the server
+├── interpretability_runs/           # D4 manifest + sample PNGs
+├── prometheus/ · loki/              # observability configs
+└── data/ · x-view-us-data/          # local datasets (gitignored)
 ```
 
 ---
@@ -1601,20 +1599,22 @@ class ModelManager:
 
 ### 7.7 Matriz de variantes de modelo
 
-El sistema gestiona multiples variantes del modelo base. Cada variante se registra con su hash SHA256 y se puede ejecutar con cualquier perfil de restriccion.
+Estado real a 2026-08-29 (la matriz original planificaba variantes
+`yolov8n-sar-*` que nunca se produjeron; el modelo primario es
+`vesseltracker-sar-yolov8`). Cada variante se registra en `models_registry`
+con SHA256 y `status` (I-MOD-3, migracion 015) y requiere ficha.
 
-| Variante | Tecnica | Tamano esperado | Formato |
-|---|---|---|---|
-| `yolov8n-base` | Ninguna (baseline) | ~6 MB | .pt |
-| `yolov8n-sar` | Fine-tuned xView3 | ~6 MB | .pt |
-| `yolov8n-sar-onnx` | Exportado ONNX | ~6 MB | .onnx |
-| `yolov8n-sar-fp16` | Quantizacion FP16 | ~3 MB | .onnx |
-| `yolov8n-sar-int8-dynamic` | Quant. dinamica INT8 | ~1.5 MB | .pt |
-| `yolov8n-sar-int8-static` | Quant. estatica INT8 | ~1.5 MB | .onnx |
-| `yolov8n-sar-pruned30` | Pruning 30% | ~4.2 MB | .pt |
-| `yolov8n-sar-pruned50` | Pruning 50% | ~3 MB | .pt |
-| `yolov8n-sar-pruned30-int8` | Pruning 30% + INT8 | ~1 MB | .onnx |
-| `yolov8n-distilled` | Knowledge distillation | ~6 MB | .pt |
+| Variante | Tecnica | Tamano | Formato | Estado |
+|---|---|---|---|---|
+| `vesseltracker-sar-yolov8` | Ninguna (baseline FP32) | 49.6 MB | .pt | active |
+| `vesseltracker-sar-yolov8-int8-dynamic` | Quant. dinamica INT8 (ONNX Runtime) | 25.1 MB | .onnx | **rejected** (no determinista en num_detections, +24.6 % RAM) |
+| `vesseltracker-sar-yolov8-int8-static` | Quant. estatica INT8 con calibracion offline | ~25 MB | .onnx | planificada (Fase 3, sustituye a la dinamica) |
+| `cfar-default` | Algoritmico CA-CFAR, sin pesos | — | — | active |
+| `yolov8n` | Base COCO (optico / smoke) | 6.5 MB | .pt | active |
+| `yolov8n-vessel`, `yolov8s-vessel` | Fine-tunes tempranos | — | .pt | archived |
+
+Pruning y knowledge distillation (`src/models/compression/{pruning,distillation}.py`)
+tienen codigo y tests unitarios pero ninguna variante ejecutada.
 
 ---
 

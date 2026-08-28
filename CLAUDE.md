@@ -37,15 +37,17 @@ AIDRA = **Artificial Intelligence In-orbit Data pRocessing Assessment**. Proof-o
 
 | Criterio pliego | Módulo principal | Test que lo cubre | Nota |
 |---|---|---|---|
-| Q3 — Metodología SAR | `src/pipeline/preprocessing.py` | `tests/test_pipeline/test_preprocessing.py` | Cadena calib→speckle→TC |
-| Q3 — Detección | `src/pipeline/detection.py`, `src/models/{cfar,yolo}.py` | `tests/test_pipeline/test_detection.py`, `test_models/test_cfar.py` | Métricas Pd/FAR |
-| Q3 — Trazabilidad | `src/traceability/`, `src/db/migrations/001_init.sql` | `tests/test_traceability/test_hasher.py` | SHA256 + linaje |
-| Q3 — Compresión modelos | `src/models/compression/` | *pendiente* | Quant/prune/KD |
-| Q3 — Perfiles de restricción | `src/profiles/` | *pendiente* | ground/sat-mid/sat-low |
-| Q3 — GEOINT integración | `src/api/`, `src/db/queries.py` | *pendiente* | Export OGC |
-| Tip & Cue (extra) | `src/tipcue/` | *pendiente* | Re-tasking autónomo |
-| AI Act (D1, D4) | `models/<nombre>/MODEL_CARD.md` | *pendiente* | Ficha por modelo |
-| Observabilidad | `src/observability/` | — | Prometheus + Loki |
+| Q3 — Metodología SAR | `src/pipeline/preprocessing.py` | `tests/test_pipeline/test_preprocessing.py` | Cadena calib→speckle (TC excluido, R8) |
+| Q3 — Detección | `src/pipeline/detection.py`, `src/models/{cfar,yolo}.py` | `tests/test_pipeline/{test_detection,test_fusion_and_inputs}.py`, `test_models/test_cfar.py` | Fusión por centros (R14), YOLO sin Lee (R15) |
+| Q3 — Validación D2 | `src/validation/` | `tests/test_validation/{test_harness,test_run_validation,test_analyze_dumps}.py` | Pipeline completo sobre xView3, AP VOC, provenance |
+| Q3 — Trazabilidad | `src/traceability/`, `src/db/migrations/` | `tests/test_traceability/`, `tests/test_invariants.py::TestITRACE*` | SHA256 + linaje + I-TRACE-2/3 |
+| Q3 — Compresión modelos | `src/models/compression/` | `tests/test_models/test_compression.py`, `test_invariants.py::TestIMOD3RejectedVariants` | Solo INT8 dinámico ejecutado (rejected) |
+| Q3 — Perfiles de restricción | `src/profiles/` | `tests/test_profiles/` | CPU enforced (Linux); RAM medida, no enforced |
+| Q3 — GEOINT integración | `src/api/`, `src/db/queries.py` | `tests/test_api/{test_ogc_features,test_stac_search,test_detections_api}.py` | GeoJSON / STAC / OGC Features |
+| Tip & Cue (extra) | `src/tipcue/` | `tests/test_tipcue/`, `tests/test_api/test_tasking_api.py` | Re-tasking autónomo |
+| Orbital (extra) | `src/orbital/` | `tests/test_orbital/` | Latencia / resiliencia orbital |
+| AI Act (D1, D4) | `models/cards/*.MODEL_CARD.md`, `src/models/manager.py` | `tests/test_models/test_ai_act_gate.py`, `test_invariants.py::TestIAIA1AICardGate` | Gate sin ficha → no carga |
+| Observabilidad | `src/observability/` | `tests/test_observability/`, `test_invariants.py::TestITRACE3RunIdPropagation` | Prometheus + Loki, run_id end-to-end |
 
 > Cuando aparezca *pendiente*, crear el test al tocar ese módulo. No dejar nuevos *pendientes*.
 
@@ -53,7 +55,7 @@ AIDRA = **Artificial Intelligence In-orbit Data pRocessing Assessment**. Proof-o
 
 ### 5.1 SAR / Sentinel-1
 - **I-SAR-1**: Toda escena que llegue a `detection.py` ha pasado por `preprocessing.preprocess_full()` (orbit → calibración σ⁰ → speckle filter → terrain correction). Si falta un paso, la escena se marca `quality=invalid` y NO se infiere sobre ella.
-- **I-SAR-2**: `edge swath filter` activo. Detecciones a < `EDGE_BUFFER_PX` del borde de swath se descartan (commit `5e880eb` introdujo el filtro robusto por clústeres de longitud).
+- **I-SAR-2**: `edge swath filter` activo. Detecciones a < `Settings.edge_buffer_px` (32) del borde de swath o del límite de datos válidos se descartan (commit `5e880eb` introdujo el filtro robusto por clústeres de longitud).
 - **I-SAR-3**: Footprint clipping contra geometría real, no bbox (commit `734a591`). `global-land-mask` tiene **dos usos permitidos y uno prohibido**: (a) máscara de mar **pre-inferencia** para CFAR (`detection.py`, `valid_mask` proyectada por la afín rotada — commit `edd09e3`), porque la hipótesis de clutter Rayleigh de CFAR no vale sobre tierra; (b) poblar el flag informativo `on_land` en persistencia. **Prohibido**: descartar una detección ya producida por caer en tierra (`continue`/`skip` en `_save_detections`). Una detección que llega a persistencia se guarda siempre, con su `quality_verdict`.
 - **I-SAR-4**: EPSG de salida = 4326 para `bbox_geom` en BD; reproyecciones documentadas.
 
