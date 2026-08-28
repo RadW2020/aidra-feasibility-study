@@ -214,6 +214,15 @@ class DetectionMetrics(BaseModel):
     num_detections_cfar: int = 0
     num_detections_yolo: int = 0
     num_detections_fused: int = 0
+    # I-MOD-2: per-tile inference latency percentiles (CFAR + YOLO per tile,
+    # and per detector). ``total_inference_ms / num_tiles`` hides the tail
+    # that matters on a constrained on-board processor.
+    tile_ms_p50: float = 0.0
+    tile_ms_p95: float = 0.0
+    cfar_tile_ms_p50: float = 0.0
+    cfar_tile_ms_p95: float = 0.0
+    yolo_tile_ms_p50: float = 0.0
+    yolo_tile_ms_p95: float = 0.0
 
 
 class DetectionResult(BaseModel):
@@ -341,6 +350,7 @@ class DetectionEngine:
         constraint_profile: str = "ground",
         scene_shape: tuple[int, int] | None = None,
         cpu_throttle: Any = None,
+        memory_guard: Any = None,
     ) -> DetectionResult:
         """Execute detection on a set of tiles using the provided detector.
 
@@ -358,6 +368,8 @@ class DetectionEngine:
         all_cfar_raw: list[dict[str, Any]] = []
         all_yolo_raw: list[dict[str, Any]] = []
         all_detections: list[Detection] = []
+        cfar_tile_ms: dict[int, float] = {}
+        yolo_tile_ms: dict[int, float] = {}
 
         # --- CFAR pass (optional, typical for SAR) --------------------
         t_cfar_start = time.perf_counter()
@@ -390,6 +402,7 @@ class DetectionEngine:
                 # Tighter clustering + SNR gate suppresses sea/edge clutter.
                 # Defaults: min_mean_snr=2.0 → ≥3 dB above local background
                 # (vessels are typically 10–30 dB brighter than calm sea).
+                t_tile = time.perf_counter()
                 cfar_dets = cfar.detect_with_clustering(
                     tile_data,
                     min_cluster_size=self.cfar_min_cluster_size,
@@ -397,12 +410,15 @@ class DetectionEngine:
                     min_mean_snr=self.cfar_min_mean_snr,
                     valid_mask=sea_mask,
                 )
+                cfar_tile_ms[tile_idx] = (time.perf_counter() - t_tile) * 1000.0
                 for d in cfar_dets:
                     d["tile_index"] = tile_idx
                 all_cfar_raw.extend(cfar_dets)
                 ram_peak = max(ram_peak, process.memory_info().rss / (1024 * 1024))
                 if cpu_throttle is not None:
                     cpu_throttle.tick()
+                if memory_guard is not None:
+                    memory_guard.check()
             if cfar_land_masked_tiles > 0:
                 logger.info(
                     "CFAR land-mask applied to %d/%d tiles "
@@ -443,7 +459,9 @@ class DetectionEngine:
                 input_data = np.concatenate([input_data] * 3, axis=-1)
 
             # Polymorphic predict call
+            t_tile = time.perf_counter()
             dets = detector.predict(input_data)
+            yolo_tile_ms[tile_idx] = (time.perf_counter() - t_tile) * 1000.0
             for d in dets:
                 d["tile_index"] = tile_idx
             all_yolo_raw.extend(dets)
@@ -451,6 +469,8 @@ class DetectionEngine:
             ram_peak = max(ram_peak, process.memory_info().rss / (1024 * 1024))
             if cpu_throttle is not None:
                 cpu_throttle.tick()
+            if memory_guard is not None:
+                memory_guard.check()
         t_det_end = time.perf_counter()
 
         # --- Fusion --------------------------------------------------
@@ -528,7 +548,20 @@ class DetectionEngine:
         cpu_pct = process.cpu_percent(interval=None)
         t_end = time.perf_counter()
 
+        def _pct(values: list[float], p: float) -> float:
+            return float(np.percentile(values, p)) if values else 0.0
+
+        combined = [
+            cfar_tile_ms.get(i, 0.0) + yolo_tile_ms.get(i, 0.0)
+            for i in set(cfar_tile_ms) | set(yolo_tile_ms)
+        ]
         metrics = DetectionMetrics(
+            tile_ms_p50=_pct(combined, 50),
+            tile_ms_p95=_pct(combined, 95),
+            cfar_tile_ms_p50=_pct(list(cfar_tile_ms.values()), 50),
+            cfar_tile_ms_p95=_pct(list(cfar_tile_ms.values()), 95),
+            yolo_tile_ms_p50=_pct(list(yolo_tile_ms.values()), 50),
+            yolo_tile_ms_p95=_pct(list(yolo_tile_ms.values()), 95),
             total_inference_ms=(t_end - t_start) * 1000,
             cfar_ms=(t_cfar_end - t_cfar_start) * 1000,
             yolo_ms=(t_det_end - t_det_start) * 1000,

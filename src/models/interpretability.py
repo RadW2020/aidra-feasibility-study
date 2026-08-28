@@ -407,6 +407,88 @@ def run_interpretability(
 # =====================================================================
 
 
+def stratified_sample(
+    candidates: list[dict[str, Any]],
+    n_samples: int,
+    seed: int,
+    bins: int = 4,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Pick ``n_samples`` detections spread over confidence quartiles and sources.
+
+    The previous sampler took the top ``3 * n`` detections by confidence and
+    drew from those, so every D4 sample was an easy, high-confidence case
+    (0.70-0.90) and no low-confidence or CFAR-only detection was ever
+    explained. Here the eligible pool is split into ``bins`` confidence
+    quantile bins; each bin contributes ``n_samples / bins`` (remainder
+    spread from the lowest bin up), drawn with a seeded RNG and, inside a
+    bin, alternating sources so ``cfar`` / ``yolo`` / ``fused`` all appear
+    when present. Each picked item gets a ``stratum`` key.
+    """
+    if not candidates or n_samples <= 0:
+        return [], {"strategy": "stratified_confidence_quantiles", "bins": bins, "picked": 0}
+    rng = random.Random(seed)
+    ordered = sorted(candidates, key=lambda c: float(c.get("confidence", 0.0)))
+    n = len(ordered)
+    edges = [ordered[min(n - 1, int(round(i * n / bins)))]["confidence"] for i in range(bins + 1)]
+    groups: list[list[dict[str, Any]]] = []
+    for b in range(bins):
+        lo = int(round(b * n / bins))
+        hi = int(round((b + 1) * n / bins)) if b < bins - 1 else n
+        groups.append(ordered[lo:hi])
+    quota = [n_samples // bins] * bins
+    for i in range(n_samples - sum(quota)):
+        quota[i % bins] += 1
+    picked: list[dict[str, Any]] = []
+    per_bin: list[dict[str, Any]] = []
+    taken_ids: set[int] = set()
+    for b, group in enumerate(groups):
+        by_source: dict[str, list[dict[str, Any]]] = {}
+        for c in group:
+            by_source.setdefault(str(c.get("source", "?")), []).append(c)
+        for lst in by_source.values():
+            rng.shuffle(lst)
+        sources = sorted(by_source)
+        taken: list[dict[str, Any]] = []
+        while len(taken) < min(quota[b], len(group)):
+            progressed = False
+            for src in sources:
+                if by_source[src] and len(taken) < quota[b]:
+                    original = by_source[src].pop()
+                    taken_ids.add(id(original))
+                    item = dict(original)
+                    item["stratum"] = f"q{b + 1}/{bins}"
+                    taken.append(item)
+                    progressed = True
+            if not progressed:
+                break
+        picked.extend(taken)
+        per_bin.append({
+            "bin": f"q{b + 1}/{bins}",
+            "confidence_min": float(group[0]["confidence"]) if group else None,
+            "confidence_max": float(group[-1]["confidence"]) if group else None,
+            "pool": len(group),
+            "picked": len(taken),
+            "sources": {s: sum(1 for t in taken if t.get("source") == s) for s in sources},
+        })
+    # Fill any shortfall (thin bins) from the remaining pool, still seeded.
+    if len(picked) < n_samples:
+        rest = [c for g in groups for c in g if id(c) not in taken_ids]
+        rng.shuffle(rest)
+        for c in rest[: n_samples - len(picked)]:
+            item = dict(c)
+            item["stratum"] = "fill"
+            picked.append(item)
+    return picked, {
+        "strategy": "stratified_confidence_quantiles",
+        "bins": bins,
+        "seed": seed,
+        "pool": n,
+        "picked": len(picked),
+        "quantile_edges": [float(e) for e in edges],
+        "per_bin": per_bin,
+    }
+
+
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     h.update(path.read_bytes())
@@ -460,16 +542,16 @@ async def run_interpretability_for_execution(
         "FROM detections WHERE execution_id=$1 "
         "  AND thumbnail_path IS NOT NULL "
         "  AND on_land = false AND cluster_anomaly = false "
-        "ORDER BY confidence DESC LIMIT $2",
+        "ORDER BY confidence DESC",
         execution_id,
-        n_samples * 3,
     )
     candidates = [dict(r) for r in rows]
     if not candidates:
         raise RuntimeError("No detections with thumbnails available.")
 
-    rng = random.Random(seed)
-    picked = rng.sample(candidates, min(n_samples, len(candidates)))
+    # Stratified over confidence quantiles and sources (not top-confidence
+    # only) so the D4 annex also shows weak and CFAR-only cases.
+    picked, sampling = stratified_sample(candidates, n_samples, seed)
 
     pt_candidates = sorted(
         [
@@ -510,6 +592,7 @@ async def run_interpretability_for_execution(
         "gradcam_model_name": gradcam_model_name,
         "gradcam_model_hash": gradcam_model_hash,
         "n_samples": len(picked),
+        "sampling": sampling,
         "samples": [],
     }
 
@@ -552,6 +635,7 @@ async def run_interpretability_for_execution(
             "detection_id": str(det["id"]),
             "confidence": float(det["confidence"]),
             "source": det["source"],
+            "stratum": det.get("stratum"),
             "thumbnail_path": det["thumbnail_path"],
             "input_png": in_path.name,
             "input_sha256": _sha256_file(in_path),

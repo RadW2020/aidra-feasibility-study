@@ -87,6 +87,16 @@ SET_LABELS: dict[str, str] = {
 }
 
 
+def _set_labels(yolo_model: str) -> dict[str, str]:
+    """Labels for the four prediction sets, naming the YOLO variant actually run."""
+    labels = dict(SET_LABELS)
+    labels["yolo"] = yolo_model
+    if yolo_model != "vesseltracker-sar-yolov8":
+        labels["aidra"] = f"aidra-cfar+{yolo_model}-union"
+        labels["fused_only"] = f"aidra-fused-only[{yolo_model}]"
+    return labels
+
+
 def _list_med_scene_ids(med_manifest: Path) -> list[str]:
     data = json.loads(med_manifest.read_text())
     return [r["scene_id"] for r in data if r.get("in_mediterranean")]
@@ -256,6 +266,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--band", type=str, default="VH_dB.tif")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--models-dir", type=Path, default=None)
+    parser.add_argument(
+        "--yolo-model",
+        type=str,
+        default="vesseltracker-sar-yolov8",
+        help="Full path only: YOLO weight name under models/ (e.g. a compressed variant).",
+    )
     parser.add_argument("--limit-scenes", type=int, default=None, help="Debug: only first N scenes.")
     parser.add_argument("--keep-raster", action="store_true", help="Debug: do not delete extracted rasters.")
     parser.add_argument(
@@ -308,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         from src.pipeline.detection import DetectionEngine
         from src.validation.harness import load_cfar, load_yolo
 
-        yolo, model_path = load_yolo(settings, "vesseltracker-sar-yolov8", confidence_threshold)
+        yolo, model_path = load_yolo(settings, args.yolo_model, confidence_threshold)
         cfar = load_cfar(settings)
         engine = DetectionEngine(edge_buffer_px=settings.edge_buffer_px)
         steps = FULL_PIPELINE_STEPS
@@ -321,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
 
     provenance = build_provenance(
         settings=settings,
-        model_name=args.model,
+        model_name=args.yolo_model if full else args.model,
         model_path=model_path,
         pipeline_path=args.pipeline_path,
         steps=steps,
@@ -353,6 +369,7 @@ def main(argv: list[str] | None = None) -> int:
         "fusion_center_tolerance_px": settings.fusion_center_tolerance_px if full else None,
         "fusion_yolo_weight": settings.fusion_yolo_weight if full else None,
         "yolo_input": settings.yolo_input if full else None,
+        "yolo_model": args.yolo_model if full else None,
         "cfar_window": {
             "guard_size": settings.cfar_guard_size,
             "training_size": settings.cfar_training_size,
@@ -526,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
     dataset = "xview3-sar/validation/adriatic"
 
     for name, acc in accs.items():
-        label = args.model if name == "detector" else SET_LABELS[name]
+        label = args.model if name == "detector" else _set_labels(args.yolo_model)[name]
         report = _report(
             acc, sea_only=False, label=label, args=args,
             confidence_threshold=confidence_threshold, params=params, provenance=provenance,

@@ -116,6 +116,8 @@ _SELECT_EXECUTIONS_BUNDLE = """
         e.num_valid_targets,
         e.avg_confidence,
         e.total_duration_ms,
+        e.inference_p50_ms,
+        e.inference_p95_ms,
         e.peak_ram_mb,
         e.output_hash,
         e.input_params_hash,

@@ -204,6 +204,16 @@ class ResourceCollector:
 
         return self._compute_metrics()
 
+    def peak_ram_mb_so_far(self) -> float:
+        """Highest RSS sampled so far (0.0 before the first sample).
+
+        Read from the sampling thread's list without locking: ``list.append``
+        is atomic under the GIL and a slightly stale value only delays the
+        :class:`~src.profiles.memory_guard.MemoryGuard` by one tile.
+        """
+        samples = self._ram_samples
+        return max(samples) if samples else 0.0
+
     @property
     def is_running(self) -> bool:
         """``True`` si la recoleccion esta en curso."""

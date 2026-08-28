@@ -359,8 +359,9 @@ UPSERT_MODEL = """
     INSERT INTO models_registry (
         name, version, format, file_path, file_hash, size_mb,
         base_model, compression_technique, compression_params,
-        num_params, num_layers, input_size, classes, metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        num_params, num_layers, input_size, classes, metadata,
+        status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT (name, version) DO UPDATE SET
         file_hash = EXCLUDED.file_hash,
         size_mb = EXCLUDED.size_mb,

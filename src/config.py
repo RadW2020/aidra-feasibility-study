@@ -162,6 +162,15 @@ class Settings(BaseSettings):
     orphan_reaper_threshold_minutes: int = 240
     orphan_reaper_interval_minutes: int = 15
 
+    # ---- Constraint profiles: memory budget ----
+    # "abort": a run whose peak RSS exceeds the profile's memory_limit_mb is
+    # aborted (MemoryError -> execution_log status=error, error_message with
+    # the breach) at the next per-tile check, emulating the kernel OOM-kill
+    # of real on-board hardware. "measure": legacy behaviour — the breach is
+    # only recorded in notes and the run completes. RLIMIT_AS is not used
+    # because PyTorch maps 8-12 GB of virtual memory regardless of RSS.
+    profile_memory_enforcement: str = "abort"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

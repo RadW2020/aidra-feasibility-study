@@ -88,7 +88,10 @@ UPDATE_EXECUTION_FIELDS = """
         END,
         notes = COALESCE($18, notes),
         -- I-DET-2 / R11: valid sea targets, separate from the raw count.
-        num_valid_targets = COALESCE($19, num_valid_targets)
+        num_valid_targets = COALESCE($19, num_valid_targets),
+        -- I-MOD-2: per-tile inference latency percentiles (migration 019).
+        inference_p50_ms = COALESCE($20, inference_p50_ms),
+        inference_p95_ms = COALESCE($21, inference_p95_ms)
     WHERE id = $1
 """
 
@@ -299,6 +302,8 @@ class ExecutionRecorder:
         error_message: str | None = None,
         notes: str | None = None,
         num_valid_targets: int | None = None,
+        inference_p50_ms: float | None = None,
+        inference_p95_ms: float | None = None,
     ) -> None:
         """Actualiza campos de resultado de una ejecucion existente.
 
@@ -365,6 +370,8 @@ class ExecutionRecorder:
             error_message,      # $17
             notes,              # $18
             num_valid_targets,  # $19
+            inference_p50_ms,   # $20
+            inference_p95_ms,   # $21
         )
 
         logger.debug("Execution %s updated", execution_id)
@@ -636,6 +643,8 @@ class ExecutionRecorder:
             tile_overlap=row.get("tile_overlap", 64),
             num_detections=row.get("num_detections", 0),
             num_valid_targets=row.get("num_valid_targets"),
+            inference_p50_ms=row.get("inference_p50_ms"),
+            inference_p95_ms=row.get("inference_p95_ms"),
             avg_confidence=row.get("avg_confidence"),
             max_confidence=row.get("max_confidence"),
             min_confidence=row.get("min_confidence"),

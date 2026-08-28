@@ -49,6 +49,9 @@ class ExecutionRecord(BaseModel):
     # 'valid_sea_target'. None for rows persisted before migration 017
     # that had no detections to backfill from.
     num_valid_targets: int | None = None
+    # I-MOD-2 (migration 019): per-tile inference latency percentiles.
+    inference_p50_ms: float | None = None
+    inference_p95_ms: float | None = None
     avg_confidence: float | None = None
     max_confidence: float | None = None
     min_confidence: float | None = None

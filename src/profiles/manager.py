@@ -233,6 +233,21 @@ class ProfileManager:
             # 2. Start resource monitoring
             collector.start()
 
+            # 2b. Memory budget (Settings.profile_memory_enforcement). The
+            # guard is checked by the detection loop after every tile.
+            from src.config import Settings
+
+            if (
+                Settings().profile_memory_enforcement == "abort"
+                and profile.memory_limit_mb
+                and "memory_guard" not in kwargs
+            ):
+                from src.profiles.memory_guard import MemoryGuard
+
+                kwargs["memory_guard"] = MemoryGuard(
+                    profile.memory_limit_mb, collector, profile_name=profile.name
+                )
+
             # 3. Execute pipeline function
             start_time = time.perf_counter()
 
@@ -289,11 +304,12 @@ class ProfileManager:
                 result.num_detections,
             )
 
-        except MemoryError:
+        except MemoryError as exc:
             if collector.is_running:
                 metrics = collector.stop()
                 result.metrics = metrics
             result.error = "OOM"
+            result.notes = str(exc) or None
             logger.warning("Profile '%s' failed: OOM", profile.name)
 
         except TimeoutError:

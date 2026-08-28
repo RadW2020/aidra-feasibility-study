@@ -564,6 +564,8 @@ class PipelineEngine:
                 download_ms=download_ms,
                 preprocessing_ms=preprocessing_ms,
                 inference_ms=inference_ms,
+                inference_p50_ms=detection_result.metrics.tile_ms_p50,
+                inference_p95_ms=detection_result.metrics.tile_ms_p95,
                 peak_ram_mb=detection_result.metrics.peak_ram_mb,
                 cpu_usage_pct=detection_result.metrics.cpu_percent,
                 num_tiles=num_tiles,
@@ -860,6 +862,8 @@ class PipelineEngine:
                         total_duration_ms=total_ms,
                         download_ms=download_ms,
                         inference_ms=detection_result.metrics.total_inference_ms,
+                        inference_p50_ms=detection_result.metrics.tile_ms_p50,
+                        inference_p95_ms=detection_result.metrics.tile_ms_p95,
                         peak_ram_mb=detection_result.metrics.peak_ram_mb,
                         cpu_usage_pct=detection_result.metrics.cpu_percent,
                         num_tiles=num_tiles,
@@ -1291,7 +1295,8 @@ class PipelineEngine:
 
                 if not profiled_result.success:
                     if profiled_result.error == "OOM":
-                        raise OOMError(f"Out of memory under profile '{profile}'")
+                        detail = f": {profiled_result.notes}" if profiled_result.notes else ""
+                        raise OOMError(f"Out of memory under profile '{profile}'{detail}")
                     if profiled_result.error == "timeout":
                         raise TimeoutError(f"Timeout under profile '{profile}'")
                     raise DetectionError(

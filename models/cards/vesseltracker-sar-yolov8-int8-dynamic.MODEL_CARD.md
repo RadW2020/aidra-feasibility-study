@@ -44,7 +44,15 @@ Estrecho de Gibraltar y zona oeste mediterránea). Comparativa head-to-
 head bajo perfil `ground` para aislar el efecto de la cuantización del
 efecto de las restricciones de hardware:
 
-| Métrica | FP32 (3 runs) | INT8 (5 runs) | Δ |
+> **Corrección (2026-08-29):** las filas FP32 e INT8 de esta tabla
+> proceden de **escenas distintas** (FP32: `S1C…20260503T182538`; INT8:
+> `…20260504T062632`, `…20260504T182548`, `…20260505T062642`, ver
+> `evidence_bundles/*.executions.csv`). No son una terna I-MOD-1 y el
+> "+126.7 % en detecciones" no puede leerse como efecto de la cuantización.
+> La comparación válida es la de la variante **estática** sobre las mismas
+> 11 escenas xView3 (`reports/validation_xview3_adriatic_full_vessels_int8_static_*.json`).
+
+| Métrica | FP32 (3 runs, otra escena) | INT8 (5 runs, otras escenas) | Δ |
 |---|---:|---:|---:|
 | Tamaño en disco | 49.6 MB | **25.1 MB** | **−49.4% (1.97×)** |
 | Inference time / escena | 52.66 min | **34.01 min** | **−35.4% (1.55×)** |

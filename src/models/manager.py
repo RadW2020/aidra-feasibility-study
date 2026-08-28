@@ -59,6 +59,18 @@ SELECT_MODELS_BY_NAME = """
 # Version tags that identify compression variants in the filename.
 # Order matters: longer suffixes must come first so they are matched
 # before shorter prefixes.
+def initial_variant_status(compression_technique: str) -> str:
+    """Registry status for a freshly scanned weight (I-MOD-3).
+
+    A compressed variant is ``candidate`` until its triplet {FP32 baseline,
+    variant, profile} has been evaluated against the declared maximum
+    degradation; the uncompressed baseline is ``active``. The upsert never
+    overwrites an existing status, so ``rejected`` / ``active`` decisions
+    survive restarts.
+    """
+    return "active" if (compression_technique or "none") == "none" else "candidate"
+
+
 _COMPRESSION_SUFFIXES: list[tuple[str, str, str]] = [
     # (suffix_pattern, version_tag, compression_technique)
     ("-int8-dynamic", "int8-dynamic", "dynamic_int8"),
@@ -550,6 +562,7 @@ class ModelManager:
             input_size,  # $12: input_size
             classes,  # $13: classes
             json.dumps({"source": "scan_and_register"}),  # $14: metadata (JSONB)
+            initial_variant_status(compression_technique),  # $15: status (insert only)
         )
 
         # Fetch the inserted/updated row to get the generated UUID
