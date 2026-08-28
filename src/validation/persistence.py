@@ -32,6 +32,10 @@ async def persist_report(
     execution_id: UUID | None = None,
     dataset_split: str | None = None,
     notes: str | None = None,
+    commit_sha: str | None = None,
+    pipeline_path: str | None = None,
+    provenance: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
 ) -> UUID:
     """Insert a ValidationReport into ``validation_runs``.
 
@@ -43,6 +47,16 @@ async def persist_report(
     responses or use it to chain follow-up writes.
     """
     pr_payload = json.dumps(report.pr_curve) if report.pr_curve else None
+    # I-TRACE-4 (migration 018): explicit kwargs win, otherwise whatever
+    # the report itself carries.
+    provenance = provenance if provenance is not None else (report.provenance or None)
+    params = params if params is not None else (report.params or None)
+    if commit_sha is None and provenance:
+        commit_sha = provenance.get("commit_sha")
+    if pipeline_path is None:
+        pipeline_path = (params or {}).get("pipeline_path") or (provenance or {}).get(
+            "pipeline_path"
+        )
 
     row = await db.fetchrow(
         INSERT_VALIDATION_RUN,
@@ -70,6 +84,10 @@ async def persist_report(
         float(report.precision),          # $22
         pr_payload,                       # $23
         notes,                            # $24
+        commit_sha,                       # $25
+        pipeline_path,                    # $26
+        json.dumps(provenance, default=str) if provenance else None,  # $27
+        json.dumps(params, default=str) if params else None,          # $28
     )
 
     new_id: UUID = row["id"]

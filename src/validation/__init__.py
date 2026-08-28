@@ -14,6 +14,7 @@ and a real-dataset run produce comparable numbers.
 
 from src.validation.metrics import (
     ValidationReport,
+    average_precision,
     bbox_center_distance,
     bbox_iou,
     match_predictions,
@@ -23,6 +24,7 @@ from src.validation.persistence import persist_report
 
 __all__ = [
     "ValidationReport",
+    "average_precision",
     "bbox_iou",
     "bbox_center_distance",
     "match_predictions",

@@ -30,7 +30,28 @@ VALID_BODY = {
     "center_tolerance_px": 20.0,
     "dataset": "xview3-sar/validation/mediterranean",
     "model_version": "v1.0",
+    "commit_sha": "ed16ab780a68b002b432214a98460873c09a3aab",
+    "pipeline_path": "detector",
 }
+
+
+async def test_import_requires_commit_sha(client, mock_db):
+    """I-TRACE-4: un reporte sin commit_sha no es evidencia (422)."""
+    bad = {k: v for k, v in VALID_BODY.items() if k != "commit_sha"}
+    resp = await client.post("/api/validation/import", json=bad)
+    assert resp.status_code == 422
+
+
+async def test_import_passes_provenance_to_persistence(client, mock_db):
+    mock_db.fetchrow.return_value = {"id": uuid4()}
+    body = {**VALID_BODY, "provenance": {"model_hash": "abc", "seed": {"seed": 42}}}
+    resp = await client.post("/api/validation/import", json=body)
+    assert resp.status_code == 200, resp.text
+    args = mock_db.fetchrow.call_args.args
+    # $25 commit_sha, $26 pipeline_path, $27 provenance_json, $28 params_json
+    assert args[25] == VALID_BODY["commit_sha"]
+    assert args[26] == "detector"
+    assert '"model_hash": "abc"' in args[27]
 
 
 async def test_import_persists_and_recomputes_metrics(client, mock_db):

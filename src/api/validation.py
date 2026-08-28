@@ -110,6 +110,8 @@ async def run_synthetic(
         confidence_threshold=request.confidence_threshold,
     )
 
+    from src.traceability.hasher import get_commit_sha
+
     dataset = f"synthetic-seed-{request.seed}"
     new_id = await persist_report(
         report,
@@ -117,6 +119,9 @@ async def run_synthetic(
         model_version=str(info.get("version", "unknown")),
         model_hash=info.get("hash"),
         compression_technique=str(info.get("compression_technique", "none")),
+        commit_sha=get_commit_sha(),
+        pipeline_path="synthetic",
+        params={"seed": request.seed, "tile_size": request.tile_size},
         notes=(
             f"synthetic ground truth: num_scenes={request.num_scenes}, "
             f"num_vessels={request.num_vessels}, tile_size={request.tile_size}, "
@@ -186,6 +191,12 @@ class ImportValidationRequest(BaseModel):
     model_hash: str | None = None
     compression_technique: str = "none"
     notes: str | None = None
+    # I-TRACE-4: a report without the commit that produced it is not
+    # evidence. Required since migration 018.
+    commit_sha: str = Field(min_length=7, max_length=64)
+    pipeline_path: str | None = Field(None, pattern="^(detector|full|synthetic)$")
+    provenance: dict[str, Any] | None = None
+    params: dict[str, Any] | None = None
 
 
 @router.post("/import")
@@ -212,6 +223,8 @@ async def import_report(request: ImportValidationRequest) -> dict[str, Any]:
         pr_curve=request.pr_curve,
         match_mode=request.match_mode,
         center_tolerance_px=request.center_tolerance_px,
+        params=request.params or {},
+        provenance=request.provenance or {},
     )
     new_id = await persist_report(
         report,
@@ -221,6 +234,10 @@ async def import_report(request: ImportValidationRequest) -> dict[str, Any]:
         model_hash=request.model_hash,
         compression_technique=request.compression_technique,
         notes=request.notes,
+        commit_sha=request.commit_sha,
+        pipeline_path=request.pipeline_path,
+        provenance=request.provenance,
+        params=request.params,
     )
     logger.info(
         "Imported external validation report",

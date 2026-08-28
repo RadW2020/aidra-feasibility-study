@@ -385,7 +385,8 @@ INSERT_VALIDATION_RUN = """
         true_positives, false_positives, false_negatives,
         total_area_km2,
         map_at_iou, pd_recall, far_per_km2, precision,
-        pr_curve_json, notes
+        pr_curve_json, notes,
+        commit_sha, pipeline_path, provenance_json, params_json
     ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7,
@@ -395,7 +396,8 @@ INSERT_VALIDATION_RUN = """
         $15, $16, $17,
         $18,
         $19, $20, $21, $22,
-        $23, $24
+        $23, $24,
+        $25, $26, $27::jsonb, $28::jsonb
     )
     RETURNING id
 """
@@ -411,7 +413,8 @@ SELECT_VALIDATION_RUNS = """
         true_positives, false_positives, false_negatives,
         total_area_km2,
         map_at_iou, pd_recall, far_per_km2, precision,
-        notes, created_at
+        notes, created_at,
+        commit_sha, pipeline_path
     FROM validation_runs
     WHERE ($1::text IS NULL OR model_name = $1)
       AND ($2::text IS NULL OR compression_technique = $2)

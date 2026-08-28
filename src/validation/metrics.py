@@ -30,6 +30,12 @@ class ValidationReport:
     pr_curve: list[dict[str, float]] = field(default_factory=list)
     match_mode: str = "iou"
     center_tolerance_px: float = 20.0
+    # Run configuration that affects the numbers (tile size, pipeline
+    # path, steps, ...) and provenance anchors (commit_sha, model_hash,
+    # image hashes, seed). Both are free-form so the CLI harness and the
+    # API import endpoint can carry whatever the run knows.
+    params: dict[str, Any] = field(default_factory=dict)
+    provenance: dict[str, Any] = field(default_factory=dict)
 
     @property
     def precision(self) -> float:
@@ -50,17 +56,26 @@ class ValidationReport:
         )
 
     @property
+    def f1(self) -> float:
+        p, r = self.precision, self.pd_recall
+        return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+
+    @property
     def map_at_iou(self) -> float:
-        """Single-class mAP from the PR curve (interpolated AP)."""
-        if not self.pr_curve:
-            return 0.0
-        pts = sorted(self.pr_curve, key=lambda p: p["recall"])
-        ap = 0.0
-        prev_recall = 0.0
-        for pt in pts:
-            ap += (pt["recall"] - prev_recall) * pt["precision"]
-            prev_recall = pt["recall"]
-        return ap
+        """Single-class average precision (PASCAL-VOC all-points).
+
+        The PR curve is the cumulative sweep over predictions sorted by
+        descending confidence, so recall is non-decreasing along it. AP is
+        the area under the *monotone precision envelope*
+        ``p_env(r) = max(p(r') for r' >= r)`` — the VOC2010+/COCO
+        convention. Summing raw ``Δrecall × precision`` (the previous
+        implementation) is a lower bound that penalises every local dip
+        of precision and is not comparable with published mAP figures.
+
+        Note: with ``match_mode == "center"`` this is AP at the centre
+        tolerance, not AP@IoU; ``as_dict`` labels it accordingly.
+        """
+        return average_precision(self.pr_curve)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -80,9 +95,34 @@ class ValidationReport:
             "pd_recall": round(self.pd_recall, 4),
             "far_per_km2": round(self.far_per_km2, 4),
             "map_at_iou": round(self.map_at_iou, 4),
+            "f1": round(self.f1, 4),
+            # Explicit label so nobody reads a centre-tolerance AP as AP@IoU.
+            "ap_definition": (
+                f"AP@center<={self.center_tolerance_px:g}px, VOC all-points envelope"
+                if self.match_mode == "center"
+                else f"AP@IoU>={self.iou_threshold:g}, VOC all-points envelope"
+            ),
             "pr_curve": self.pr_curve,
+            "params": self.params,
+            "provenance": self.provenance,
             "computed_at_utc": datetime.now(tz=UTC).isoformat(),
         }
+
+
+def average_precision(pr_curve: list[dict[str, float]]) -> float:
+    """VOC all-points AP over a cumulative PR sweep (see ``map_at_iou``)."""
+    if not pr_curve:
+        return 0.0
+    pts = sorted(pr_curve, key=lambda p: (p["recall"], -p["precision"]))
+    recalls = [0.0] + [float(p["recall"]) for p in pts]
+    precisions = [0.0] + [float(p["precision"]) for p in pts]
+    # Monotone envelope from the right.
+    for i in range(len(precisions) - 2, -1, -1):
+        precisions[i] = max(precisions[i], precisions[i + 1])
+    ap = 0.0
+    for i in range(1, len(recalls)):
+        ap += (recalls[i] - recalls[i - 1]) * precisions[i]
+    return float(ap)
 
 
 # ---------------------------------------------------------------------------
