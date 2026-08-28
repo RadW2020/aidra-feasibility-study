@@ -25,7 +25,8 @@
 | Sentinel-1 GRD calibration σ⁰ → linear power | `src/pipeline/preprocessing.py:_parse_calibration_lut` |
 | Lee speckle filter (7×7) | `src/pipeline/preprocessing.py:_lee_filter` |
 | Edge-of-swath filter via footprint geometry + longitude clustering fallback (I-SAR-2) | `src/pipeline/engine.py:_save_detections` |
-| Real-footprint clipping (no global-land-mask filtering, I-SAR-3) | `src/pipeline/preprocessing.py:_calculate_valid_footprint` |
+| Real-footprint clipping (I-SAR-3) | `src/pipeline/preprocessing.py:_calculate_valid_footprint` |
+| `global-land-mask` used as a **pre-inference sea mask for CFAR** (rotation-aware affine) and as the informational `on_land` flag; never to discard a produced detection (I-SAR-3 / I-DET-2) | `src/pipeline/detection.py:_build_sea_mask_from_affine`, `src/pipeline/engine.py:_save_detections` |
 | Quality gate `quality=invalid` if any pre-step missing (I-SAR-1) | `src/pipeline/preprocessing.py:_evaluate_scene_quality` + Prometheus counter `aidra_scenes_processed_total{quality}` |
 | EPSG:4326 enforced everywhere (I-SAR-4) | grep `EPSG:4326` |
 | SAR metadata persisted (`incidence_angle`, `polarisation`, `orbit_direction`, `relative_orbit`, `product_type`, `pixel_spacing`) | `src/pipeline/preprocessing.py:parse_sar_metadata` + DB column on `execution_log` |

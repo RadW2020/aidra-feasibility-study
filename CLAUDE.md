@@ -54,12 +54,12 @@ AIDRA = **Artificial Intelligence In-orbit Data pRocessing Assessment**. Proof-o
 ### 5.1 SAR / Sentinel-1
 - **I-SAR-1**: Toda escena que llegue a `detection.py` ha pasado por `preprocessing.preprocess_full()` (orbit → calibración σ⁰ → speckle filter → terrain correction). Si falta un paso, la escena se marca `quality=invalid` y NO se infiere sobre ella.
 - **I-SAR-2**: `edge swath filter` activo. Detecciones a < `EDGE_BUFFER_PX` del borde de swath se descartan (commit `5e880eb` introdujo el filtro robusto por clústeres de longitud).
-- **I-SAR-3**: Footprint clipping contra geometría real, no bbox (commit `734a591`). `global-land-mask` deshabilitado por no fiable.
+- **I-SAR-3**: Footprint clipping contra geometría real, no bbox (commit `734a591`). `global-land-mask` tiene **dos usos permitidos y uno prohibido**: (a) máscara de mar **pre-inferencia** para CFAR (`detection.py`, `valid_mask` proyectada por la afín rotada — commit `edd09e3`), porque la hipótesis de clutter Rayleigh de CFAR no vale sobre tierra; (b) poblar el flag informativo `on_land` en persistencia. **Prohibido**: descartar una detección ya producida por caer en tierra (`continue`/`skip` en `_save_detections`). Una detección que llega a persistencia se guarda siempre, con su `quality_verdict`.
 - **I-SAR-4**: EPSG de salida = 4326 para `bbox_geom` en BD; reproyecciones documentadas.
 
 ### 5.2 Detección y persistencia
 - **I-DET-1**: Cada detección persistida lleva como mínimo: `scene_id`, `model_id`, `model_hash`, `confidence`, `bbox_geom (4326)`, `pixel_bbox`, `incidence_angle` (si disponible), `timestamp_utc`.
-- **I-DET-2**: Detección sobre tierra (según mask de footprint) → flag `on_land=true`. Se conserva, pero se excluye de métricas de mar.
+- **I-DET-2**: Detección sobre tierra (según `global-land-mask` en persistencia) → flag `on_land=true` y `quality_verdict='land_artifact'`. Se conserva, pero se excluye de métricas de mar (`num_valid_targets` en `execution_log`, dashboards operacionales).
 - **I-DET-3**: Densidad anómala (> umbral por km²) → flag `cluster_anomaly`. Probable artefacto borde/speckle.
 - **I-DET-4**: `confidence_threshold` y `iou_threshold` proceden de `Settings` o config explícita; nunca hardcoded en lógica.
 

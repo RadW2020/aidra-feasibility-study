@@ -54,7 +54,7 @@ dependencies = [
     # Utilidades
     "psutil>=5.9.8",
     "python-multipart>=0.0.9",
-    "global-land-mask>=1.0.0",  # informativo (flag on_land), nunca filtro
+    "global-land-mask>=1.0.0",  # sea mask pre-inferencia CFAR + flag on_land; nunca descarta detecciones (I-SAR-3)
 
     # Docker SDK (para perfiles de restriccion)
     "docker>=7.1.0",

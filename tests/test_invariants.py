@@ -87,7 +87,20 @@ class TestISAR1QualityGate:
 @pytest.mark.invariant
 class TestISAR3LandMaskIsInformationalOnly:
     """I-SAR-3 + I-DET-2: footprint clipping filtra swath; global-land-mask
-    se permite SOLO como flag on_land informativo (nunca filtra)."""
+    se permite (a) como mascara de mar PRE-inferencia de CFAR y (b) como
+    flag on_land informativo. Nunca descarta una deteccion ya producida."""
+
+    def test_cfar_sea_mask_is_pre_inference_only(self):
+        """La mascara entra a CFAR como valid_mask (uso permitido) y no se
+        reutiliza para filtrar detecciones despues de producirlas."""
+        src = Path("src/pipeline/detection.py").read_text()
+        assert "valid_mask=sea_mask" in src, "CFAR sea mask no se pasa como valid_mask"
+        # Tras la pasada CFAR no debe haber filtrado por mascara sobre
+        # la lista de detecciones (patron `if sea_mask[...]` + continue).
+        after = src[src.index("valid_mask=sea_mask"):]
+        assert "sea_mask[" not in after, (
+            "I-SAR-3 violado: sea_mask usada para filtrar detecciones post-inferencia"
+        )
 
     def test_engine_does_not_skip_on_land_detections(self):
         """global-land-mask no debe usarse para `continue`/`skip` en _save_detections.
@@ -127,6 +140,92 @@ def _find_all(haystack: str, needle: str) -> list[int]:
             return out
         out.append(i)
         start = i + len(needle)
+
+
+# =====================================================================
+# I-TRACE-2 — execution_log nace 'pending' antes del run, nunca solo al exito
+# =====================================================================
+
+
+@pytest.mark.invariant
+class TestITRACE2PendingBeforeRun:
+    """I-TRACE-2: el registro se inserta como ``pending`` ANTES de inferir y
+    todo camino de error lo actualiza (nunca queda solo el caso feliz)."""
+
+    def test_create_pending_inserts_status_pending(self):
+        src = Path("src/traceability/recorder.py").read_text()
+        body = src[src.index("async def create_pending"):src.index("async def update(")]
+        assert '"pending"' in body, "create_pending no fija status='pending'"
+
+    def test_run_creates_pending_before_detection(self):
+        src = Path("src/pipeline/engine.py").read_text()
+        run_body = src[src.index("    async def run("):src.index("    async def run_all_profiles(")]
+        assert run_body.index("create_pending(") < run_body.index("_run_detection("), (
+            "I-TRACE-2 violado: la deteccion corre antes de insertar el registro pending"
+        )
+        assert "_safe_update_status(execution_id, \"error\"" in run_body, (
+            "el camino de error de run() no actualiza el status"
+        )
+
+    def test_run_all_profiles_creates_pending_per_profile_before_detection(self):
+        src = Path("src/pipeline/engine.py").read_text()
+        start = src.index("    async def run_all_profiles(")
+        end = src.index("\n    async def ", start + 10)
+        body = src[start:end]
+        assert body.index("create_pending(") < body.index("_run_detection("), (
+            "I-TRACE-2 violado en run_all_profiles"
+        )
+        assert body.count("_safe_update_status(execution_id, \"error\"") >= 2, (
+            "run_all_profiles debe marcar error tanto en OOM como en excepcion generica"
+        )
+
+    def test_recorder_update_never_downgrades_to_pending(self):
+        """update(status=...) solo se llama con estados terminales o running."""
+        src = Path("src/pipeline/engine.py").read_text()
+        assert 'status="pending"' not in src
+
+
+# =====================================================================
+# I-TRACE-3 — run_id viaja a logs estructurados y metricas
+# =====================================================================
+
+
+@pytest.mark.invariant
+class TestITRACE3RunIdPropagation:
+    """I-TRACE-3: el ``execution_id`` (run_id) llega a cada linea de log
+    estructurado (Loki) y a las metricas Prometheus como exemplar."""
+
+    def test_structured_logger_merges_execution_id(self, caplog):
+        import logging
+
+        from src.observability.loki_logger import StructuredLogger
+
+        log = StructuredLogger("aidra.test.itrace3", execution_id="run-123", profile="ground")
+        with caplog.at_level(logging.INFO, logger="aidra.test.itrace3"):
+            log.info("hello", extra={"zone": "gibraltar"})
+        records = [r for r in caplog.records if r.name == "aidra.test.itrace3"]
+        assert records, "no se emitio el log"
+        assert getattr(records[-1], "execution_id", None) == "run-123"
+        assert getattr(records[-1], "profile", None) == "ground"
+        assert getattr(records[-1], "zone", None) == "gibraltar"
+
+    def test_engine_logs_carry_execution_id(self):
+        src = Path("src/pipeline/engine.py").read_text()
+        run_body = src[src.index("    async def run("):src.index("    async def run_all_profiles(")]
+        assert run_body.count('"execution_id": str(execution_id)') >= 2, (
+            "los logs de run() deben llevar execution_id"
+        )
+
+    def test_metrics_attach_run_id_exemplar(self):
+        src = Path("src/pipeline/engine.py").read_text()
+        emit = src[src.index("def _emit_metrics("):]
+        assert '{"trace_id": str(execution_id)}' in emit, (
+            "_emit_metrics no adjunta el run_id como exemplar OpenMetrics"
+        )
+        run_body = src[src.index("    async def run("):src.index("    async def run_all_profiles(")]
+        assert "exemplar=" in run_body[run_body.index("except Exception"):], (
+            "el contador de error no lleva exemplar con el run_id"
+        )
 
 
 # =====================================================================
