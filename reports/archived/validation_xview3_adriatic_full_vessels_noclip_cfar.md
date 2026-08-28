@@ -1,0 +1,18 @@
+> **SUPERSEDED (2026-08-28)**: run without valid-data-boundary clipping; see JSON superseded_reason.
+
+## Métricas de validación (D2 — `scripts/run_validation.py`)
+
+- **Match mode**: distancia al centro ≤ 20 px (xView3-SAR convention)
+- **AP**: 0.0114
+- **Pd (recall)**: 0.3505
+- **FAR / km²**: 0.0448
+- **Precision**: 0.0323
+- **F1**: 0.0591
+- Escenas evaluadas: 11
+- Ground-truth total: 1997
+- Predicciones (post-confidence ≥ 0.25): 21696
+- Área cubierta: 468575.2 km²
+- Pipeline path: `full`, tile 640px / overlap 64px
+- Provenance: commit `d6d36d4b658d`, model_hash `18aec1bb3caf7dd2`, settings_hash `3ab0c3dfc0689266`, seed 42
+
+**Sea-only (I-DET-2, on_land excluded from preds and GT):** AP 0.0144 · Pd 0.4432 · FAR/km² 0.0444 · Precision 0.0323 · GT 1566 · preds 21512

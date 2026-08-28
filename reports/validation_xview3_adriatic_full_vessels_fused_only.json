@@ -1,0 +1,689 @@
+{
+  "model_name": "aidra-fused-only",
+  "match_mode": "center",
+  "iou_threshold": 0.5,
+  "center_tolerance_px": 20.0,
+  "confidence_threshold": 0.25,
+  "num_scenes": 11,
+  "num_ground_truth": 1997,
+  "num_predictions": 0,
+  "true_positives": 0,
+  "false_positives": 0,
+  "false_negatives": 1997,
+  "total_area_km2": 468575.2,
+  "precision": 0.0,
+  "pd_recall": 0.0,
+  "far_per_km2": 0.0,
+  "map_at_iou": 0.0,
+  "f1": 0.0,
+  "ap_definition": "AP@center<=20px, VOC all-points envelope",
+  "pr_curve": [],
+  "params": {
+    "pipeline_path": "full",
+    "tile_size": 640,
+    "tile_overlap": 64,
+    "band_tile_rows": 4,
+    "confidence_threshold": 0.25,
+    "iou_threshold_nms": 0.45,
+    "edge_buffer_px": 32,
+    "fusion_iou_threshold": 0.3,
+    "fusion_yolo_weight": 0.5,
+    "cfar_cluster": {
+      "min_cluster_size": 5,
+      "eps": 1.5,
+      "min_mean_snr": 2.0
+    },
+    "steps": [
+      "db_to_linear_sigma0",
+      "lee_filter_7x7_linear",
+      "tiles_settings_tile_size_overlap",
+      "lonlat_affine_rotation_aware",
+      "cfar_sea_mask_pre_inference",
+      "cfar_dbscan_clustering",
+      "yolo_uint8_db_stretch",
+      "fusion_iou_settings",
+      "edge_swath_filter_settings",
+      "footprint_clip_valid_data_boundary_edge_buffer",
+      "cross_tile_geo_dedup",
+      "on_land_flag_global_land_mask"
+    ],
+    "match_mode": "center",
+    "center_tolerance_px": 20.0,
+    "iou_threshold_match": 0.5,
+    "sea_only": false
+  },
+  "provenance": {
+    "commit_sha": "8ce9ca2e0ff267e0e48b0f568c9e8ce80fb6d7f8",
+    "settings_hash": "3ab0c3dfc0689266dc84557fe0278b450d92507557f30181e68b08f8cf58b131",
+    "model_name": "all",
+    "model_hash": "18aec1bb3caf7dd2c5ace8d397e241c485e917c28df248eefe794578c996d671",
+    "model_path": "models/vesseltracker-sar-yolov8.pt",
+    "pipeline_path": "full",
+    "steps": [
+      "db_to_linear_sigma0",
+      "lee_filter_7x7_linear",
+      "tiles_settings_tile_size_overlap",
+      "lonlat_affine_rotation_aware",
+      "cfar_sea_mask_pre_inference",
+      "cfar_dbscan_clustering",
+      "yolo_uint8_db_stretch",
+      "fusion_iou_settings",
+      "edge_swath_filter_settings",
+      "footprint_clip_valid_data_boundary_edge_buffer",
+      "cross_tile_geo_dedup",
+      "on_land_flag_global_land_mask"
+    ],
+    "seed": {
+      "seed": 42,
+      "numpy": true,
+      "random": true,
+      "torch": true,
+      "torch_deterministic_algorithms": true
+    },
+    "harness": "scripts/validate_xview3_serial.py",
+    "host": {
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu_count": 10
+    },
+    "versions": {
+      "python": "3.14.6",
+      "torch": "2.11.0",
+      "ultralytics": "8.4.41",
+      "numpy": "2.4.4",
+      "rasterio": "1.5.0",
+      "onnxruntime": "1.25.0"
+    },
+    "image_hashes": {
+      "264ed833a13b7f2av": {
+        "tar_sha256": "259937fbd52b2e4550bc93182ffb174b1f4b6fa5b48b1a2b4b2e61e727a9470e",
+        "member": "264ed833a13b7f2av/VH_dB.tif"
+      },
+      "13dd786ee6c95e06v": {
+        "tar_sha256": "4e48ff13904cfd3bdcd1fb3b1657006c22c30ac421530e12e2527068b52a9f3a",
+        "member": "13dd786ee6c95e06v/VH_dB.tif"
+      },
+      "0d8ed29b0760dc59v": {
+        "tar_sha256": "ab4ce296c10560f1711f18bcdca23bab1e4d3bbf77874189052775c060031ce9",
+        "member": "0d8ed29b0760dc59v/VH_dB.tif"
+      },
+      "9a5aa7310c195f14v": {
+        "tar_sha256": "61dec9b477ca6534ee811f28d63cb4699c7620088de35ab13c819e4541a09b96",
+        "member": "9a5aa7310c195f14v/VH_dB.tif"
+      },
+      "36076e547370064ev": {
+        "tar_sha256": "64456832f37f3dc1ed8aa30c53dd01ac051976316c2149f5a42e9ee7c60e7e9b",
+        "member": "36076e547370064ev/VH_dB.tif"
+      },
+      "f9eb760aaf6e798dv": {
+        "tar_sha256": "5850609c43eb816909b5a5444762c1181862e2a4c69a585e923fe213c1023311",
+        "member": "f9eb760aaf6e798dv/VH_dB.tif"
+      },
+      "8204efcfe9f09f94v": {
+        "tar_sha256": "2de5500fd164b6b269ef0805e3c029a806508d75637d65d79161dd47ec477f3b",
+        "member": "8204efcfe9f09f94v/VH_dB.tif"
+      },
+      "fe6a8d80fb5ebb8ev": {
+        "tar_sha256": "eeda70d09f01c2db95cbf7332da9d6ecbbb601a1f02219fd0becb49e1ba4365b",
+        "member": "fe6a8d80fb5ebb8ev/VH_dB.tif"
+      },
+      "3fe00bf7beab8812v": {
+        "tar_sha256": "2747efdf1d09cd5736c24d4502acef79aeeb77bbc62bffb35fa8d41a823a1db5",
+        "member": "3fe00bf7beab8812v/VH_dB.tif"
+      },
+      "487b4884f467c94av": {
+        "tar_sha256": "0e3c5a8ac2c120a3304a8139271902ec0eb20fef005c9ce6f57d1e1c67065f9a",
+        "member": "487b4884f467c94av/VH_dB.tif"
+      },
+      "3808f5703f0920bfv": {
+        "tar_sha256": "59f48434e644603d2629133c0e87cb57b1c6761e9470b91f07bcae436d66c7b6",
+        "member": "3808f5703f0920bfv/VH_dB.tif"
+      }
+    },
+    "cfar_params": {
+      "guard_size": 8,
+      "training_size": 20,
+      "pfa": 1e-05,
+      "method": "ca",
+      "distribution": "exponential"
+    },
+    "steps_not_exercised": [
+      "orbit_correction (raster pre-processed by xView3)",
+      "radiometric_calibration_sigma0 (raster pre-processed by xView3)",
+      "terrain_correction (excluded from MVP, R8; xView3 rasters are TC'd)"
+    ],
+    "ground_truth": {
+      "source": "x-view-us-data/validation.csv",
+      "confidence_filter": [
+        "HIGH",
+        "MEDIUM"
+      ],
+      "vessels_only": true,
+      "band": "VH_dB.tif"
+    },
+    "wall_time_s": 4364.7
+  },
+  "computed_at_utc": "2026-08-28T18:42:16.101528+00:00",
+  "sea_only": {
+    "model_name": "aidra-fused-only",
+    "match_mode": "center",
+    "iou_threshold": 0.5,
+    "center_tolerance_px": 20.0,
+    "confidence_threshold": 0.25,
+    "num_scenes": 11,
+    "num_ground_truth": 1566,
+    "num_predictions": 0,
+    "true_positives": 0,
+    "false_positives": 0,
+    "false_negatives": 1566,
+    "total_area_km2": 468575.2,
+    "precision": 0.0,
+    "pd_recall": 0.0,
+    "far_per_km2": 0.0,
+    "map_at_iou": 0.0,
+    "f1": 0.0,
+    "ap_definition": "AP@center<=20px, VOC all-points envelope",
+    "params": {
+      "pipeline_path": "full",
+      "tile_size": 640,
+      "tile_overlap": 64,
+      "band_tile_rows": 4,
+      "confidence_threshold": 0.25,
+      "iou_threshold_nms": 0.45,
+      "edge_buffer_px": 32,
+      "fusion_iou_threshold": 0.3,
+      "fusion_yolo_weight": 0.5,
+      "cfar_cluster": {
+        "min_cluster_size": 5,
+        "eps": 1.5,
+        "min_mean_snr": 2.0
+      },
+      "steps": [
+        "db_to_linear_sigma0",
+        "lee_filter_7x7_linear",
+        "tiles_settings_tile_size_overlap",
+        "lonlat_affine_rotation_aware",
+        "cfar_sea_mask_pre_inference",
+        "cfar_dbscan_clustering",
+        "yolo_uint8_db_stretch",
+        "fusion_iou_settings",
+        "edge_swath_filter_settings",
+        "footprint_clip_valid_data_boundary_edge_buffer",
+        "cross_tile_geo_dedup",
+        "on_land_flag_global_land_mask"
+      ],
+      "match_mode": "center",
+      "center_tolerance_px": 20.0,
+      "iou_threshold_match": 0.5,
+      "sea_only": true
+    },
+    "computed_at_utc": "2026-08-28T18:42:16.101683+00:00"
+  },
+  "per_scene": [
+    {
+      "scene_id": "264ed833a13b7f2av",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.332,
+      "centroid_lon": 12.6596,
+      "scene_area_km2": 42675.4,
+      "n_gt": 55,
+      "n_gt_on_land": 8,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 55,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 47
+      },
+      "seconds": 406.7,
+      "pipeline_stats": {
+        "num_tiles": 2028,
+        "num_bands": 10,
+        "tiles_with_geocoding": 2028,
+        "cfar_raw": 2259,
+        "yolo_raw": 88,
+        "aidra_before_seam_dedup": 1796,
+        "aidra": 1782,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 2105,
+          "yolo": 1,
+          "aidra": 1591,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 16.22,
+          "engine": 389.302,
+          "total": 406.702
+        }
+      }
+    },
+    {
+      "scene_id": "13dd786ee6c95e06v",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.4153,
+      "centroid_lon": 12.4978,
+      "scene_area_km2": 42674.4,
+      "n_gt": 150,
+      "n_gt_on_land": 19,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 150,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 131
+      },
+      "seconds": 414.1,
+      "pipeline_stats": {
+        "num_tiles": 2028,
+        "num_bands": 10,
+        "tiles_with_geocoding": 2028,
+        "cfar_raw": 2333,
+        "yolo_raw": 119,
+        "aidra_before_seam_dedup": 1885,
+        "aidra": 1868,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 2187,
+          "yolo": 1,
+          "aidra": 1642,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 16.201,
+          "engine": 397.129,
+          "total": 414.137
+        }
+      }
+    },
+    {
+      "scene_id": "0d8ed29b0760dc59v",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.1149,
+      "centroid_lon": 13.6202,
+      "scene_area_km2": 42519.7,
+      "n_gt": 177,
+      "n_gt_on_land": 18,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 177,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 159
+      },
+      "seconds": 396.3,
+      "pipeline_stats": {
+        "num_tiles": 1976,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1976,
+        "cfar_raw": 2033,
+        "yolo_raw": 181,
+        "aidra_before_seam_dedup": 1757,
+        "aidra": 1743,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 1594,
+          "yolo": 0,
+          "aidra": 1231,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 15.73,
+          "engine": 379.826,
+          "total": 396.297
+        }
+      }
+    },
+    {
+      "scene_id": "9a5aa7310c195f14v",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.4666,
+      "centroid_lon": 12.5813,
+      "scene_area_km2": 42675.3,
+      "n_gt": 89,
+      "n_gt_on_land": 21,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 89,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 68
+      },
+      "seconds": 407.2,
+      "pipeline_stats": {
+        "num_tiles": 2028,
+        "num_bands": 10,
+        "tiles_with_geocoding": 2028,
+        "cfar_raw": 2282,
+        "yolo_raw": 97,
+        "aidra_before_seam_dedup": 1841,
+        "aidra": 1832,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 2140,
+          "yolo": 1,
+          "aidra": 1624,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 16.423,
+          "engine": 389.566,
+          "total": 407.186
+        }
+      }
+    },
+    {
+      "scene_id": "36076e547370064ev",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.051,
+      "centroid_lon": 14.2293,
+      "scene_area_km2": 42533.1,
+      "n_gt": 274,
+      "n_gt_on_land": 82,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 274,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 192
+      },
+      "seconds": 387.1,
+      "pipeline_stats": {
+        "num_tiles": 1938,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1938,
+        "cfar_raw": 2063,
+        "yolo_raw": 132,
+        "aidra_before_seam_dedup": 1723,
+        "aidra": 1710,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 1630,
+          "yolo": 2,
+          "aidra": 1231,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 15.345,
+          "engine": 370.674,
+          "total": 387.146
+        }
+      }
+    },
+    {
+      "scene_id": "f9eb760aaf6e798dv",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.7071,
+      "centroid_lon": 14.2854,
+      "scene_area_km2": 42628.2,
+      "n_gt": 210,
+      "n_gt_on_land": 46,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 210,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 164
+      },
+      "seconds": 397.1,
+      "pipeline_stats": {
+        "num_tiles": 1976,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1976,
+        "cfar_raw": 1107,
+        "yolo_raw": 151,
+        "aidra_before_seam_dedup": 1153,
+        "aidra": 1140,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 650,
+          "yolo": 0,
+          "aidra": 606,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 15.896,
+          "engine": 380.098,
+          "total": 397.066
+        }
+      }
+    },
+    {
+      "scene_id": "8204efcfe9f09f94v",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.5111,
+      "centroid_lon": 14.1972,
+      "scene_area_km2": 42629.4,
+      "n_gt": 286,
+      "n_gt_on_land": 84,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 286,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 202
+      },
+      "seconds": 395.6,
+      "pipeline_stats": {
+        "num_tiles": 1976,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1976,
+        "cfar_raw": 1194,
+        "yolo_raw": 146,
+        "aidra_before_seam_dedup": 1208,
+        "aidra": 1196,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 699,
+          "yolo": 0,
+          "aidra": 644,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 15.706,
+          "engine": 378.815,
+          "total": 395.549
+        }
+      }
+    },
+    {
+      "scene_id": "fe6a8d80fb5ebb8ev",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.0114,
+      "centroid_lon": 13.8714,
+      "scene_area_km2": 42532.7,
+      "n_gt": 156,
+      "n_gt_on_land": 27,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 156,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 129
+      },
+      "seconds": 382.9,
+      "pipeline_stats": {
+        "num_tiles": 1938,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1938,
+        "cfar_raw": 2006,
+        "yolo_raw": 170,
+        "aidra_before_seam_dedup": 1720,
+        "aidra": 1711,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 1566,
+          "yolo": 3,
+          "aidra": 1209,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 15.448,
+          "engine": 366.369,
+          "total": 382.851
+        }
+      }
+    },
+    {
+      "scene_id": "3fe00bf7beab8812v",
+      "aoi_label": "adriatic",
+      "centroid_lat": 44.0123,
+      "centroid_lon": 13.7543,
+      "scene_area_km2": 42533.1,
+      "n_gt": 234,
+      "n_gt_on_land": 42,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 234,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 192
+      },
+      "seconds": 385.8,
+      "pipeline_stats": {
+        "num_tiles": 1938,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1938,
+        "cfar_raw": 2092,
+        "yolo_raw": 150,
+        "aidra_before_seam_dedup": 1744,
+        "aidra": 1731,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 1639,
+          "yolo": 0,
+          "aidra": 1228,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 15.666,
+          "engine": 369.013,
+          "total": 385.831
+        }
+      }
+    },
+    {
+      "scene_id": "487b4884f467c94av",
+      "aoi_label": "adriatic",
+      "centroid_lat": 43.4641,
+      "centroid_lon": 15.9767,
+      "scene_area_km2": 42489.5,
+      "n_gt": 258,
+      "n_gt_on_land": 79,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 258,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 179
+      },
+      "seconds": 384.8,
+      "pipeline_stats": {
+        "num_tiles": 1938,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1938,
+        "cfar_raw": 1776,
+        "yolo_raw": 171,
+        "aidra_before_seam_dedup": 1527,
+        "aidra": 1518,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 1264,
+          "yolo": 0,
+          "aidra": 938,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 15.624,
+          "engine": 368.127,
+          "total": 384.811
+        }
+      }
+    },
+    {
+      "scene_id": "3808f5703f0920bfv",
+      "aoi_label": "adriatic",
+      "centroid_lat": 42.0468,
+      "centroid_lon": 15.6978,
+      "scene_area_km2": 42684.4,
+      "n_gt": 108,
+      "n_gt_on_land": 5,
+      "n_preds": 0,
+      "n_preds_on_land": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 108,
+      "sea_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 103
+      },
+      "seconds": 294.4,
+      "pipeline_stats": {
+        "num_tiles": 1938,
+        "num_bands": 10,
+        "tiles_with_geocoding": 1938,
+        "cfar_raw": 2551,
+        "yolo_raw": 45,
+        "aidra_before_seam_dedup": 2043,
+        "aidra": 2026,
+        "fused_only": 0,
+        "swath_edge_buffer_px": 32,
+        "swath_edge_dropped": {
+          "cfar": 2404,
+          "yolo": 0,
+          "aidra": 1853,
+          "fused_only": 0
+        },
+        "timings_s": {
+          "preprocess": 13.438,
+          "engine": 279.94,
+          "total": 294.405
+        }
+      }
+    }
+  ],
+  "dataset": "xview3-sar/validation/adriatic",
+  "dataset_split": "validation",
+  "prediction_set": "fused_only"
+}

@@ -152,6 +152,58 @@ ORDER BY constraint_profile;
 
 ---
 
+## D2 — Detection quality against xView3-SAR ground truth (2026-08-28)
+
+| | |
+|---|---|
+| Reports | `reports/validation_xview3_adriatic_full_vessels_{cfar,yolo,aidra,fused_only}.json` (+`.md`), `reports/validation_xview3_adriatic_detector_{yolo,cfar}_vessels.json` |
+| Ground truth | xView3-SAR `validation.csv`, 11 Adriatic scenes, `is_vessel=True`, confidence HIGH+MEDIUM → 1 997 vessels, 468 575 km² |
+| Settings | `confidence_threshold` 0.25, tiles 640/64, `edge_buffer_px` 32, `fusion_iou_threshold` 0.3 — all from `Settings` (I-DET-4), recorded in each report's `params` |
+| Provenance (each report) | `commit_sha` `8ce9ca2e0f…`, `model_hash` `18aec1bb…` (SHA256 of `vesseltracker-sar-yolov8.pt`), `settings_hash`, seed 42, per-scene tar SHA256, library versions, steps exercised / not exercised |
+| Steps not exercised | orbit correction, radiometric calibration, terrain correction — xView3 rasters are already SNAP-processed (see `provenance.steps_not_exercised`) |
+| Reproducibility | Two independent full-pipeline runs (16:14Z and 18:29Z, different GT filters) produced **identical per-scene prediction counts** (18 257 predictions before clipping). Archived run: `reports/archived/validation_xview3_adriatic_full_allobjects_noclip_*.json` |
+| Prediction dumps | `reports/predictions/xview3_adriatic_full_vessels/<scene_id>.json` — every prediction set + GT with `on_land`, for offline analysis and D4 sampling |
+| Analysis | `reports/analysis_xview3_adriatic_full_vessels.md` — box geometry, YOLO↔CFAR co-location (42 %) vs IoU ≥ 0.3 (0.07 %), GT Venn split |
+| Wall time | 4 365 s for 11 scenes on the workstation (`provenance.wall_time_s`) |
+
+Headline (AIDRA production output, CFAR ∪ YOLO): Pd 0.356, FAR
+0.0080/km², precision 0.159, AP 0.103, F1 0.220; sea-only Pd 0.448,
+FAR 0.0067. Fused detections: 0 (R14). Full table in README.
+
+**Verify**:
+```bash
+# provenance anchors present and consistent
+python - <<'EOF'
+import json, hashlib
+r = json.load(open("reports/validation_xview3_adriatic_full_vessels_aidra.json"))
+p = r["provenance"]
+print("commit", p["commit_sha"], "| steps", len(p["steps"]), "| scenes hashed", len(p["image_hashes"]))
+print("model_hash matches .pt:", hashlib.sha256(open("models/vesseltracker-sar-yolov8.pt","rb").read()).hexdigest() == p["model_hash"])
+EOF
+# regenerate (≈75 min, needs data/xview3/scenes/*.tar.gz and x-view-us-data/validation.csv)
+python -m scripts.validate_xview3_serial --xview-dir x-view-us-data --tar-dir data/xview3/scenes \
+  --tmp-dir data/xview3/scratch --models-dir models --seed 42 --vessels-only \
+  --pipeline-path full --model all --output /tmp/d2_check.json
+# expected: num_predictions 4460 (aidra), 3818 (cfar), 1442 (yolo), 0 (fused_only)
+```
+
+Import into production (after the migration 018 deploy; requires the API token):
+```bash
+python - <<'EOF' | curl -sS -X POST https://<deployed-aidra>/api/validation/import \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @-
+import json
+r = json.load(open("reports/validation_xview3_adriatic_full_vessels_aidra.json"))
+body = {k: r[k] for k in ("model_name","iou_threshold","confidence_threshold","num_scenes","num_ground_truth",
+        "num_predictions","true_positives","false_positives","false_negatives","total_area_km2","pr_curve",
+        "match_mode","center_tolerance_px","dataset","dataset_split","params","provenance")}
+body.update(model_version="v1.0", model_hash=r["provenance"]["model_hash"], commit_sha=r["provenance"]["commit_sha"],
+            pipeline_path="full", notes="xView3 Adriatic, vessels-only, full pipeline, 2026-08-28")
+print(json.dumps(body))
+EOF
+```
+
+---
+
 ## Reproduction (for the auditor)
 
 The whole chain is reproducible from outside the server given an API

@@ -40,7 +40,67 @@ C. Santamariz, cuyos pesos no están publicados.
 
 # Métricas de validación
 
-## D2 oficial — xView3-SAR Mediterráneo (Adriático, 2026-04-26, palanca L20)
+## D2 — pipeline completo sobre xView3-SAR (Adriático, 2026-08-28)
+
+Reproducible vía (harness en `src/validation/harness.py`; thresholds y
+tiles desde `Settings`, I-DET-4):
+
+```bash
+python -m scripts.validate_xview3_serial \
+    --xview-dir x-view-us-data --tar-dir data/xview3/scenes \
+    --tmp-dir data/xview3/scratch --models-dir models --seed 42 \
+    --vessels-only --pipeline-path full --model all \
+    --dump-predictions reports/predictions/xview3_adriatic_full_vessels \
+    --output reports/validation_xview3_adriatic_full_vessels.json
+python -m scripts.analyze_prediction_dumps \
+    --dumps reports/predictions/xview3_adriatic_full_vessels \
+    --output reports/analysis_xview3_adriatic_full_vessels.json
+```
+
+**Dataset**: 11 escenas del split `validation` de xView3-SAR, todas en
+el Adriático (un solo track, VH), 468 575 km², **1 997 barcos**
+(`is_vessel=True`, confianza ≥ MEDIUM). Match `center` ≤ 20 px. Los
+cuatro conjuntos salen de **una sola pasada** del `DetectionEngine` de
+producción (dB→σ⁰ lineal, Lee 7×7, máscara de mar pre-CFAR, fusión,
+edge filter, clipping contra el borde de datos válidos, dedup) con
+`confidence_threshold` 0.25 y tiles 640/64 para todos.
+
+| Conjunto | Ruta | Predicciones | Pd | FAR/km² | Precision | AP | F1 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `cfar-default` solo | detector | 57 117 | 0.434 | 0.1200 | 0.015 | 0.012 | 0.029 |
+| **`vesseltracker-sar-yolov8` solo** | detector | 2 191 | 0.143 | 0.0041 | 0.131 | 0.026 | 0.137 |
+| CFAR en pipeline | full | 3 818 | 0.349 | 0.0067 | 0.183 | 0.134 | 0.240 |
+| **YOLO en pipeline (este modelo)** | full | 1 442 | 0.093 | 0.0027 | 0.129 | 0.015 | 0.108 |
+| Salida AIDRA (CFAR ∪ YOLO) | full | 4 460 | 0.356 | 0.0080 | 0.159 | 0.103 | 0.220 |
+| Solo `source="fused"` (CFAR ∩ YOLO) | full | 0 | 0 | 0 | — | — | — |
+
+Lecturas específicas de este modelo:
+
+1. **Lee degrada YOLO** (R15): mismos pesos, Pd 0.143 sobre el raster
+   dB sin filtrar → 0.093 tras Lee 7×7, en 11/11 escenas. La FAR
+   también baja (0.0041 → 0.0027) pero F1 cae 0.137 → 0.108.
+2. **La fusión con CFAR nunca dispara** (R14): 42 % de las cajas YOLO
+   tienen un clúster CFAR a ≤ 20 px, pero la IoU entre una caja de
+   ~39×42 px y un clúster de ~4×5 px es mediana 0.07 → 0 fusiones.
+3. **Complementariedad real pequeña**: de 1 997 barcos, 169 los ven
+   ambos, 528 solo CFAR, **17 solo YOLO**, 1 283 ninguno.
+4. Sesgos del subset (Adriático, VH, split validation) y del modelo
+   (domain shift, sin calibración de threshold) siguen aplicando; ver
+   *Caveats AI Act*.
+
+Provenance de los reportes: `commit_sha` 8ce9ca2e0f, `model_hash`
+18aec1bb… (SHA256 del `.pt`), `settings_hash`, seed 42, SHA256 del tar
+de cada escena. Dos corridas independientes produjeron conteos de
+predicción idénticos por escena.
+
+## D2 (superseded) — detector aislado, xView3-SAR Adriático, 2026-04-26
+
+> Sección conservada por auditoría. Medía el detector **sin** pipeline
+> (sin Lee, sin máscara, sin edge filter) y con parámetros distintos a
+> los de CFAR; reporte archivado en `reports/archived/` con
+> `superseded_reason`. La fila "YOLO solo" de la tabla anterior es su
+> equivalente actual (mismos 2 191 preds).
+
 
 Reproducible vía:
 
@@ -121,17 +181,15 @@ totales, **1 997 vessels etiquetados** — confianza ≥ MEDIUM,
    stretch dB→uint8 sobre xView3 train (240 escenas) podría subir
    Pd a 0.4-0.6 sin sacrificar precision.
 
-### Hipótesis pendientes (no medidas)
+### Hipótesis medidas (2026-08-28)
 
-- **Fusión CFAR ∩ YOLO**: se espera Pd intermedio (~0.1–0.15), FAR
-  muy inferior a CFAR (~0.001/km²) y precisión > 0.5 por el doble
-  criterio. Es una hipótesis de diseño, **no un resultado**: no hay
-  `validation_xview3_med_fused.json`. Hasta que exista, ninguna tabla
-  de métricas de esta ficha incluye la fusión.
-- **Harness a través de `preprocess_full()`**: la validación D2 lee
-  los rasters `VH_dB.tif` de xView3 sin Lee, sin máscara de mar ni
-  edge filter, por lo que mide el detector aislado y no el pipeline
-  AIDRA completo (R13 en `RISK_REGISTER.md`).
+- **Fusión CFAR ∩ YOLO**: se esperaba Pd intermedio, FAR ~0.001 y
+  precisión > 0.5. **Medido: 0 fusiones en 1 997 barcos** — la fusión
+  por IoU es geométricamente imposible entre clústeres CFAR de ~4 px y
+  cajas YOLO de ~40 px (R14). La salida de producción es la unión,
+  no la intersección.
+- **Harness a través del pipeline**: cerrado (R13). Los números de la
+  sección D2 2026-08-28 miden el `DetectionEngine` de producción.
 
 ### Caveats AI Act (Anexo IV)
 

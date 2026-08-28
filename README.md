@@ -45,35 +45,64 @@ A working end-to-end pipeline that:
 
 ---
 
-## Real validation numbers (xView3-SAR Adriatic, 11 scenes)
+## Real validation numbers (xView3-SAR Adriatic, 11 scenes, 2026-08-28)
 
 Measured on `468 575 km²` of Sentinel-1 GRD, **1 997 ground-truth
 vessels** (xView3 confidence ≥ MEDIUM, `is_vessel=True`), match
 mode `center` ≤ 20 px (the official xView3-SAR scoring convention).
 All 11 scenes come from the xView3 *validation* split, a single
 Adriatic track, VH polarisation only — they characterise the
-detectors in one basin, not "the Mediterranean".
+detectors in one basin, not "the Mediterranean". Every row below uses
+the **same settings** (`confidence_threshold` 0.25, 640 px tiles /
+64 px overlap, from `Settings`) and the same GT; "full" rows come from
+one pass of the production `DetectionEngine` (Lee 7×7, CFAR with the
+pre-inference sea mask, fusion, edge filter, footprint clipping against
+the valid-data boundary, cross-tile dedup).
 
-| Detector | mAP | Pd (recall) | FAR / km² | Precision | Predictions |
-|---|---:|---:|---:|---:|---:|
-| `cfar-default` (baseline) | 0.0104 | **0.4226** | 0.1157 | 0.0153 | 55 064 |
-| `vesseltracker-sar-yolov8` | 0.0242 | 0.1432 | **0.0041** | **0.1305** | 2 191 |
+| Prediction set | Path | Predictions | Pd (recall) | FAR / km² | Precision | AP | F1 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `cfar-default` alone | detector only | 57 117 | **0.434** | 0.1200 | 0.015 | 0.012 | 0.029 |
+| `vesseltracker-sar-yolov8` alone | detector only | 2 191 | 0.143 | 0.0041 | 0.131 | 0.026 | 0.137 |
+| CFAR inside the pipeline | full | 3 818 | 0.349 | 0.0067 | **0.183** | **0.134** | **0.240** |
+| YOLO inside the pipeline | full | 1 442 | 0.093 | **0.0027** | 0.129 | 0.015 | 0.108 |
+| **AIDRA output** (CFAR ∪ YOLO, what production persists) | full | 4 460 | 0.356 | 0.0080 | 0.159 | 0.103 | 0.220 |
+| AIDRA `source="fused"` only (CFAR ∩ YOLO) | full | **0** | 0 | 0 | — | — | — |
 
-CFAR catches more vessels but emits far more detections; YOLO
-filters port/glint clutter at the cost of recall. Note that the two
-rows were **not** produced under identical settings (CFAR: conf ≥ 0.10,
-1024 px tiles; YOLO: conf ≥ 0.25, 640 px tiles), so the ratios between
-them are indicative, not a controlled comparison.
+Sea-only view of the AIDRA output (I-DET-2: `on_land` predictions and
+GT dropped, 1 566 GT): Pd **0.448**, FAR 0.0067, precision 0.182,
+AP 0.142, F1 0.259.
 
-Both numbers are **untuned baselines** (no fine-tuning on xView3, no
-threshold calibration) and sit far below the xView3 leaderboard
-(F1 ≈ 0.6–0.7). The **production fusion** path (CFAR ∩ YOLO) is what
-AIDRA actually runs, and it has **not yet been measured against ground
-truth** — only its two components have. The validation harness also
-bypasses `preprocess_full()` (it reads the xView3-provided VH dB
-rasters), so these figures describe the detectors in isolation, not
-the end-to-end AIDRA pipeline. Full per-scene tables and caveats live
-in the [MODEL_CARDs](models/cards/).
+What the measurements say:
+
+- **The pipeline is what makes CFAR usable.** Sea mask + Lee +
+  footprint clipping cut CFAR's false alarms **18×** (FAR 0.120 →
+  0.0067/km²) for −8.5 pts of recall; precision goes 0.015 → 0.183.
+- **The fusion never fires.** 42 % of YOLO boxes have a CFAR cluster
+  within 20 px, but CFAR clusters are ~4×5 px and YOLO boxes ~39×42 px,
+  so their IoU (median 0.07, max 0.30) never reaches the 0.3 fusion
+  threshold: **0 fused detections over 1 997 vessels**. The production
+  output is therefore a plain union, and adding YOLO to CFAR buys +14
+  true positives for +642 false alarms (F1 0.240 → 0.220). A
+  centre-distance fusion is the obvious fix and is tracked as R14.
+- **The Lee filter hurts YOLO.** The same weights recover 0.143 of the
+  vessels on the raw dB raster and 0.093 after Lee, in 11/11 scenes
+  (R15). The filter is right for CFAR's multiplicative-noise model, not
+  for a CNN trained on unfiltered chips.
+- **Both detectors miss most vessels**: 64 % of the GT is recovered by
+  neither (xView3 labels many vessels below Sentinel-1's ~20 m
+  resolution). These are **untuned baselines** — no fine-tuning on
+  xView3, no threshold calibration — far below the xView3 leaderboard
+  (F1 ≈ 0.6–0.7).
+
+Every report carries its provenance (`commit_sha`, `model_hash`,
+`settings_hash`, seed, per-scene tar SHA256, library versions) and the
+exact steps exercised. Two independent runs of the full pipeline
+produced identical per-scene prediction counts (18 257 predictions over
+11 scenes), which is the harness-level reproducibility evidence. Reports:
+`reports/validation_xview3_adriatic_*_vessels*.json`, dumps for offline
+analysis: `reports/predictions/`, geometry / fusion analysis:
+`reports/analysis_xview3_adriatic_full_vessels.md`. Superseded 2026-04
+reports are kept under `reports/archived/` with `superseded_reason`.
 
 ---
 

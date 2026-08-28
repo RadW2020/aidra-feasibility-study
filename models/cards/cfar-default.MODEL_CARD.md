@@ -38,7 +38,47 @@ Variantes implementadas:
 
 # Métricas de validación
 
-## D2 oficial — xView3-SAR Mediterráneo (Adriático, 2026-04-26, palanca L20)
+## D2 — pipeline completo sobre xView3-SAR (Adriático, 2026-08-28)
+
+Misma corrida, dataset y comando que la sección homónima de
+`vesseltracker-sar-yolov8.MODEL_CARD.md` (una pasada del
+`DetectionEngine` de producción; `confidence_threshold` 0.25, tiles
+640/64 para todos los conjuntos; 1 997 barcos, 468 575 km²).
+
+| Conjunto | Ruta | Predicciones | Pd | FAR/km² | Precision | AP | F1 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| **`cfar-default` solo** | detector | 57 117 | 0.434 | 0.1200 | 0.015 | 0.012 | 0.029 |
+| **CFAR en pipeline (este modelo)** | full | 3 818 | 0.349 | **0.0067** | **0.183** | **0.134** | **0.240** |
+| YOLO en pipeline | full | 1 442 | 0.093 | 0.0027 | 0.129 | 0.015 | 0.108 |
+| Salida AIDRA (CFAR ∪ YOLO) | full | 4 460 | 0.356 | 0.0080 | 0.159 | 0.103 | 0.220 |
+
+Lecturas específicas de CFAR:
+
+1. **El preprocesado es lo que hace utilizable a CFAR**: máscara de mar
+   pre-inferencia + Lee + clipping contra el borde de datos válidos
+   dividen la FAR por **18** (0.120 → 0.0067/km²) a cambio de −8.5 pts
+   de Pd; la precisión pasa de 0.015 a 0.183.
+2. **Artefacto de borde en rasters proyectados**: sin el clipping, el
+   77 % de las salidas CFAR eran rayas de ~192×2 px pegadas al borde
+   nodata rotado (0 TP). En producción ese paso lo hace
+   `_save_detections` (I-SAR-2/3); el harness lo replica desde
+   `8ce9ca2`.
+3. **Parámetros reales**: en producción `ModelManager` instancia
+   `CFARDetector()` con guard 8 / training 20 / pfa 1e-5 (método CA,
+   exponencial), **no** los `Settings.cfar_guard_size=3` /
+   `cfar_training_size=15`. Los reportes registran los valores usados
+   en `provenance.cfar_params`. Discrepancia pendiente de resolver.
+4. Vista solo-mar (I-DET-2) de la salida AIDRA: Pd 0.448, FAR 0.0067,
+   precisión 0.182, F1 0.259 (1 566 GT).
+
+## D2 (superseded) — detector aislado, xView3-SAR Adriático, 2026-04-26
+
+> Sección conservada por auditoría: medía CFAR **sin** pipeline con
+> `--confidence-threshold 0.10` y tiles 1024, no comparable con la
+> ficha YOLO de la época. Reporte archivado en `reports/archived/`.
+> Su equivalente actual es la fila "CFAR solo" (conf 0.25, tiles 640:
+> 57 117 preds, Pd 0.434, FAR 0.120 — cifras consistentes).
+
 
 Reproducible vía:
 

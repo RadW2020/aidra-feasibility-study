@@ -148,7 +148,7 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
 
 ## R13 — Validacion D2 desacoplada del pipeline y no comparable entre detectores
 
-- **Severidad:** M · **Probabilidad:** A (se cumple hoy) · **Estado:** abierto (registrado 2026-08-28, autoauditoria)
+- **Severidad:** M · **Probabilidad:** A · **Estado:** **cerrado 2026-08-28** — `reports/validation_xview3_adriatic_full_vessels_{cfar,yolo,aidra,fused_only}.json` (ruta `full`, mismos parametros para los 4 conjuntos, anclas de trazabilidad completas, dos corridas con conteos identicos). Los hallazgos que destapo viven ahora en R14 y R15.
 - **Descripcion:** `scripts/run_validation.py::_run_inference` lee los rasters `VH_dB.tif` ya preprocesados por xView3 y ejecuta el detector directamente: sin `preprocess_full()` (Lee, sea mask, edge filter), sin flags `on_land`. Ademas CFAR y YOLO se validaron con parametros distintos (conf 0.10 / tiles 1024 vs conf 0.25 / tiles 640) y la fusion CFAR ∩ YOLO —modo operativo real— no se ha medido nunca contra GT. Los JSON de `reports/validation_*.json` no llevan `model_hash`, `image_hash`, `commit_sha` ni seed. `map_at_iou` no aplica envolvente monotona y con `match_mode=center` no es mAP@IoU0.5 (I-MOD-2).
 - **Impacto:** Las cifras publicadas describen los detectores aislados, no el sistema AIDRA (I-SAR-1 no ejercitado en la evidencia). Los ratios "3× mas vessels / 25× mas detecciones" no son una comparacion controlada. La decision arquitectural central (fusion) carece de evidencia. README y card lo declaran desde 2026-08-28.
 - **Mitigacion:**
@@ -158,6 +158,25 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
   4. `map_at_iou` con envolvente monotona; reportar `mAP@0.5(IoU)` y `F1@center-20px` por separado.
   5. Anclas de trazabilidad en cada reporte (`model_hash`, `image_hashes[]`, `commit_sha`, `settings_hash`, `seed`); `POST /api/validation/import` las exige.
 - **Trigger de cierre:** existe `validation_xview3_med_fused.json` con `pipeline_path=full`, parametros identicos a los reportes CFAR/YOLO regenerados y anclas de trazabilidad completas.
+
+## R14 — Fusion CFAR ∩ YOLO por IoU inoperante (0 fusiones en 1 997 barcos)
+
+- **Severidad:** A · **Probabilidad:** A (medido) · **Estado:** abierto (registrado 2026-08-28)
+- **Descripcion:** `DetectionEngine._fuse_detections` empareja CFAR y YOLO por IoU ≥ `Settings.fusion_iou_threshold` (0.3). Sobre las 11 escenas xView3 del Adriatico, `source='fused'` = **0** de 4 460 detecciones. Causa geometrica, no de desacuerdo: los clusteres CFAR miden ~4×5 px y las cajas YOLO ~39×42 px; el 42 % de las cajas YOLO tiene un CFAR a ≤ 20 px, pero la IoU entre ambos es mediana 0.07 / maxima 0.30 (`reports/analysis_xview3_adriatic_full_vessels.md`).
+- **Impacto:** El "ensemble CFAR + YOLO" de la decision congelada (CLAUDE.md §2) es en produccion una union simple. Anadir YOLO a CFAR aporta +14 TP por +642 FP (F1 0.240 → 0.220). El README y la ficha lo vendian como fusion; corregido 2026-08-28.
+- **Mitigacion propuesta (requiere decision — cambia el comportamiento de produccion):**
+  1. Fusion por distancia de centros ≤ N px (N desde `Settings`, p.ej. 20 px como el matching xView3) en lugar de IoU, conservando la caja YOLO y sumando la confianza ponderada. El 42 % de co-localizacion medido es el techo de fusiones esperables.
+  2. Re-validar con la terna {antes, despues} sobre las mismas 11 escenas y publicar `fused_only` medido.
+  3. Actualizar `fusion_iou_threshold` → `fusion_center_tolerance_px` en `input_params_hash`.
+- **Trigger de cierre:** `fused_only` > 0 con Pd_union ≥ Pd_cfar y FAR_union ≤ FAR_cfar en la validacion xView3.
+
+## R15 — El filtro Lee degrada YOLO (Pd 0.143 → 0.093, 11/11 escenas)
+
+- **Severidad:** M · **Probabilidad:** A (medido) · **Estado:** abierto (registrado 2026-08-28)
+- **Descripcion:** `preprocess_full` aplica Lee 7×7 sobre sigma0 lineal a TODAS las teselas antes de ambos detectores. `vesseltracker-sar-yolov8` sobre el raster dB sin filtrar recupera 286/1 997 barcos (Pd 0.143); tras Lee, 186 (Pd 0.093), en las 11 escenas sin excepcion (`validation_xview3_adriatic_detector_yolo_vessels.json` vs `..._full_vessels_yolo.json`). La FAR tambien baja (0.0041 → 0.0027) pero el F1 cae de 0.137 a 0.108.
+- **Impacto:** El preprocesado esta optimizado para el modelo de ruido multiplicativo de CFAR, no para una CNN entrenada con chips sin filtrar. Mientras la fusion no funcione (R14) el coste es pequeno porque la salida la domina CFAR; en cuanto la fusion aporte, YOLO debe ver la tesela sin Lee.
+- **Mitigacion propuesta:** alimentar a YOLO con la tesela calibrada sin filtrar y a CFAR con la filtrada (ambas derivan de la misma lectura; coste de RAM +1 tesela). Medir con la terna {antes, despues}.
+- **Trigger de cierre:** Pd_yolo en pipeline ≥ 0.95 × Pd_yolo detector-only sobre las mismas escenas.
 
 ## Plan de contingencia consolidado
 
