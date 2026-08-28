@@ -53,12 +53,13 @@ class TestFusionMode:
 
     def test_center_mode_picks_nearest_box_once(self):
         two_yolo = [
-            {"bbox": [100.0, 100.0, 140.0, 140.0], "confidence": 0.6},  # centre (120,120)
-            {"bbox": [112.0, 112.0, 132.0, 132.0], "confidence": 0.9},  # centre (122,122), nearer
+            {"bbox": [100.0, 100.0, 140.0, 140.0], "confidence": 0.6},  # centre (120,120), d=0
+            {"bbox": [112.0, 112.0, 136.0, 136.0], "confidence": 0.9},  # centre (124,124), d=5.7
         ]
         out = _engine(fusion_mode="center")._fuse_detections(CFAR, two_yolo, 0)
         fused = [d for d in out if d.source == "fused"]
-        assert len(fused) == 1 and fused[0].yolo_score == 0.9
+        # Nearest centre wins even though the other box has higher confidence.
+        assert len(fused) == 1 and fused[0].yolo_score == 0.6
         assert sum(d.source == "yolo" for d in out) == 1
 
     def test_invalid_mode_rejected(self):
