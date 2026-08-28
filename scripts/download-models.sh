@@ -34,19 +34,10 @@ else
     echo "  YOLOv8n already exists, skipping."
 fi
 
-# Download YOLOv8 small (for comparison)
-if [ ! -f "$MODELS_DIR/yolov8s.pt" ]; then
-    echo "Downloading YOLOv8s model (~22 MB)..."
-    python3 -c "
-from ultralytics import YOLO
-import shutil
-model = YOLO('yolov8s.pt')
-shutil.move('yolov8s.pt', '$MODELS_DIR/yolov8s.pt')
-print('  Downloaded successfully.')
-"
-else
-    echo "  YOLOv8s already exists, skipping."
-fi
+# NOTE: yolov8s.pt is intentionally NOT downloaded. Every weight under
+# models/ needs a models/cards/<name>.MODEL_CARD.md (I-MOD-4 / I-AIA-1)
+# and ModelManager refuses to load a weight without one. Add the card
+# first if you want the small variant back.
 
 # Download SAR ship detection YOLOv8m (from HuggingFace, Apache 2.0)
 if [ ! -f "$MODELS_DIR/vesseltracker-sar-yolov8.pt" ]; then

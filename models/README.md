@@ -10,7 +10,6 @@ This directory contains AI model weights for vessel detection.
 
 This downloads:
 - `yolov8n.pt` — YOLOv8 nano base model (~6 MB)
-- `yolov8s.pt` — YOLOv8 small model (~22 MB)
 - `yolov8n.onnx` — YOLOv8 nano exported to ONNX
 
 ## Fine-tuned models
