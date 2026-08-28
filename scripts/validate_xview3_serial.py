@@ -258,6 +258,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--models-dir", type=Path, default=None)
     parser.add_argument("--limit-scenes", type=int, default=None, help="Debug: only first N scenes.")
     parser.add_argument("--keep-raster", action="store_true", help="Debug: do not delete extracted rasters.")
+    parser.add_argument(
+        "--dump-predictions",
+        type=Path,
+        default=None,
+        help=(
+            "Directory for per-scene JSON dumps of every prediction set and the GT "
+            "(bbox, confidence, source, on_land). Enables offline analysis (fusion "
+            "co-occurrence, FP/FN sampling for D4) without re-running inference."
+        ),
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -430,6 +440,22 @@ def main(argv: list[str] | None = None) -> int:
         for g, flag in zip(gt, gt_on_land, strict=True):
             g["on_land"] = bool(flag)
         gt_sea = [g for g in gt if not g["on_land"]]
+
+        if args.dump_predictions is not None:
+            args.dump_predictions.mkdir(parents=True, exist_ok=True)
+            dump: dict[str, Any] = {
+                "scene_id": sid,
+                "tar_sha256": tar_hash,
+                "pipeline_path": args.pipeline_path,
+                "confidence_threshold": confidence_threshold,
+                "ground_truth": gt,
+                "sets": pred_sets,
+            }
+            if full:
+                dump["scene_shape"] = list(scene.scene_shape)
+                dump["lonlat_affine"] = list(scene.lonlat_affine)
+                dump["stats"] = scene.stats
+            (args.dump_predictions / f"{sid}.json").write_text(json.dumps(dump))
 
         for name, preds in pred_sets.items():
             acc = accs[name]
