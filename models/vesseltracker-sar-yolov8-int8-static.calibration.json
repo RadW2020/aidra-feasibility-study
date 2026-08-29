@@ -1,0 +1,224 @@
+{
+  "model_id": "vesseltracker-sar-yolov8-int8-static",
+  "created_at": "2026-08-29T00:11:17.697848+00:00",
+  "commit_sha": "9156a3651ec736d270dcf402f9ec3ba19e2edd9d",
+  "int8": {
+    "path": "/Users/rauljm/codeloper/AIDRA/models/vesseltracker-sar-yolov8-int8-static.onnx",
+    "sha256": "dfe4c9669c0c19c1f03d71fbae4bc5aaa2119fefa89f78656b665e622e194521",
+    "size_mb": 26.54
+  },
+  "fp32_onnx": {
+    "path": "/Users/rauljm/codeloper/AIDRA/models/vesseltracker-sar-yolov8.onnx",
+    "sha256": "4e3a6389bcd84ba78cbff5af0d2bfab408da278eb0a34a6249edfd87591343af",
+    "size_mb": 103.63
+  },
+  "pt": {
+    "path": "/Users/rauljm/codeloper/AIDRA/models/vesseltracker-sar-yolov8.pt",
+    "sha256": "18aec1bb3caf7dd2c5ace8d397e241c485e917c28df248eefe794578c996d671",
+    "size_mb": 52.03
+  },
+  "quantization": {
+    "original_path": "/Users/rauljm/codeloper/AIDRA/models/vesseltracker-sar-yolov8.onnx",
+    "quantized_path": "/Users/rauljm/codeloper/AIDRA/models/vesseltracker-sar-yolov8-int8-static.onnx",
+    "original_size_mb": 98.8248062133789,
+    "quantized_size_mb": 25.310473442077637,
+    "compression_ratio": 3.9,
+    "technique": "static_int8_onnx_qdq",
+    "original_hash": "4e3a6389bcd84ba78cbff5af0d2bfab408da278eb0a34a6249edfd87591343af",
+    "quantized_hash": "dfe4c9669c0c19c1f03d71fbae4bc5aaa2119fefa89f78656b665e622e194521"
+  },
+  "quantization_config": {
+    "quant_format": "QDQ",
+    "op_types_to_quantize": [
+      "Conv"
+    ],
+    "per_channel": true,
+    "reduce_range": false,
+    "calibrate_method": "Percentile",
+    "weight_type": "QInt8",
+    "activation_type": "QUInt8"
+  },
+  "fp32_agreement_on_calibration_tiles": {
+    "conf": 0.25,
+    "tiles": 32,
+    "fp32_dets": 40,
+    "int8_dets": 45,
+    "matched": 38,
+    "extra": 7,
+    "missed": 2,
+    "int8_deterministic": true
+  },
+  "calibration": {
+    "scene_id": "264ed833a13b7f2av",
+    "tar_sha256": "259937fbd52b2e4550bc93182ffb174b1f4b6fa5b48b1a2b4b2e61e727a9470e",
+    "member": "264ed833a13b7f2av/VH_dB.tif",
+    "validation_csv": "x-view-us-data/validation.csv",
+    "seed": 42,
+    "tile_size": 640,
+    "n_tiles": 32,
+    "tiles": [
+      {
+        "kind": "vessel",
+        "row": 7640,
+        "col": 19634
+      },
+      {
+        "kind": "vessel",
+        "row": 7338,
+        "col": 18633
+      },
+      {
+        "kind": "vessel",
+        "row": 9294,
+        "col": 18060
+      },
+      {
+        "kind": "vessel",
+        "row": 11652,
+        "col": 22706
+      },
+      {
+        "kind": "vessel",
+        "row": 8279,
+        "col": 20835
+      },
+      {
+        "kind": "vessel",
+        "row": 7247,
+        "col": 18520
+      },
+      {
+        "kind": "vessel",
+        "row": 7781,
+        "col": 17680
+      },
+      {
+        "kind": "vessel",
+        "row": 12078,
+        "col": 22916
+      },
+      {
+        "kind": "vessel",
+        "row": 10622,
+        "col": 17872
+      },
+      {
+        "kind": "vessel",
+        "row": 12072,
+        "col": 19479
+      },
+      {
+        "kind": "vessel",
+        "row": 9892,
+        "col": 23127
+      },
+      {
+        "kind": "vessel",
+        "row": 17048,
+        "col": 26035
+      },
+      {
+        "kind": "vessel",
+        "row": 16887,
+        "col": 26479
+      },
+      {
+        "kind": "vessel",
+        "row": 12247,
+        "col": 19371
+      },
+      {
+        "kind": "vessel",
+        "row": 8536,
+        "col": 20070
+      },
+      {
+        "kind": "vessel",
+        "row": 11238,
+        "col": 23638
+      },
+      {
+        "kind": "vessel",
+        "row": 5867,
+        "col": 23532
+      },
+      {
+        "kind": "vessel",
+        "row": 17248,
+        "col": 26536
+      },
+      {
+        "kind": "vessel",
+        "row": 8894,
+        "col": 18903
+      },
+      {
+        "kind": "vessel",
+        "row": 11374,
+        "col": 19073
+      },
+      {
+        "kind": "vessel",
+        "row": 7848,
+        "col": 19008
+      },
+      {
+        "kind": "vessel",
+        "row": 4067,
+        "col": 17513
+      },
+      {
+        "kind": "vessel",
+        "row": 17154,
+        "col": 25789
+      },
+      {
+        "kind": "vessel",
+        "row": 13381,
+        "col": 20657
+      },
+      {
+        "kind": "vessel",
+        "row": 12443,
+        "col": 26209
+      },
+      {
+        "kind": "vessel",
+        "row": 3640,
+        "col": 17261
+      },
+      {
+        "kind": "vessel",
+        "row": 16683,
+        "col": 24900
+      },
+      {
+        "kind": "vessel",
+        "row": 9708,
+        "col": 22672
+      },
+      {
+        "kind": "vessel",
+        "row": 4172,
+        "col": 17467
+      },
+      {
+        "kind": "vessel",
+        "row": 10377,
+        "col": 24221
+      },
+      {
+        "kind": "vessel",
+        "row": 7390,
+        "col": 18435
+      },
+      {
+        "kind": "vessel",
+        "row": 7258,
+        "col": 18427
+      }
+    ],
+    "tensor_sha256": "8f4cbb9a664b80b40db8da369f71ffe169cdd13c260e29e9dde95f8a217b22a9",
+    "stretch": "sigma0_linear->dB[-25,0]->uint8, no Lee"
+  }
+}

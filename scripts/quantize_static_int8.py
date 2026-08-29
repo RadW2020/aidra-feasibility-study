@@ -84,13 +84,31 @@ declarada antes del run (ΔmAP ≤ 5 pts, `Settings`).
 # Método de compresión
 
 - `onnxruntime.quantization.quantize_static` (QDQ, `weight_type=QInt8`,
-  `activation_type=QUInt8`), vía `ModelQuantizer.quantize_static_onnx`.
-- Escalas de activación fijadas offline con el set de calibración de abajo:
-  **no** hay dequantización en tiempo de ejecución → salida determinista
-  run a run (verificable: dos `predict` sobre la misma tesela devuelven
-  cajas idénticas).
-- Determinismo del artefacto: mismo FP32 ONNX + mismo set de calibración
-  (mismo seed) → mismo fichero INT8.
+  `activation_type=QUInt8`, **`op_types_to_quantize=["Conv"]`**,
+  `per_channel=True`, calibración **{calibrate_method}**), vía
+  `ModelQuantizer.quantize_static_onnx`.
+- **Por qué solo Conv:** con la configuración por defecto de ORT (todos los
+  tipos de op) el detector quedaba a 0 detecciones incluso a conf 0.01
+  (FP32: 100 en las mismas teselas): los Sigmoid / Softmax / Div / Mul de
+  la cabeza DFL en UINT8 colapsan las puntuaciones de clase.
+- **Por qué Percentile:** MinMax es frágil — una tesela de mar con un
+  reflector brillante fija el rango de activación y el acuerdo con FP32
+  sobre 44 teselas con barcos osciló entre 15/55 y 45/55 según qué 16
+  teselas de mar entraran en la calibración. Barrido 2026-08-29 (44
+  teselas con barcos, conf 0.25, FP32 = 55 detecciones): **Percentile con
+  32 teselas de barcos, sin mar: 53 recuperadas / 12 extra / 2 perdidas**;
+  Percentile-24 barcos 51 / 9 / 4; Percentile 20 barcos + 4 mar 32 / 1 / 23
+  (las teselas de mar, sin objetivos, comprimen el rango de puntuaciones);
+  MinMax 15 / 1 / 40; MinMax+media móvil 16 / 0 / 39; Entropy(8) ~1.
+  60 imágenes con Percentile agotan 16 GB de RAM (ORT guarda todas las
+  activaciones para el histograma). El chequeo es in-sample; la prueba
+  fuera de muestra es la terna sobre las 11 escenas xView3.
+- Acuerdo con FP32 sobre las {agree_tiles} teselas de calibración con
+  barcos (centro ≤ 20 px, conf ≥ 0.25): **{agree_matched}/{agree_fp32}**
+  detecciones FP32 recuperadas, {agree_extra} extra, {agree_missed}
+  perdidas. INT8 determinista (dos `predict` idénticos): {agree_det}.
+- Escalas fijadas offline → salida determinista run a run; mismo FP32 ONNX
+  + mismo set de calibración (seed) → mismo fichero INT8.
 
 # Set de calibración (provenance)
 
@@ -227,8 +245,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--models-dir", type=Path, default=Path("models"))
     parser.add_argument("--cards-dir", type=Path, default=Path("models/cards"))
     parser.add_argument("--tmp-dir", type=Path, default=Path("data/xview3/scratch_calib"))
-    parser.add_argument("--n-vessel-tiles", type=int, default=48)
-    parser.add_argument("--n-sea-tiles", type=int, default=16)
+    # 32 vessel-centred tiles, no open-sea tiles: Percentile calibration keeps
+    # every activation in RAM (60 tiles -> >16 GB, OOM) and sea tiles hurt
+    # (20 vessel + 4 sea: 32/55 FP32 detections recovered on the 44-tile
+    # check; 24 vessel-only: 51/55; 32 vessel-only: 53/55, 12 extra, 2 missed).
+    parser.add_argument("--n-vessel-tiles", type=int, default=32)
+    parser.add_argument("--n-sea-tiles", type=int, default=0)
+    parser.add_argument("--calibrate-method", default="Percentile", choices=["Percentile", "MinMax", "Entropy"])
     parser.add_argument("--tile-size", type=int, default=640)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--summary-json", type=Path, default=None)
@@ -278,8 +301,51 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("FP32 ONNX exported: %s", onnx_fp32)
 
     # 3. Static quantization.
-    result = ModelQuantizer(onnx_fp32).quantize_static_onnx(int8_path, tiles, quant_format="QDQ")
+    quant_cfg = {
+        "quant_format": "QDQ",
+        "op_types_to_quantize": ["Conv"],
+        "per_channel": True,
+        "reduce_range": False,
+        "calibrate_method": args.calibrate_method,
+        "weight_type": "QInt8",
+        "activation_type": "QUInt8",
+    }
+    result = ModelQuantizer(onnx_fp32).quantize_static_onnx(
+        int8_path, tiles, quant_format="QDQ",
+        op_types_to_quantize=quant_cfg["op_types_to_quantize"], per_channel=True,
+        reduce_range=False, calibrate_method=args.calibrate_method,
+    )
     logger.info("INT8 static written: %s (%.2f MB)", int8_path, int8_path.stat().st_size / 1e6)
+
+    # Sanity + fidelity check against FP32 on the vessel calibration tiles
+    # (centre matching <= 20 px, conf >= Settings.confidence_threshold).
+    from src.config import Settings
+    from src.models.yolo import YOLODetector
+    from src.validation.metrics import match_predictions
+
+    conf = Settings().confidence_threshold
+    det8 = YOLODetector(int8_path, conf, Settings().iou_threshold)
+    det32 = YOLODetector(pt_path, conf, Settings().iou_threshold)
+    agree = {"conf": conf, "tiles": 0, "fp32_dets": 0, "int8_dets": 0, "matched": 0, "extra": 0, "missed": 0, "int8_deterministic": True}
+    for t, m in zip(tiles, meta, strict=True):
+        if m["kind"] != "vessel":
+            continue
+        o8 = det8.predict(t)
+        o8b = det8.predict(t)
+        o32 = det32.predict(t)
+        if [(d["bbox"], d["confidence"]) for d in o8] != [(d["bbox"], d["confidence"]) for d in o8b]:
+            agree["int8_deterministic"] = False
+        tp, fp, fn, _ = match_predictions(
+            [{"bbox": d["bbox"], "confidence": d["confidence"]} for d in o8],
+            [{"bbox": d["bbox"]} for d in o32], 0.5, match_mode="center", center_tolerance_px=20.0,
+        )
+        agree["tiles"] += 1
+        agree["fp32_dets"] += len(o32)
+        agree["int8_dets"] += len(o8)
+        agree["matched"] += tp
+        agree["extra"] += fp
+        agree["missed"] += fn
+    logger.info("FP32 agreement on calibration tiles: %s", agree)
 
     # 4. Card + summary.
     created = datetime.now(tz=UTC)
@@ -292,12 +358,15 @@ def main(argv: list[str] | None = None) -> int:
         model_id=f"{base_name}-int8-static", base_name=base_name,
         created_date=created.strftime("%Y-%m-%d"), created_at=created.strftime("%Y-%m-%d %H:%M UTC"),
         commit_sha=get_commit_sha()[:12], onnx_filename=int8_path.name, size_mb=int8_mb,
+        calibrate_method=args.calibrate_method,
         reduction_pct=(1 - int8_mb / fp32_mb) * 100 if fp32_mb else 0,
         pt_reduction_pct=(1 - int8_mb / pt_mb) * 100 if pt_mb else 0,
         file_hash=sha256_file(int8_path), scene_id=scene_id, tar_sha256=tar_sha,
         validation_csv=str(args.validation_csv), n_vessel=sum(m["kind"] == "vessel" for m in meta),
         n_sea=sum(m["kind"] == "sea" for m in meta), n_total=len(meta), seed=args.seed,
         calib_sha256=calib_sha, summary_json=str(summary_json), pt_filename=pt_path.name,
+        agree_matched=agree["matched"], agree_fp32=agree["fp32_dets"], agree_extra=agree["extra"],
+        agree_missed=agree["missed"], agree_tiles=agree["tiles"], agree_det=agree["int8_deterministic"],
         pt_hash=sha256_file(pt_path), pt_size_mb=pt_mb, onnx_fp32_filename=onnx_fp32.name,
         onnx_fp32_hash=sha256_file(onnx_fp32), onnx_fp32_size_mb=fp32_mb,
     ))
@@ -309,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         "fp32_onnx": {"path": str(onnx_fp32), "sha256": sha256_file(onnx_fp32), "size_mb": round(fp32_mb, 2)},
         "pt": {"path": str(pt_path), "sha256": sha256_file(pt_path), "size_mb": round(pt_mb, 2)},
         "quantization": result.model_dump() if hasattr(result, "model_dump") else str(result),
+        "quantization_config": quant_cfg,
+        "fp32_agreement_on_calibration_tiles": agree,
         "calibration": {
             "scene_id": scene_id, "tar_sha256": tar_sha, "member": member,
             "validation_csv": str(args.validation_csv), "seed": args.seed,

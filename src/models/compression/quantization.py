@@ -193,12 +193,32 @@ class ModelQuantizer:
         output_path: Path | str,
         calibration_data: list[NDArray[np.uint8]],
         quant_format: str = "QDQ",
+        *,
+        op_types_to_quantize: list[str] | None = None,
+        per_channel: bool = True,
+        reduce_range: bool = False,
+        calibrate_method: str = "Percentile",
+        nodes_to_exclude: list[str] | None = None,
     ) -> QuantizationResult:
         """Apply static INT8 quantization using ONNX Runtime.
 
         Requires calibration data (50-100 representative images) to
         determine activation ranges. Produces the smallest and fastest
         model variant.
+
+        Defaults come from the 2026-08-29 sweep on ``vesseltracker-sar-yolov8``
+        with 60 xView3 calibration tiles: quantizing every op type (the ORT
+        default) zeroed the detector — Sigmoid / Softmax / Div / Mul of the
+        DFL head in UINT8 collapse the class scores (0 detections at conf
+        0.01 while FP32 gave 100 on the same tiles). Restricting to ``Conv``
+        fixes that. MinMax calibration then proved fragile: one bright
+        open-sea tile in the set sets the activation range and recall vs
+        FP32 on 44 vessel tiles swung between 15/55 and 45/55 depending on
+        which 16 sea tiles were sampled. Percentile calibration on 32
+        vessel-centred tiles recovered 53/55 (12 extra, 2 missed); 24 tiles
+        51/55; adding open-sea tiles hurt (20 vessel + 4 sea: 32/55); 60
+        tiles exhausted 16 GB of RAM (ORT keeps every activation for the
+        histogram). Hence Percentile by default on ~32 target-bearing tiles.
 
         Parameters
         ----------
@@ -209,6 +229,10 @@ class ModelQuantizer:
             or ``(H, W)``).
         quant_format:
             Quantization format: ``"QDQ"`` (default) or ``"QOperator"``.
+        op_types_to_quantize:
+            ONNX op types to quantize; default ``["Conv"]`` (see above).
+        per_channel, reduce_range, calibrate_method, nodes_to_exclude:
+            Forwarded to ``onnxruntime.quantization.quantize_static``.
 
         Returns
         -------
@@ -216,10 +240,15 @@ class ModelQuantizer:
         """
         from onnxruntime.quantization import (
             CalibrationDataReader,
+            CalibrationMethod,
             QuantFormat,
             QuantType,
             quantize_static,
         )
+
+        if op_types_to_quantize is None:
+            op_types_to_quantize = ["Conv"]
+        calib_enum = getattr(CalibrationMethod, calibrate_method)
 
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -287,6 +316,11 @@ class ModelQuantizer:
             quant_format=fmt,
             weight_type=QuantType.QInt8,
             activation_type=QuantType.QUInt8,
+            op_types_to_quantize=op_types_to_quantize,
+            per_channel=per_channel,
+            reduce_range=reduce_range,
+            calibrate_method=calib_enum,
+            nodes_to_exclude=nodes_to_exclude or [],
         )
 
         # Clean up temporary ONNX if we created one
