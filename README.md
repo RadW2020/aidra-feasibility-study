@@ -164,14 +164,23 @@ against the FP32 baseline on the **same 11 scenes and settings**:
 | INT8 static `.onnx` | **26.5 MB** | 0.147 | 0.0036 | 0.032 | 0.355 | 0.118 |
 
 No measurable degradation (ΔAP +0.6 pts on the YOLO set, within the
-declared ΔmAP ≤ 5 pts), deterministic run-to-run, engine time −48 % on the
-workstation. The dynamic-INT8 variant stays `rejected` (non-deterministic,
-+RAM). What is still missing for a complete triplet is the
-**hardware-profile leg** — per-tile p50/p95 latency and peak RSS under the
-`sat-*` profiles with the new memory-budget enforcement — which has to run
-on the OCI deployment (`POST /api/pipeline/trigger-all-profiles`,
-`model_version=int8-static`); until then the variant is `candidate` in
-`models_registry`.
+declared ΔmAP ≤ 5 pts), deterministic run-to-run. The dynamic-INT8 variant
+stays `rejected` (non-deterministic, +RAM).
+
+**Hardware leg (OCI ARM A1, same Sentinel-1 image, 2026-08-29):**
+
+| Profile | FP32 | INT8 static |
+|---|---|---|
+| `ground` (4 OCPU) | 468 det, 52.1 min, p50/p95 **2329 / 2369 ms** per tile, RSS 4.85 GB | 460 det, **7.1 min**, p50/p95 **263 / 590 ms**, RSS 4.72 GB |
+| `sat-high` … `sat-extreme` | OOM budget (RSS 4.9 GB) | OOM budget (RSS 4.7 GB) |
+
+INT8 is **7.4× faster per scene** (8.9× on p50 per tile) on the
+ARM target with the same detections and 3 % less RSS, so the variant is now
+`active` (migration 020). Every `sat-*` profile aborts under the new memory
+enforcement **before the first inference**: the pipeline holds all tiles of
+the scene in RAM (~4.7 GB), which is a pipeline design limit, not a model
+one — tracked as R17 (band streaming, as the validation harness already
+does).
 
 ## Architecture
 

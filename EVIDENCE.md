@@ -197,9 +197,26 @@ vs `..._r14r15_*` — `vesseltracker-sar-yolov8-int8-static` (Conv-only
 static INT8, Percentile calibration on 32 xView3 vessel tiles, 26.5 MB,
 SHA256 `dfe4c966…`) on the same 11 scenes: YOLO set AP 0.026 → 0.032,
 Pd 0.143 → 0.147, FAR 0.0040 → 0.0036; union AP 0.110 → 0.118,
-Pd 0.360 → 0.355. I-MOD-3 (ΔmAP ≤ 5 pts) satisfied; deterministic. The
-hardware-profile leg (p50/p95 per tile, peak RSS under `sat-*` with
-memory enforcement) must run on the OCI deployment. Calibration
+Pd 0.360 → 0.355. I-MOD-3 (ΔmAP ≤ 5 pts) satisfied; deterministic.
+
+**Compression triplet, hardware leg (2026-08-29, OCI ARM A1, production
+commit `54201b8`, `POST /api/pipeline/trigger-all-profiles`, INT8 then FP32
+on the same image `4b5dfec3-a240-45ec-96d0-567b7b303ca3`):**
+
+| Perfil | Modelo | Estado | Detecciones (válidas mar) | Inferencia escena | p50 / p95 por tesela | RSS pico |
+|---|---|---|---:|---:|---:|---:|
+| ground (4 OCPU ARM, 24 GB) | FP32 `v1.0` | success | 468 (167) | 52.1 min | 2329 / 2369 ms | 4964 MB |
+| ground (4 OCPU ARM, 24 GB) | **INT8 estático** | success | 460 (165) | **7.1 min** | **263 / 590 ms** | 4835 MB |
+| sat-high (2 OCPU, 4 096 MB) | FP32 / INT8 | **error: OOM budget** | — | — | — | 4 939 / 4 739 MB al primer check |
+| sat-mid (1 OCPU, 2 048 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+| sat-low (0.5 OCPU, 1 024 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+| sat-extreme (0.25 OCPU, 512 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+
+Misma imagen Sentinel-1 (`image_id 4b5dfec3-a240-45ec-96d0-567b7b303ca3`), mismo commit de producción (`54201b8`), `profile_memory_enforcement=abort`. INT8 es **7.4× más rápido** por escena (8.9× en p50 por tesela) con el mismo número de detecciones (Δ −8 brutas, −2 válidas) y 130 MB menos de RSS pico. Ejecuciones: INT8 `58c7afdd…`, FP32 `9a5cf2ce…` (todas en `execution_log`, consultables vía `/api/traceability/{id}`).
+
+Verify: `GET /api/traceability/58c7afdd-2a74-43a9-b50e-84da5c7292a0` (INT8 ground) and
+`GET /api/traceability/9a5cf2ce-7344-4623-afc2-ebb37daebc88` (FP32 ground); the `sat-*`
+ids are in `execution_log` with `status=error` and the OOM message. Calibration
 provenance: `models/vesseltracker-sar-yolov8-int8-static.calibration.json`.
 
 **Verify**:

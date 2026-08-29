@@ -7,7 +7,7 @@ compression_technique: static_int8
 format: onnx
 license: Apache-2.0
 authors: ["AIDRA project — quantization by RadW2020"]
-status: candidate
+status: active
 ---
 
 # Propósito
@@ -17,7 +17,7 @@ activaciones QUInt8) del modelo base `vesseltracker-sar-yolov8` v1.0. Sustituye 
 variante dinámica, rechazada bajo I-MOD-3 (conteos de detección no
 deterministas, +24.6 % RAM). Estado `candidate` hasta completar la terna
 {baseline FP32, esta variante, perfil} con la degradación máxima
-declarada antes del run (ΔmAP ≤ 5 pts, `Settings`).
+declarada antes del run (ΔmAP ≤ 5 pts, `Settings`). **Terna completada el 2026-08-29 → `active`.**
 
 # Identidad
 
@@ -97,12 +97,29 @@ vs `..._r14r15_*.json` (provenance completa en cada uno).
 Δ INT8 − FP32 (conjunto YOLO): AP +0.0061 · Pd +0.0035 · FAR -0.0004/km² · F1 +0.0102.
 Tamaño 52.0 MB (`.pt`) → 26.5 MB (−49 %). Tiempo de motor (CFAR + YOLO + fusión, 11 escenas, misma máquina): 3653 s → 1915 s (−48 %; CFAR idéntico en ambas, así que la ganancia es toda de YOLO; medido bajo carga concurrente distinta, orientativo). Salida determinista run a run.
 
-**Veredicto I-MOD-3:** degradación máxima declarada ΔmAP ≤ 5 pts → **no hay
-degradación** (ΔAP +0.6 pts, dentro del ruido). La pata de **perfil de
-hardware** (latencia p50/p95 por tesela y RAM pico bajo `sat-*`, con
-`profile_memory_enforcement=abort`) requiere ejecutarse en el despliegue OCI
-(`POST /api/pipeline/trigger-all-profiles` con `model_version=int8-static`);
-hasta entonces `status=candidate`.
+**Veredicto I-MOD-3 (calidad):** degradación máxima declarada ΔmAP ≤ 5 pts →
+**no hay degradación** (ΔAP +0.6 pts, dentro del ruido).
+
+Terna I-MOD-1 **pata de hardware** (2026-08-29, despliegue OCI ARM A1 vía
+`POST /api/pipeline/trigger-all-profiles`, primero INT8 y después FP32
+sobre la misma imagen):
+
+| Perfil | Modelo | Estado | Detecciones (válidas mar) | Inferencia escena | p50 / p95 por tesela | RSS pico |
+|---|---|---|---:|---:|---:|---:|
+| ground (4 OCPU ARM, 24 GB) | FP32 `v1.0` | success | 468 (167) | 52.1 min | 2329 / 2369 ms | 4964 MB |
+| ground (4 OCPU ARM, 24 GB) | **INT8 estático** | success | 460 (165) | **7.1 min** | **263 / 590 ms** | 4835 MB |
+| sat-high (2 OCPU, 4 096 MB) | FP32 / INT8 | **error: OOM budget** | — | — | — | 4 939 / 4 739 MB al primer check |
+| sat-mid (1 OCPU, 2 048 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+| sat-low (0.5 OCPU, 1 024 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+| sat-extreme (0.25 OCPU, 512 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+
+Misma imagen Sentinel-1 (`image_id 4b5dfec3-a240-45ec-96d0-567b7b303ca3`), mismo commit de producción (`54201b8`), `profile_memory_enforcement=abort`. INT8 es **7.4× más rápido** por escena (8.9× en p50 por tesela) con el mismo número de detecciones (Δ −8 brutas, −2 válidas) y 130 MB menos de RSS pico. Ejecuciones: INT8 `58c7afdd…`, FP32 `9a5cf2ce…` (todas en `execution_log`, consultables vía `/api/traceability/{id}`).
+
+Los perfiles `sat-*` no fallan por el modelo: el proceso alcanza ~4.7–4.9 GB
+de RSS antes de la primera inferencia porque `preprocess_full` mantiene
+todas las teselas de la escena en memoria (R17). Con ambas patas medidas,
+la variante pasa a **`active`** (migración 020); el baseline FP32 sigue
+siendo el modelo por defecto.
 
 # Datos de entrenamiento
 

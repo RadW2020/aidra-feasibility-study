@@ -84,7 +84,7 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
 
 ## R12 — INT8 dinamico no determinista en numero de detecciones
 
-- **Severidad:** M · **Probabilidad:** A · **Estado:** **superado 2026-08-29** por la variante estatica `vesseltracker-sar-yolov8-int8-static` (Conv-only, Percentile sobre 32 teselas de barcos): determinista, y sobre las mismas 11 escenas xView3 que el baseline FP32 da ΔAP +0.6 pts / ΔPd +0.4 pts / ΔFAR −0.0004 (I-MOD-3 cumplido en calidad); 26.5 MB (−49 %). La dinamica sigue `rejected`. Pendiente la pata de perfiles de hardware en OCI (registrado 2026-05-08)
+- **Severidad:** M · **Probabilidad:** A · **Estado:** **superado 2026-08-29** por la variante estatica `vesseltracker-sar-yolov8-int8-static` (Conv-only, Percentile sobre 32 teselas de barcos): determinista, y sobre las mismas 11 escenas xView3 que el baseline FP32 da ΔAP +0.6 pts / ΔPd +0.4 pts / ΔFAR −0.0004 (I-MOD-3 cumplido en calidad); 26.5 MB (−49 %). Pata de hardware en OCI (misma imagen, `ground`): 7.4× mas rapido por escena, p50 263 vs 2329 ms por tesela, mismas detecciones → **variante `active` (migracion 020)**. La dinamica sigue `rejected`. Perfiles `sat-*`: ver R17 (registrado 2026-05-08)
 - **Descripcion:** El modelo `vesseltracker-sar-yolov8-int8-dynamic` produjo 1127 vs 9490 detecciones en runs con misma escena, mismo modelo, mismo perfil y mismo `input_params_hash`. La quantizacion INT8 dinamica de PyTorch reusa caches por-sample y depende del orden de threading, lo que introduce variabilidad sub-confidence-threshold que pasa el cut.
 - **Impacto:** Las comparaciones de compresion FP32-vs-INT8 son ruidosas; el panel `03-compression-bench` agrega muestras que no son reproducibles individualmente, aunque la media-poblacion siga siendo informativa. La ficha `MODEL_CARD.md` del INT8 debe reflejar este sesgo.
 - **Mitigacion:**
@@ -186,6 +186,14 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
 - **Mitigacion aplicada:** capa P3 (`model.model.15`, stride 8, la cabeza que asigna objetos de 4-15 px) + objetivo = puntuacion de clase del ancla mas cercana al centro de la deteccion (`target_xy`). Resultado (320 px): TP-alta 3/5 (57 % de la masa en la caja), FP 2/5, TP-baja 1/5, FN 1/5; el mapa CFAR 4/5 en TP-alta y 4/5 en FN. Queda calor residual en los bordes del chip (padding) — siguiente paso: mascara de borde o Grad-CAM++. Produccion (`run_interpretability_for_execution`) usa ya P3 + centro del thumbnail y muestreo estratificado por cuantiles de confianza y fuente; el manifest registra `gradcam_layer` / `gradcam_target` / `stratum`.
 - **Pendiente:** regenerar el D4 de produccion tras el deploy (`POST /api/interpretability/run`) y actualizar `EVIDENCE.md` § D4 con el nuevo run_id; el anexo (§6) ya documenta antes/despues.
 - **Trigger de cierre:** manifest de produccion con `gradcam_layer=model.model.15` y `sampling.strategy=stratified_confidence_quantiles`.
+
+## R17 — Ningun perfil sat-* cabe en RAM: el pipeline carga toda la escena en memoria
+
+- **Severidad:** A · **Probabilidad:** A (medido) · **Estado:** abierto (registrado 2026-08-29)
+- **Descripcion:** Con `profile_memory_enforcement=abort` (defecto desde 0d48f59), la terna en OCI sobre la imagen `4b5dfec3` aborta los cuatro perfiles `sat-*` en el primer check por tesela: RSS 4964 MB (FP32) / 4835 MB (INT8) frente a presupuestos de 4 096 / 2 048 / 1 024 / 512 MB. El pico se alcanza **antes de inferir**: `preprocess_full` devuelve todas las teselas float32 de la escena (~2.5 GB) mas los tensores de PyTorch; cambiar de modelo solo mueve ~130 MB.
+- **Impacto:** Hasta ahora esos runs "completaban" con una nota de exceso; ahora fallan de forma honesta. La evidencia de viabilidad OBDP bajo `sat-*` no existe con el pipeline actual, con independencia de la compresion del modelo. En `ground` la terna si es concluyente: INT8 7.4× mas rapido con las mismas detecciones.
+- **Mitigacion propuesta:** procesar la escena por bandas de teselas (el harness `src/validation/harness.py` ya lo hace con `band_tile_rows`), liberando cada banda tras la deteccion; opcionalmente teselas uint8/float16 para YOLO. Objetivo: RSS pico < 2 GB en `sat-mid` con FP32 y < 1 GB con INT8. Re-ejecutar la terna de perfiles despues.
+- **Trigger de cierre:** `trigger-all-profiles` completa `sat-mid` con `status=success` bajo enforcement `abort`.
 
 ## Plan de contingencia consolidado
 
