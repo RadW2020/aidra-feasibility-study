@@ -151,6 +151,28 @@ and emits `latency_p95_ms` and `energy_estimated_j`
 
 ---
 
+## Compression triplet (I-MOD-1/2/3)
+
+`vesseltracker-sar-yolov8-int8-static` — static INT8 (ONNX Runtime QDQ,
+**Conv only**, per-channel, Percentile calibration on 32 xView3 vessel
+tiles; ORT's all-ops default produced a model with 0 detections) — scored
+against the FP32 baseline on the **same 11 scenes and settings**:
+
+| Model | Size | YOLO Pd | YOLO FAR / km² | YOLO AP | AIDRA output Pd | AIDRA output AP |
+|---|---:|---:|---:|---:|---:|---:|
+| FP32 `.pt` | 52.0 MB | 0.143 | 0.0040 | 0.026 | 0.360 | 0.110 |
+| INT8 static `.onnx` | **26.5 MB** | 0.147 | 0.0036 | 0.032 | 0.355 | 0.118 |
+
+No measurable degradation (ΔAP +0.6 pts on the YOLO set, within the
+declared ΔmAP ≤ 5 pts), deterministic run-to-run, engine time −48 % on the
+workstation. The dynamic-INT8 variant stays `rejected` (non-deterministic,
++RAM). What is still missing for a complete triplet is the
+**hardware-profile leg** — per-tile p50/p95 latency and peak RSS under the
+`sat-*` profiles with the new memory-budget enforcement — which has to run
+on the OCI deployment (`POST /api/pipeline/trigger-all-profiles`,
+`model_version=int8-static`); until then the variant is `candidate` in
+`models_registry`.
+
 ## Architecture
 
 ```

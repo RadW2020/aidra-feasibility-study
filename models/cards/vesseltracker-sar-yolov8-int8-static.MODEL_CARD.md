@@ -77,11 +77,32 @@ declarada antes del run (ΔmAP ≤ 5 pts, `Settings`).
 
 # Métricas
 
-Pendientes de la terna sobre las mismas 11 escenas xView3 que el baseline
-(`scripts/validate_xview3_serial.py --pipeline-path full --model all
---yolo-model vesseltracker-sar-yolov8-int8-static`): AP, Pd, FAR/km², precisión, latencia p50/p95 por
-tesela, RAM pico, tamaño. Se anotan aquí al ejecutarla; hasta entonces esta
-variante **no** entra en evaluación (I-MOD-1/3).
+Terna I-MOD-1 **pata de calidad** (2026-08-29): baseline FP32 y esta variante
+sobre las **mismas 11 escenas xView3-SAR** (Adriático, 1 997 barcos), mismo
+pipeline (`fusion_mode=center`, `yolo_input=unfiltered`, CFAR 8/20, conf 0.25,
+tiles 640/64), harness `scripts/validate_xview3_serial.py --pipeline-path full
+--model all --yolo-model vesseltracker-sar-yolov8-int8-static`.
+Reportes: `reports/validation_xview3_adriatic_full_vessels_int8_static_*.json`
+vs `..._r14r15_*.json` (provenance completa en cada uno).
+
+| Conjunto | Predicciones | Pd | FAR/km² | Precision | AP | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| YOLO FP32 (`vesseltracker-sar-yolov8`) | 2 178 | 0.143 | 0.0040 | 0.131 | 0.026 | 0.137 |
+| **YOLO INT8 estático (esta variante)** | 1 985 | 0.147 | 0.0036 | 0.148 | 0.032 | 0.147 |
+| Salida AIDRA con YOLO FP32 | 4 610 | 0.360 | 0.0083 | 0.156 | 0.110 | 0.218 |
+| Salida AIDRA con YOLO INT8 | 4 395 | 0.355 | 0.0079 | 0.162 | 0.118 | 0.222 |
+| Solo fusionadas con FP32 | 763 | 0.119 | 0.0011 | 0.312 | 0.062 | 0.172 |
+| Solo fusionadas con INT8 | 823 | 0.128 | 0.0012 | 0.311 | 0.065 | 0.182 |
+
+Δ INT8 − FP32 (conjunto YOLO): AP +0.0061 · Pd +0.0035 · FAR -0.0004/km² · F1 +0.0102.
+Tamaño 52.0 MB (`.pt`) → 26.5 MB (−49 %). Tiempo de motor (CFAR + YOLO + fusión, 11 escenas, misma máquina): 3653 s → 1915 s (−48 %; CFAR idéntico en ambas, así que la ganancia es toda de YOLO; medido bajo carga concurrente distinta, orientativo). Salida determinista run a run.
+
+**Veredicto I-MOD-3:** degradación máxima declarada ΔmAP ≤ 5 pts → **no hay
+degradación** (ΔAP +0.6 pts, dentro del ruido). La pata de **perfil de
+hardware** (latencia p50/p95 por tesela y RAM pico bajo `sat-*`, con
+`profile_memory_enforcement=abort`) requiere ejecutarse en el despliegue OCI
+(`POST /api/pipeline/trigger-all-profiles` con `model_version=int8-static`);
+hasta entonces `status=candidate`.
 
 # Datos de entrenamiento
 

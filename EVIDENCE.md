@@ -185,6 +185,23 @@ Headline (AIDRA production output, CFAR ∪ YOLO): Pd 0.356, FAR
 0.0080/km², precision 0.159, AP 0.103, F1 0.220; sea-only Pd 0.448,
 FAR 0.0067. Fused detections: 0 (R14). Full table in README.
 
+**Re-validation and attribution (2026-08-29, same scenes/GT/settings):**
+`..._r14only_*` (centre fusion only), `..._r15only_*` (unfiltered YOLO
+input only), `..._r14r15_*` (both = new defaults). Fused detections
+0 → 489 → 763; YOLO Pd 0.093 → 0.143 with unfiltered input; union F1
+0.220 / 0.225 / 0.214 / 0.218. Legacy flags reproduce the baseline bit
+for bit (scene 264ed833: 191 predictions, 36 TP).
+
+**Compression triplet, quality leg (2026-08-29):** `..._int8_static_*`
+vs `..._r14r15_*` — `vesseltracker-sar-yolov8-int8-static` (Conv-only
+static INT8, Percentile calibration on 32 xView3 vessel tiles, 26.5 MB,
+SHA256 `dfe4c966…`) on the same 11 scenes: YOLO set AP 0.026 → 0.032,
+Pd 0.143 → 0.147, FAR 0.0040 → 0.0036; union AP 0.110 → 0.118,
+Pd 0.360 → 0.355. I-MOD-3 (ΔmAP ≤ 5 pts) satisfied; deterministic. The
+hardware-profile leg (p50/p95 per tile, peak RSS under `sat-*` with
+memory enforcement) must run on the OCI deployment. Calibration
+provenance: `models/vesseltracker-sar-yolov8-int8-static.calibration.json`.
+
 **Verify**:
 ```bash
 # provenance anchors present and consistent
