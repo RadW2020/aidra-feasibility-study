@@ -152,6 +152,21 @@ ORDER BY constraint_profile;
 
 ---
 
+## D4 (GT-anchored) — Grad-CAM / CFAR fidelity on xView3 (2026-08-29)
+
+| | |
+|---|---|
+| Run | `d4_xview3_264ed833a13b7f2av_aidra_20260829T002845Z` — `reports/interpretability/xview3_264ed833a13b7f2av_baseline_p3_targeted/` |
+| Sample | 20 chips (256 px) from scene `264ed833a13b7f2av`, `aidra` set of the 2026-08-28 baseline: 5 × TP high-conf, TP low-conf, FP, FN (seed 42) |
+| Finding | Legacy Grad-CAM (P5 `model.model.21`, global target): pointing game 0/20. New default (P3 `model.model.15`, detection-targeted): TP-high 5/5 (68 % heat in box), FN 3/5, FP 2/5, TP-low 0/5. CFAR score map: TP-high 5/5, FN 5/5 (6 % heat) |
+| Provenance | `commit_sha` `b63188567554…`, renderer `vesseltracker-sar-yolov8` `18aec1bb…`, subject model hash from the validation report, CFAR 8/20, per-PNG SHA256 in `manifest.json` |
+| Comparison runs | `..._baseline_global/` (P5, global) and `..._baseline_p3_global/` (P3, global): `manifest.json` + `summary.md` |
+| Production D4 | still the legacy run `173bbdb5…_interp_227b8434` above — regenerate after deploy (R16) |
+
+**Verify**: `python -m scripts.run_interpretability_xview3 --dump reports/predictions/xview3_adriatic_full_vessels/264ed833a13b7f2av.json --tar data/xview3/scenes/264ed833a13b7f2av.tar.gz --report reports/validation_xview3_adriatic_full_vessels_aidra.json --set aidra --n-per-stratum 5 --seed 42 --out /tmp/d4check` → same `fidelity_summary` as the committed manifest.
+
+---
+
 ## D2 — Detection quality against xView3-SAR ground truth (2026-08-28)
 
 | | |

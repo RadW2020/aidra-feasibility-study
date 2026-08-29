@@ -56,12 +56,61 @@ class InterpretabilityManifest:
 # =====================================================================
 
 
+def select_target_anchor(
+    raw_out: Any,
+    target_xy: tuple[float, float] | None,
+    tol_px: float,
+) -> tuple[int | None, float | None]:
+    """Pick the output anchor whose decoded centre is nearest ``target_xy``.
+
+    ``raw_out`` is the YOLOv8 inference tensor ``(1, 4 + nc, N)`` with
+    ``xywh`` (input pixels) in the first four channels and class scores
+    after. Returns ``(anchor_index, distance_px)`` for the highest-scoring
+    anchor within ``tol_px`` of the target, or ``(None, None)`` when no
+    anchor is close enough (the caller then falls back to the global
+    saliency target). Pure tensor arithmetic so it can be unit-tested on
+    synthetic outputs.
+    """
+    if target_xy is None or raw_out is None or raw_out.ndim != 3 or raw_out.shape[1] < 5:
+        return None, None
+    xy = raw_out[0, :2, :]
+    scores = raw_out[0, 4:, :].max(dim=0).values
+    dx = xy[0] - float(target_xy[0])
+    dy = xy[1] - float(target_xy[1])
+    dist = (dx * dx + dy * dy).sqrt()
+    near = dist <= float(tol_px)
+    if not bool(near.any()):
+        return None, None
+    masked = scores.clone()
+    masked[~near] = -1.0
+    idx = int(masked.argmax().item())
+    return idx, float(dist[idx].item())
+
+
 def gradcam_yolov8(
     model: Any,
     image: np.ndarray,
-    target_layer_name: str = "model.model.21",
+    target_layer_name: str = "model.model.15",
+    target_xy: tuple[float, float] | None = None,
+    target_tol_px: float = 20.0,
 ) -> np.ndarray:
     """Calcula un heatmap Grad-CAM sobre la cabeza YOLOv8.
+
+    Capa por defecto ``model.model.15`` (C2f de la rama P3, stride 8): los
+    barcos Sentinel-1 miden 4-15 px y los asigna la cabeza P3. En el chequeo
+    con ground truth xView3 (2026-08-29) la capa P5 ``model.model.21`` usada
+    hasta entonces no localizo ningun barco (pointing-game 0/20) y con
+    objetivo por deteccion su CAM era nulo (el gradiente de un ancla P3 no
+    llega a P5); en P3 con objetivo por deteccion acerto los 3/3 TP probados
+    (masa en caja 0.99 / 0.70 / 0.37).
+
+    Con ``target_xy`` (centro de la deteccion a explicar, en pixeles de
+    ``image``) el gradiente se retropropaga desde la puntuacion de clase del
+    ancla mas cercana a ese punto — Grad-CAM *dirigido a la deteccion*. Sin
+    el, se usa la media de |salida| global (saliencia generica): en el
+    chequeo con ground truth xView3 del 2026-08-29 esa variante no apunto al
+    barco en ninguna de 20 muestras (pointing-game 0.0, 0.3 % de la masa en
+    la caja), de ahi el modo dirigido.
 
     Parameters
     ----------
@@ -135,8 +184,21 @@ def gradcam_yolov8(
     try:
         model.model.eval()
         out = model.model(img_t)
-        # Use scalar of summed objectness as backprop target.
-        if isinstance(out, list | tuple):
+        raw = out[0] if isinstance(out, list | tuple) else out
+        anchor: int | None = None
+        if target_xy is not None and isinstance(raw, torch.Tensor):
+            # Target given in image pixels; the model ran at target_size.
+            sx = target_size / float(image_rgb.shape[1])
+            sy = target_size / float(image_rgb.shape[0])
+            anchor, _dist = select_target_anchor(
+                raw.detach(),
+                (float(target_xy[0]) * sx, float(target_xy[1]) * sy),
+                float(target_tol_px) * max(sx, sy),
+            )
+        if anchor is not None:
+            # Detection-targeted: class score of the nearest anchor.
+            scalar = raw[0, 4:, anchor].max()
+        elif isinstance(out, list | tuple):
             scalar = sum(o.abs().mean() for o in out if isinstance(o, torch.Tensor))
         else:
             scalar = out.abs().mean()
@@ -346,7 +408,8 @@ def run_interpretability(
         save_grayscale_png(tile, in_path)
 
         try:
-            cam = gradcam_yolov8(yolo_model, tile)
+            centre = (tile.shape[1] / 2.0, tile.shape[0] / 2.0)
+            cam = gradcam_yolov8(yolo_model, tile, target_xy=centre)
             save_heatmap_png(tile, cam, cam_path)
             cam_ok = True
         except Exception as exc:
@@ -591,6 +654,8 @@ async def run_interpretability_for_execution(
         "execution_model_hash": model_hash,
         "gradcam_model_name": gradcam_model_name,
         "gradcam_model_hash": gradcam_model_hash,
+        "gradcam_layer": "model.model.15",
+        "gradcam_target": "detection_centre",
         "n_samples": len(picked),
         "sampling": sampling,
         "samples": [],
@@ -614,7 +679,10 @@ async def run_interpretability_for_execution(
 
         cam_ok = False
         try:
-            cam = gradcam_yolov8(yolo, tile)
+            # Thumbnails are centred on the detection: target its centre so
+            # the CAM explains THIS detection, not the whole chip.
+            centre = (tile.shape[1] / 2.0, tile.shape[0] / 2.0)
+            cam = gradcam_yolov8(yolo, tile, target_xy=centre)
             save_heatmap_png(tile, cam, cam_path)
             cam_ok = True
             n_cam_ok += 1

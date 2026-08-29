@@ -178,6 +178,15 @@ Registro vivo de riesgos del proof-of-concept y plan de contingencia. Se actuali
 - **Mitigacion propuesta:** alimentar a YOLO con la tesela calibrada sin filtrar y a CFAR con la filtrada (ambas derivan de la misma lectura; coste de RAM +1 tesela). Medir con la terna {antes, despues}.
 - **Trigger de cierre:** Pd_yolo en pipeline ≥ 0.95 × Pd_yolo detector-only sobre las mismas escenas.
 
+## R16 — Grad-CAM del D4 no localizaba los barcos (capa P5 + objetivo global)
+
+- **Severidad:** A · **Probabilidad:** A (medido) · **Estado:** corregido en repo 2026-08-29; **abierto** hasta regenerar el D4 de produccion
+- **Descripcion:** `gradcam_yolov8` hookeaba `model.model.21` (P5, stride 32) y retropropagaba la media de |salida| global. Chequeo con ground truth xView3 (`scripts/run_interpretability_xview3.py`, escena 264ed833, 20 muestras estratificadas TP-alta/TP-baja/FP/FN): pointing-game **0/20**, 0.3 % de la masa del heatmap dentro de la caja del barco (peor que uniforme). El anexo D4 entregado (20 heatmaps) es, por tanto, decorativo: no explica las detecciones (I-AIA-2).
+- **Impacto:** El entregable D4 afirmaba interpretabilidad que no existia. Detectado solo porque el muestreo con GT incluye FN/FP y una metrica de fidelidad; el muestreo top-confianza de produccion no podia verlo.
+- **Mitigacion aplicada:** capa P3 (`model.model.15`, stride 8, la cabeza que asigna objetos de 4-15 px) + objetivo = puntuacion de clase del ancla mas cercana al centro de la deteccion (`target_xy`). Resultado: TP-alta 5/5 (68 % masa), FN 3/5, FP 2/5, TP-baja 0/5 (YOLO no las ve; son CFAR). Produccion (`run_interpretability_for_execution`) usa ya P3 + centro del thumbnail y muestreo estratificado por cuantiles de confianza y fuente; el manifest registra `gradcam_layer` / `gradcam_target` / `stratum`.
+- **Pendiente:** regenerar el D4 de produccion tras el deploy (`POST /api/interpretability/run`) y actualizar `EVIDENCE.md` § D4 con el nuevo run_id; el anexo (§6) ya documenta antes/despues.
+- **Trigger de cierre:** manifest de produccion con `gradcam_layer=model.model.15` y `sampling.strategy=stratified_confidence_quantiles`.
+
 ## Plan de contingencia consolidado
 
 1. **Backup diario** de `aidra` DB + `models/` + bundles D3 a S3-compatible UE.
