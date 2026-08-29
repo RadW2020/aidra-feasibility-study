@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # ``models_dir/cards`` at startup (src/models/cards_sync.py). Empty or
     # missing -> no sync (local dev runs from the repo).
     model_cards_dist_dir: str = "/app/models_dist/cards"
+    # Root of the D4 interpretability runs (volume on the deployment); read
+    # back through GET /api/interpretability/runs so evidence can be mirrored
+    # into git without SSH.
+    interpretability_dir: str = "/data/interpretability"
     images_dir: str = "/data/images"
     thumbnails_dir: str = "/data/thumbnails"
 
