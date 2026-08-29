@@ -223,6 +223,12 @@ class DetectionMetrics(BaseModel):
     cfar_tile_ms_p95: float = 0.0
     yolo_tile_ms_p50: float = 0.0
     yolo_tile_ms_p95: float = 0.0
+    # Per-tile (CFAR + YOLO) latencies so band results can be pooled into
+    # scene-level percentiles (R17 streaming).
+    tile_ms_samples: list[float] = Field(default_factory=list)
+    # Wall time spent producing the tiles of the bands consumed by this run
+    # (only set by the streamed path; 0 when tiles were pre-built).
+    band_preprocess_ms: float = 0.0
 
 
 class DetectionResult(BaseModel):
@@ -556,6 +562,7 @@ class DetectionEngine:
             for i in set(cfar_tile_ms) | set(yolo_tile_ms)
         ]
         metrics = DetectionMetrics(
+            tile_ms_samples=[round(v, 3) for v in combined],
             tile_ms_p50=_pct(combined, 50),
             tile_ms_p95=_pct(combined, 95),
             cfar_tile_ms_p50=_pct(list(cfar_tile_ms.values()), 50),

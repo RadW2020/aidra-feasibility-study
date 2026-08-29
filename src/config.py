@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     # ---- Tile defaults ----
     tile_size: int = 640
     tile_overlap: int = 64
+    # R17: process the scene in bands of this many tile ROWS instead of
+    # holding every tile in RAM (a full S1 GRD scene is ~2.5 GB of float32
+    # tiles, which pushed peak RSS to ~4.8 GB and made every sat-* budget
+    # unreachable regardless of the model). 0 = legacy whole-scene mode.
+    tile_stream_band_rows: int = 4
 
     # ---- Edge swath filter (I-SAR-2) ----
     # Drops detections whose pixel center lies within ``edge_buffer_px``

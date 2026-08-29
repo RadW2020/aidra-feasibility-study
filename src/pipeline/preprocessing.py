@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -760,40 +761,20 @@ def preprocess_s2_full(
     }
 
 
-def preprocess_full(
+
+def _prepare_s1_context(
     product_dir: Path,
-    aoi_bbox: list[float] | None = None,
-    tile_size: int = 640,
-    overlap: int = 64,
+    aoi_bbox: list[float] | None,
+    tile_size: int,
+    overlap: int,
 ) -> dict[str, Any]:
-    """Run preprocessing on a Sentinel-1 (SAR) or Sentinel-2 (optical) product.
+    """Everything ``preprocess_full`` computes before touching a single tile.
 
-    Auto-detects the sensor type:
-    - Sentinel-2: reads RGB bands (B04, B03, B02) and composes color tiles
-    - Sentinel-1: windowed SAR processing with calibration + Lee filter
-
-    Steps per tile (S1):
-    1. Read tile window from TIFF via ``rasterio.windows.Window``.
-    2. Apply radiometric calibration (DN -> sigma0 dB) using the LUT.
-    3. Apply Lee speckle filter (7x7 window).
-    4. Store tile with geo-referencing metadata.
-
-    Args:
-        product_dir: Root directory of the extracted S1 product.
-        aoi_bbox: Optional ``[lon_min, lat_min, lon_max, lat_max]`` to crop.
-        tile_size: Tile side length in pixels.
-        overlap: Overlap between adjacent tiles in pixels.
-
-    Returns:
-        A dict with keys ``tiles`` (list of tile dicts) and ``metadata``.
+    Locates the measurement TIFF and calibration XML, builds the GCP affine,
+    parses the calibration LUT, resolves the AOI window and the valid-data
+    footprint. Shared by the eager ``preprocess_full`` and the banded
+    :class:`PreprocessStream` so both produce identical tiles.
     """
-    product_dir = Path(product_dir)
-
-    # Auto-detect sensor type
-    if _is_sentinel2(product_dir):
-        _log.info("Detected Sentinel-2 product, using optical preprocessing")
-        return preprocess_s2_full(product_dir, aoi_bbox, tile_size, overlap)
-
     _log.info(
         "Starting SAR preprocessing (windowed)",
         extra={"product_dir": str(product_dir)},
@@ -930,107 +911,138 @@ def preprocess_full(
             _log.warning("Could not calculate footprint", extra={"error": str(exc)})
 
     # --- 6. Read tiles directly via windowed I/O ---
+
     step = tile_size - overlap
     if step <= 0:
         raise ValueError(f"overlap ({overlap}) must be < tile_size ({tile_size})")
+    row_offsets = list(range(0, read_height, step))
+    col_offsets = list(range(0, read_width, step))
+    return {
+        "product_dir": product_dir,
+        "tiff_path": tiff_path,
+        "cal_lut": cal_lut,
+        "gcps": gcps,
+        "geo_transform": geo_transform,
+        "crs": crs,
+        "img_height": img_height,
+        "img_width": img_width,
+        "original_shape": original_shape,
+        "row_start_aoi": row_start_aoi,
+        "col_start_aoi": col_start_aoi,
+        "read_height": read_height,
+        "read_width": read_width,
+        "valid_footprint": valid_footprint,
+        "tile_size": tile_size,
+        "overlap": overlap,
+        "row_offsets": row_offsets,
+        "col_offsets": col_offsets,
+        "num_tiles": len(row_offsets) * len(col_offsets),
+    }
 
-    tiles: list[dict[str, Any]] = []
-    lee_margin = 4  # Extra margin for Lee filter border effects (half of 7)
 
-    with rasterio.open(tiff_path) as src:
-        for row_offset in range(0, read_height, step):
-            for col_offset in range(0, read_width, step):
-                # Compute read window with margin for Lee filter
-                r_start = row_start_aoi + row_offset - lee_margin
-                c_start = col_start_aoi + col_offset - lee_margin
-                r_size = tile_size + 2 * lee_margin
-                c_size = tile_size + 2 * lee_margin
+def _read_s1_tile(
+    src: Any,
+    ctx: dict[str, Any],
+    row_offset: int,
+    col_offset: int,
+    tile_index: int,
+    lee_margin: int = 4,
+) -> dict[str, Any]:
+    """Read, calibrate, Lee-filter and geo-tag ONE tile (the former loop body)."""
+    cal_lut = ctx["cal_lut"]
+    geo_transform = ctx["geo_transform"]
+    tile_size = ctx["tile_size"]
+    img_height, img_width = ctx["img_height"], ctx["img_width"]
+    row_start_aoi, col_start_aoi = ctx["row_start_aoi"], ctx["col_start_aoi"]
+    # Compute read window with margin for Lee filter
+    r_start = row_start_aoi + row_offset - lee_margin
+    c_start = col_start_aoi + col_offset - lee_margin
+    r_size = tile_size + 2 * lee_margin
+    c_size = tile_size + 2 * lee_margin
 
-                # Clamp to image bounds
-                r_start_clamped = max(0, r_start)
-                c_start_clamped = max(0, c_start)
-                r_end = min(img_height, r_start + r_size)
-                c_end = min(img_width, c_start + c_size)
+    # Clamp to image bounds
+    r_start_clamped = max(0, r_start)
+    c_start_clamped = max(0, c_start)
+    r_end = min(img_height, r_start + r_size)
+    c_end = min(img_width, c_start + c_size)
 
-                win = rasterio.windows.Window(
-                    col_off=c_start_clamped,
-                    row_off=r_start_clamped,
-                    width=c_end - c_start_clamped,
-                    height=r_end - r_start_clamped,
-                )
-
-                # Read DN for this window only
-                dn_chunk = src.read(1, window=win)
-
-                # Calibrate to LINEAR sigma0 (Lee + CFAR assume linear power)
-                chunk_cal = (
-                    cal_lut.window(
-                        r_start_clamped,
-                        r_end,
-                        c_start_clamped,
-                        c_end,
-                    )
-                    if cal_lut is not None
-                    else None
-                )
-                calibrated_linear = _calibrate_tile_linear(dn_chunk, chunk_cal)
-
-                # Lee filter on linear-scale data (multiplicative noise model)
-                filtered = apply_lee_filter(calibrated_linear, window_size=7)
-
-                # Extract the center tile (remove Lee margin)
-                margin_top = r_start_clamped - r_start if r_start < 0 else lee_margin
-                margin_left = c_start_clamped - c_start if c_start < 0 else lee_margin
-                center = filtered[
-                    margin_top : margin_top + tile_size,
-                    margin_left : margin_left + tile_size,
-                ]
-
-                # Pad if at edge
-                tile = np.zeros((tile_size, tile_size), dtype=np.float32)
-                tile[: center.shape[0], : center.shape[1]] = center
-
-                # R15: YOLO input from the UNFILTERED calibrated tile (the Lee
-                # filter cost the CNN 35 % of its recall on xView3). Stored as
-                # uint8 gray (0.4 MB per 640 px tile) so the extra memory stays
-                # small; DetectionEngine stacks it to RGB when
-                # Settings.yolo_input == "unfiltered".
-                from src.pipeline.detection import sar_linear_to_uint8_gray
-
-                center_raw = calibrated_linear[
-                    margin_top : margin_top + tile_size,
-                    margin_left : margin_left + tile_size,
-                ]
-                yolo_gray = np.zeros((tile_size, tile_size), dtype=np.uint8)
-                yolo_gray[: center_raw.shape[0], : center_raw.shape[1]] = (
-                    sar_linear_to_uint8_gray(center_raw)
-                )
-
-                # Geo bounds — compute from the four rotated corners
-                abs_row = row_start_aoi + row_offset
-                abs_col = col_start_aoi + col_offset
-                geo_bounds = _tile_geo_corners(geo_transform, abs_col, abs_row, tile_size)
-
-                tiles.append(
-                    {
-                        "array": tile,
-                        "yolo_input": yolo_gray,
-                        "row_offset": abs_row,
-                        "col_offset": abs_col,
-                        "geo_bounds": geo_bounds,
-                        "geo_transform": geo_transform,
-                    }
-                )
-
-    _log.info(
-        "Windowed preprocessing complete",
-        extra={
-            "num_tiles": len(tiles),
-            "original_shape": list(original_shape),
-            "read_area": [read_height, read_width],
-        },
+    win = rasterio.windows.Window(
+        col_off=c_start_clamped,
+        row_off=r_start_clamped,
+        width=c_end - c_start_clamped,
+        height=r_end - r_start_clamped,
     )
 
+    # Read DN for this window only
+    dn_chunk = src.read(1, window=win)
+
+    # Calibrate to LINEAR sigma0 (Lee + CFAR assume linear power)
+    chunk_cal = (
+        cal_lut.window(
+            r_start_clamped,
+            r_end,
+            c_start_clamped,
+            c_end,
+        )
+        if cal_lut is not None
+        else None
+    )
+    calibrated_linear = _calibrate_tile_linear(dn_chunk, chunk_cal)
+
+    # Lee filter on linear-scale data (multiplicative noise model)
+    filtered = apply_lee_filter(calibrated_linear, window_size=7)
+
+    # Extract the center tile (remove Lee margin)
+    margin_top = r_start_clamped - r_start if r_start < 0 else lee_margin
+    margin_left = c_start_clamped - c_start if c_start < 0 else lee_margin
+    center = filtered[
+        margin_top : margin_top + tile_size,
+        margin_left : margin_left + tile_size,
+    ]
+
+    # Pad if at edge
+    tile = np.zeros((tile_size, tile_size), dtype=np.float32)
+    tile[: center.shape[0], : center.shape[1]] = center
+
+    # R15: YOLO input from the UNFILTERED calibrated tile (the Lee
+    # filter cost the CNN 35 % of its recall on xView3). Stored as
+    # uint8 gray (0.4 MB per 640 px tile) so the extra memory stays
+    # small; DetectionEngine stacks it to RGB when
+    # Settings.yolo_input == "unfiltered".
+    from src.pipeline.detection import sar_linear_to_uint8_gray
+
+    center_raw = calibrated_linear[
+        margin_top : margin_top + tile_size,
+        margin_left : margin_left + tile_size,
+    ]
+    yolo_gray = np.zeros((tile_size, tile_size), dtype=np.uint8)
+    yolo_gray[: center_raw.shape[0], : center_raw.shape[1]] = (
+        sar_linear_to_uint8_gray(center_raw)
+    )
+
+    # Geo bounds — compute from the four rotated corners
+    abs_row = row_start_aoi + row_offset
+    abs_col = col_start_aoi + col_offset
+    geo_bounds = _tile_geo_corners(geo_transform, abs_col, abs_row, tile_size)
+
+    return {
+        "array": tile,
+        "tile_index": tile_index,
+        "yolo_input": yolo_gray,
+        "row_offset": abs_row,
+        "col_offset": abs_col,
+        "geo_bounds": geo_bounds,
+        "geo_transform": geo_transform,
+    }
+
+
+def _s1_metadata(ctx: dict[str, Any], num_tiles: int) -> dict[str, Any]:
+    """Scene metadata + I-SAR-1 quality gate (known before any tile is read)."""
+    product_dir = ctx["product_dir"]
+    cal_lut, gcps = ctx["cal_lut"], ctx["gcps"]
+    geo_transform, valid_footprint = ctx["geo_transform"], ctx["valid_footprint"]
+    crs, original_shape = ctx["crs"], ctx["original_shape"]
+    tile_size, overlap = ctx["tile_size"], ctx["overlap"]
     metadata: dict[str, Any] = {
         "product_dir": str(product_dir),
         "original_shape": original_shape,
@@ -1038,7 +1050,7 @@ def preprocess_full(
         "filter": "lee_7x7_linear",
         "tile_size": tile_size,
         "overlap": overlap,
-        "num_tiles": len(tiles),
+        "num_tiles": num_tiles,
         "crs": crs,
         "geo_transform": geo_transform,
         "valid_footprint": valid_footprint,
@@ -1055,7 +1067,7 @@ def preprocess_full(
         gcps=gcps,
         geo_transform=geo_transform,
         valid_footprint=valid_footprint,
-        num_tiles=len(tiles),
+        num_tiles=num_tiles,
     )
     metadata["quality"] = quality
     metadata["quality_reasons"] = reasons
@@ -1065,6 +1077,114 @@ def preprocess_full(
             extra={"reasons": reasons, "product_dir": str(product_dir)},
         )
 
+    return metadata
+
+
+
+
+class PreprocessStream:
+    """Lazy, band-wise view of a preprocessed scene (R17).
+
+    ``metadata`` is available immediately (grid, calibration, footprint,
+    quality gate); ``bands()`` yields lists of tile dicts, ``band_tile_rows``
+    tile rows at a time, reading and filtering each window on demand so the
+    process never holds more than one band of float32 tiles. Tile dicts are
+    identical to ``preprocess_full``'s (plus a global ``tile_index``), in the
+    same row-major order.
+    """
+
+    def __init__(
+        self,
+        product_dir: Path,
+        aoi_bbox: list[float] | None = None,
+        tile_size: int = 640,
+        overlap: int = 64,
+        band_tile_rows: int = 4,
+    ) -> None:
+        self.product_dir = Path(product_dir)
+        self.band_tile_rows = max(1, int(band_tile_rows))
+        self._s2: dict[str, Any] | None = None
+        if _is_sentinel2(self.product_dir):
+            # Optical path is small (RGB uint8); keep the eager implementation.
+            self._s2 = preprocess_s2_full(self.product_dir, aoi_bbox, tile_size, overlap)
+            self.metadata = self._s2["metadata"]
+            self._ctx: dict[str, Any] | None = None
+            return
+        _log.info(
+            "Starting SAR preprocessing (banded)",
+            extra={"product_dir": str(self.product_dir), "band_tile_rows": self.band_tile_rows},
+        )
+        self._ctx = _prepare_s1_context(self.product_dir, aoi_bbox, tile_size, overlap)
+        self.metadata = _s1_metadata(self._ctx, self._ctx["num_tiles"])
+
+    @property
+    def num_tiles(self) -> int:
+        return int(self.metadata.get("num_tiles", 0))
+
+    @property
+    def num_bands(self) -> int:
+        if self._ctx is None:
+            return 1
+        rows = len(self._ctx["row_offsets"])
+        return (rows + self.band_tile_rows - 1) // self.band_tile_rows
+
+    def bands(self) -> Iterator[list[dict[str, Any]]]:
+        if self._s2 is not None:
+            tiles = self._s2["tiles"]
+            for i, t in enumerate(tiles):
+                t.setdefault("tile_index", i)
+            yield list(tiles)
+            return
+        ctx = self._ctx
+        assert ctx is not None
+        tile_index = 0
+        with rasterio.open(ctx["tiff_path"]) as src:
+            rows = ctx["row_offsets"]
+            for b in range(0, len(rows), self.band_tile_rows):
+                band: list[dict[str, Any]] = []
+                for row_offset in rows[b : b + self.band_tile_rows]:
+                    for col_offset in ctx["col_offsets"]:
+                        band.append(_read_s1_tile(src, ctx, row_offset, col_offset, tile_index))
+                        tile_index += 1
+                yield band
+
+
+def open_preprocess_stream(
+    product_dir: Path,
+    aoi_bbox: list[float] | None = None,
+    tile_size: int = 640,
+    overlap: int = 64,
+    band_tile_rows: int = 4,
+) -> PreprocessStream:
+    """Factory for :class:`PreprocessStream` (R17 band streaming)."""
+    return PreprocessStream(product_dir, aoi_bbox, tile_size, overlap, band_tile_rows)
+
+
+def preprocess_full(
+    product_dir: Path,
+    aoi_bbox: list[float] | None = None,
+    tile_size: int = 640,
+    overlap: int = 64,
+) -> dict[str, Any]:
+    """Run preprocessing on a Sentinel-1 (SAR) or Sentinel-2 (optical) product.
+
+    Eager variant: returns every tile of the scene in memory. It is a thin
+    wrapper over :class:`PreprocessStream` (R17), so the tiles are exactly the
+    ones the banded path yields, in the same order. Production uses the
+    stream (``Settings.tile_stream_band_rows > 0``); this stays for callers
+    that need the whole scene at once and for the legacy setting ``0``.
+
+    Steps per tile (S1): read window → calibrate to linear σ⁰ → Lee 7×7 →
+    unfiltered uint8 for YOLO → geo-tag. Returns ``{"tiles", "metadata"}``.
+    """
+    stream = PreprocessStream(Path(product_dir), aoi_bbox, tile_size, overlap, band_tile_rows=1 << 30)
+    tiles = [t for band in stream.bands() for t in band]
+    metadata = dict(stream.metadata)
+    metadata["num_tiles"] = len(tiles)
+    _log.info(
+        "Windowed preprocessing complete",
+        extra={"num_tiles": len(tiles), "original_shape": list(metadata.get("original_shape", []))},
+    )
     return {"tiles": tiles, "metadata": metadata}
 
 

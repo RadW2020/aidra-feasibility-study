@@ -60,7 +60,7 @@ from src.observability.prometheus_metrics import (
 )
 from src.pipeline.detection import Detection, DetectionEngine, DetectionMetrics, DetectionResult
 from src.pipeline.ingestion import SEARCH_ZONES, CopernicusSearchResult, ImageIngester
-from src.pipeline.preprocessing import preprocess_full
+from src.pipeline.preprocessing import open_preprocess_stream, preprocess_full
 from src.profiles.manager import ProfileManager
 from src.tipcue.evaluator import TipEvaluator, TipResult
 from src.traceability.hasher import (
@@ -422,19 +422,40 @@ class PipelineEngine:
 
             # ---- Step 7: Preprocess (calibrate, filter, tile) ----
             preprocess_start = time.monotonic()
+            band_rows = int(getattr(self.config, "tile_stream_band_rows", 0) or 0)
+            stream = None
+            tiles: list[dict[str, Any]] | None = None
             try:
-                preprocessed = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None,
-                        lambda: preprocess_full(
-                            product_dir=extract_path,
-                            aoi_bbox=request.aoi_bbox,
-                            tile_size=self.config.tile_size,
-                            overlap=self.config.tile_overlap,
+                if band_rows > 0:
+                    # R17: metadata now, tiles later band by band.
+                    stream = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: open_preprocess_stream(
+                                product_dir=extract_path,
+                                aoi_bbox=request.aoi_bbox,
+                                tile_size=self.config.tile_size,
+                                overlap=self.config.tile_overlap,
+                                band_tile_rows=band_rows,
+                            ),
                         ),
-                    ),
-                    timeout=TIMEOUTS["preprocessing"],
-                )
+                        timeout=TIMEOUTS["preprocessing"],
+                    )
+                    preprocessed = {"tiles": None, "metadata": stream.metadata}
+                else:
+                    preprocessed = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: preprocess_full(
+                                product_dir=extract_path,
+                                aoi_bbox=request.aoi_bbox,
+                                tile_size=self.config.tile_size,
+                                overlap=self.config.tile_overlap,
+                            ),
+                        ),
+                        timeout=TIMEOUTS["preprocessing"],
+                    )
+                    tiles = preprocessed["tiles"]
             except builtins.TimeoutError as exc:
                 raise PreprocessingError(
                     f"Preprocessing timed out after {TIMEOUTS['preprocessing']}s"
@@ -443,7 +464,6 @@ class PipelineEngine:
                 raise PreprocessingError(f"Preprocessing failed: {exc}") from exc
             preprocessing_ms = (time.monotonic() - preprocess_start) * 1000.0
 
-            tiles = preprocessed["tiles"]
             num_tiles = preprocessed["metadata"]["num_tiles"]
 
             # Store metadata for footprint clipping in _save_detections
@@ -496,39 +516,60 @@ class PipelineEngine:
                     )
 
             # ---- Step 8: Detect (under profile constraints) ----
+            from src.pipeline.postprocessing import flag_cluster_anomaly
+            from src.pipeline.thumbnails import generate_thumbnails
+
+            thumbnails_root = Path(getattr(self.config, "thumbnails_dir", "/data/thumbnails"))
+            _exec_id = execution_id
+
+            def _thumbs_for_band(band_result: DetectionResult, band_tiles: list[dict[str, Any]]) -> None:
+                # R17: cut thumbnails while the band's arrays are still alive.
+                generate_thumbnails(
+                    detections=band_result.detections,
+                    tiles=band_tiles,
+                    execution_id=_exec_id,
+                    out_root=thumbnails_root,
+                )
+
+            original_shape = self._current_metadata.get("original_shape")
             detection_result = await self._run_detection(
                 tiles=tiles,
                 profile=request.profile,
                 detector=detector,
                 sensor=request.sensor,
+                stream=stream,
+                scene_shape=tuple(original_shape) if original_shape else None,
+                on_band_result=_thumbs_for_band if stream is not None else None,
             )
 
             inference_ms = detection_result.metrics.total_inference_ms
+            preprocessing_ms += detection_result.metrics.band_preprocess_ms
 
             # ---- Step 9: Compute runtime duration ----
             total_ms = (time.monotonic() - start_time) * 1000.0
 
             # ---- Step 10: Flag anomalies + thumbnails + save to PostGIS ----
-            from src.pipeline.postprocessing import flag_cluster_anomaly
-            from src.pipeline.thumbnails import generate_thumbnails
-
             flag_cluster_anomaly(
                 detection_result.detections,
                 radius_deg=self.config.cluster_anomaly_radius_deg,
                 min_neighbours=self.config.cluster_anomaly_min_neighbours,
             )
 
-            # Wow effect #1: SAR crop per detection. Skipea detecciones
-            # filtradas por anomaly/land si configurado, para no inflar
-            # el almacenamiento.
+            # Wow effect #1: SAR crop per detection. In streamed mode the
+            # crops were cut per band; here we only drop the PNGs of
+            # detections removed by the cross-band dedup.
             try:
-                thumbnails_root = Path(getattr(self.config, "thumbnails_dir", "/data/thumbnails"))
-                generate_thumbnails(
-                    detections=detection_result.detections,
-                    tiles=tiles,
-                    execution_id=execution_id,
-                    out_root=thumbnails_root,
-                )
+                if stream is None:
+                    generate_thumbnails(
+                        detections=detection_result.detections,
+                        tiles=tiles or [],
+                        execution_id=execution_id,
+                        out_root=thumbnails_root,
+                    )
+                else:
+                    self._prune_orphan_thumbnails(
+                        thumbnails_root / str(execution_id), detection_result.detections
+                    )
             except Exception as exc:
                 self._log.warning(
                     "Thumbnail generation failed (continuing)",
@@ -701,18 +742,35 @@ class PipelineEngine:
             image_hash = compute_sha256(image_path)
             extract_path = await self.ingester.extract(image_path)
 
-            # Preprocess once
-            preprocessed = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: preprocess_full(
-                    product_dir=extract_path,
-                    aoi_bbox=request.aoi_bbox,
-                    tile_size=self.config.tile_size,
-                    overlap=self.config.tile_overlap,
-                ),
-            )
+            # Preprocess once (metadata); R17: tiles are re-streamed from disk
+            # for every profile so no profile inherits another's RAM.
+            band_rows = int(getattr(self.config, "tile_stream_band_rows", 0) or 0)
+            tiles: list[dict[str, Any]] | None = None
+            _open_stream: Any = None
+            if band_rows > 0:
+                def _open_stream() -> Any:
+                    return open_preprocess_stream(
+                        product_dir=extract_path,
+                        aoi_bbox=request.aoi_bbox,
+                        tile_size=self.config.tile_size,
+                        overlap=self.config.tile_overlap,
+                        band_tile_rows=band_rows,
+                    )
 
-            tiles = preprocessed["tiles"]
+                first_stream = await asyncio.get_event_loop().run_in_executor(None, _open_stream)
+                preprocessed = {"tiles": None, "metadata": first_stream.metadata}
+                del first_stream
+            else:
+                preprocessed = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: preprocess_full(
+                        product_dir=extract_path,
+                        aoi_bbox=request.aoi_bbox,
+                        tile_size=self.config.tile_size,
+                        overlap=self.config.tile_overlap,
+                    ),
+                )
+                tiles = preprocessed["tiles"]
             num_tiles = preprocessed["metadata"]["num_tiles"]
 
             # Same-scene metadata for footprint clipping in _run_detection
@@ -723,6 +781,7 @@ class PipelineEngine:
             # NULLs on every trigger-all-profiles row).
             self._current_metadata = preprocessed.get("metadata", {})
             sar_meta = self._current_metadata.get("sar") or {}
+            original_shape = self._current_metadata.get("original_shape")
 
             # Run detection for each profile
             from src.profiles.definitions import PROFILE_ORDER
@@ -813,12 +872,19 @@ class PipelineEngine:
                                 },
                             )
 
-                    # Run detection under this profile
+                    # Run detection under this profile (R17: fresh stream each time)
+                    profile_stream = (
+                        await asyncio.get_event_loop().run_in_executor(None, _open_stream)
+                        if _open_stream is not None
+                        else None
+                    )
                     detection_result = await self._run_detection(
                         tiles=tiles,
                         profile=profile_name,
                         detector=det,
                         sensor=request.sensor,
+                        stream=profile_stream,
+                        scene_shape=tuple(original_shape) if original_shape else None,
                     )
 
                     total_ms = (time.monotonic() - start_time) * 1000.0
@@ -1188,12 +1254,152 @@ class PipelineEngine:
             f"Download failed after {retry_cfg['max_retries'] + 1} attempts: {last_error}"
         )
 
+    def _format_tiles(
+        self, tiles: list[dict[str, Any]], sensor: str, start_index: int = 0
+    ) -> list[dict[str, Any]]:
+        """Adapt preprocessing tile dicts to what ``DetectionEngine`` expects.
+
+        Keeps the global ``tile_index`` the stream assigned (or numbers from
+        ``start_index``), copies the rotation-aware affine for S1, and builds
+        the per-tile axis-aligned fallback for S2. ``yolo_input`` (R15) is
+        passed through.
+        """
+        is_s1 = sensor.lower() == "s1"
+        formatted_tiles: list[dict[str, Any]] = []
+        for i, tile in enumerate(tiles):
+            formatted_tile: dict[str, Any] = {
+                "data": tile.get("array", tile.get("data")),
+                "tile_index": int(tile.get("tile_index", start_index + i)),
+                "row_offset": tile.get("row_offset", 0),
+                "col_offset": tile.get("col_offset", 0),
+            }
+            if tile.get("yolo_input") is not None:
+                formatted_tile["yolo_input"] = tile["yolo_input"]
+            global_gt = tile.get("geo_transform")
+            if is_s1 and global_gt is not None:
+                formatted_tile["geo_transform"] = tuple(global_gt)
+                from src.pipeline.preprocessing import _tile_geo_corners
+
+                formatted_tile["geo_bounds"] = _tile_geo_corners(
+                    tuple(global_gt),
+                    tile.get("col_offset", 0),
+                    tile.get("row_offset", 0),
+                    formatted_tile["data"].shape[0],
+                )
+            elif "geo_bounds" in tile:
+                gb = tile["geo_bounds"]
+                if gb.get("lon_min") is not None and gb.get("lat_max") is not None:
+                    tile_size = tile.get("array", tile.get("data")).shape[0]
+                    px_x = (gb["lon_max"] - gb["lon_min"]) / tile_size if tile_size else 1.0
+                    px_y = (gb["lat_min"] - gb["lat_max"]) / tile_size if tile_size else -1.0
+                    formatted_tile["geo_transform"] = (
+                        gb["lon_min"],
+                        px_x,
+                        0.0,
+                        gb["lat_max"],
+                        0.0,
+                        px_y,
+                    )
+                    formatted_tile["row_offset"] = 0
+                    formatted_tile["col_offset"] = 0
+            formatted_tiles.append(formatted_tile)
+        return formatted_tiles
+
+    def _detect_bands(
+        self,
+        *,
+        stream: Any,
+        detector: Any,
+        cfar: Any,
+        constraint_profile: str,
+        sensor: str,
+        scene_shape: tuple[int, int] | None,
+        on_band_result: Any = None,
+        cpu_throttle: Any = None,
+        memory_guard: Any = None,
+    ) -> DetectionResult:
+        """R17: run ``DetectionEngine`` band by band and pool the results.
+
+        One band of tiles lives in memory at a time; the profile manager's
+        ``cpu_throttle`` / ``memory_guard`` are shared across bands so the
+        budget applies to the whole scene. ``on_band_result(result, tiles)``
+        lets the caller cut thumbnails while the band's arrays still exist.
+        After the last band the production cross-tile dedup runs once more
+        over the concatenated detections (band seams) and the per-tile
+        latency samples are pooled into scene-level p50/p95.
+        """
+        import numpy as np
+
+        from src.pipeline.detection import _dedup_geo_detections
+
+        all_dets: list[Detection] = []
+        samples: list[float] = []
+        metrics = DetectionMetrics()
+        notes: list[str] = []
+        t_prep = 0.0
+        n_bands = 0
+        t_band = time.perf_counter()
+        for band in stream.bands():
+            t_prep += time.perf_counter() - t_band
+            n_bands += 1
+            formatted = self._format_tiles(band, sensor)
+            res = self.detector_engine.run(
+                formatted,
+                detector=detector,
+                cfar=cfar,
+                constraint_profile=constraint_profile,
+                scene_shape=scene_shape,
+                cpu_throttle=cpu_throttle,
+                memory_guard=memory_guard,
+            )
+            if on_band_result is not None:
+                try:
+                    on_band_result(res, band)
+                except Exception as exc:
+                    self._log.warning("on_band_result failed", extra={"error": str(exc)[:200]})
+            all_dets.extend(res.detections)
+            samples.extend(res.metrics.tile_ms_samples)
+            m = res.metrics
+            metrics.total_inference_ms += m.total_inference_ms
+            metrics.cfar_ms += m.cfar_ms
+            metrics.yolo_ms += m.yolo_ms
+            metrics.fusion_ms += m.fusion_ms
+            metrics.peak_ram_mb = max(metrics.peak_ram_mb, m.peak_ram_mb)
+            metrics.cpu_percent = max(metrics.cpu_percent, m.cpu_percent)
+            metrics.num_tiles += m.num_tiles
+            metrics.num_detections_cfar += m.num_detections_cfar
+            metrics.num_detections_yolo += m.num_detections_yolo
+            if res.notes:
+                notes.append(res.notes)
+            del formatted, band, res
+            t_band = time.perf_counter()
+
+        before = len(all_dets)
+        all_dets = _dedup_geo_detections(all_dets, max_distance_deg=5e-4)
+        metrics.num_detections_fused = len(all_dets)
+        if samples:
+            metrics.tile_ms_samples = samples
+            metrics.tile_ms_p50 = float(np.percentile(samples, 50))
+            metrics.tile_ms_p95 = float(np.percentile(samples, 95))
+        metrics.band_preprocess_ms = t_prep * 1000.0
+        notes.append(f"streamed:{n_bands} bands, seam_dedup_removed={before - len(all_dets)}")
+        self._log.info(
+            "Banded detection complete",
+            extra={"bands": n_bands, "tiles": metrics.num_tiles, "detections": len(all_dets),
+                   "seam_dedup_removed": before - len(all_dets), "peak_ram_mb": round(metrics.peak_ram_mb)},
+        )
+        return DetectionResult(detections=all_dets, metrics=metrics, notes="; ".join(notes) or None)
+
     async def _run_detection(
         self,
-        tiles: list[dict[str, Any]],
+        tiles: list[dict[str, Any]] | None,
         profile: str,
         detector: Any = None,
         sensor: str = "s1",
+        *,
+        stream: Any = None,
+        scene_shape: tuple[int, int] | None = None,
+        on_band_result: Any = None,
     ) -> DetectionResult:
         """Execute detection, optionally under resource constraints.
 
@@ -1218,57 +1424,9 @@ class PipelineEngine:
         TimeoutError
             If detection exceeds the configured timeout.
         """
-        # Prepare tiles in the format expected by DetectionEngine
-        # The preprocessing module outputs tiles with 'array' key;
-        # DetectionEngine expects 'data' key.
-        # The preprocessing module now stores the GLOBAL pixel→lon/lat
-        # affine on each S1 tile (rotation-aware).  Prefer that — fall
-        # back to a per-tile axis-aligned approximation for S2 (whose
-        # geo_transform is in UTM, not WGS-84).
-        is_s1 = sensor.lower() == "s1"
-        formatted_tiles: list[dict[str, Any]] = []
-        for idx, tile in enumerate(tiles):
-            formatted_tile: dict[str, Any] = {
-                "data": tile.get("array", tile.get("data")),
-                "tile_index": idx,
-                "row_offset": tile.get("row_offset", 0),
-                "col_offset": tile.get("col_offset", 0),
-            }
-            global_gt = tile.get("geo_transform")
-            if is_s1 and global_gt is not None:
-                # Use the rotation-aware global affine directly; detection
-                # adds (col_offset, row_offset) to the bbox before applying.
-                formatted_tile["geo_transform"] = tuple(global_gt)
-                # Derive geo_bounds so the CFAR sea-mask helper can use it
-                # without re-implementing the affine projection.
-                from src.pipeline.preprocessing import _tile_geo_corners
-
-                formatted_tile["geo_bounds"] = _tile_geo_corners(
-                    tuple(global_gt),
-                    tile.get("col_offset", 0),
-                    tile.get("row_offset", 0),
-                    formatted_tile["data"].shape[0],
-                )
-            elif "geo_bounds" in tile:
-                gb = tile["geo_bounds"]
-                if gb.get("lon_min") is not None and gb.get("lat_max") is not None:
-                    tile_size = tile.get("array", tile.get("data")).shape[0]
-                    px_x = (gb["lon_max"] - gb["lon_min"]) / tile_size if tile_size else 1.0
-                    px_y = (gb["lat_min"] - gb["lat_max"]) / tile_size if tile_size else -1.0
-                    # Per-tile axis-aligned fallback: row_offset/col_offset
-                    # are absorbed into the per-tile origin (lon_min/lat_max),
-                    # so detection geocoding must NOT add them again.
-                    formatted_tile["geo_transform"] = (
-                        gb["lon_min"],
-                        px_x,
-                        0.0,
-                        gb["lat_max"],
-                        0.0,
-                        px_y,
-                    )
-                    formatted_tile["row_offset"] = 0
-                    formatted_tile["col_offset"] = 0
-            formatted_tiles.append(formatted_tile)
+        # Legacy path: every tile pre-built. Streamed path (R17): ``stream``
+        # yields bands; tiles are formatted band by band in _detect_bands.
+        formatted_tiles = self._format_tiles(tiles, sensor) if tiles is not None else []
 
         # Run CFAR for SAR sensors regardless of which YOLO weight loaded.
         # Tying this to the sensor (not the model name) keeps the SAR
@@ -1282,15 +1440,26 @@ class PipelineEngine:
             except Exception:
                 self._log.warning("CFAR detector requested but not available")
 
+        if stream is not None:
+            pipeline_fn: Any = self._detect_bands
+            pipeline_kwargs: dict[str, Any] = {
+                "stream": stream, "detector": detector, "cfar": cfar_detector,
+                "constraint_profile": profile, "sensor": sensor,
+                "scene_shape": scene_shape, "on_band_result": on_band_result,
+            }
+        else:
+            pipeline_fn = self.detector_engine.run
+            pipeline_kwargs = {
+                "tiles": formatted_tiles, "detector": detector, "cfar": cfar_detector,
+                "constraint_profile": profile,
+            }
+
         try:
             if profile != "ground":
                 profiled_result = await self.profile_manager.run_with_profile(
                     profile_name=profile,
-                    pipeline_fn=self.detector_engine.run,
-                    tiles=formatted_tiles,
-                    detector=detector,
-                    cfar=cfar_detector,
-                    constraint_profile=profile,
+                    pipeline_fn=pipeline_fn,
+                    **pipeline_kwargs,
                 )
 
                 if not profiled_result.success:
@@ -1322,12 +1491,7 @@ class PipelineEngine:
                 detection_result = await asyncio.wait_for(
                     asyncio.get_event_loop().run_in_executor(
                         None,
-                        lambda: self.detector_engine.run(
-                            tiles=formatted_tiles,
-                            detector=detector,
-                            cfar=cfar_detector,
-                            constraint_profile="ground",
-                        ),
+                        lambda: pipeline_fn(**pipeline_kwargs),
                     ),
                     timeout=TIMEOUTS["inference_total"],
                 )
@@ -1530,6 +1694,28 @@ class PipelineEngine:
             # I-DET-2 / R11: what the operational dashboards should count.
             "valid_targets": verdict_counts.get("valid_sea_target", 0),
         }
+
+    def _prune_orphan_thumbnails(self, run_dir: Path, detections: list[Detection]) -> int:
+        """Remove PNGs of detections dropped by the cross-band dedup (R17).
+
+        Thumbnails are cut per band, before the seam dedup can know which of
+        two duplicates survives; the survivor keeps its PNG, the duplicate's
+        file is removed. Only ``<thumbnails_dir>/<execution_id>/`` is touched.
+        """
+        if not run_dir.is_dir():
+            return 0
+        keep = {str(d.id) for d in detections}
+        removed = 0
+        for png in run_dir.glob("*.png"):
+            if png.stem not in keep:
+                try:
+                    png.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+        if removed:
+            self._log.info("Pruned orphan thumbnails", extra={"removed": removed, "dir": str(run_dir)})
+        return removed
 
     @staticmethod
     def _finite_or_none(value: float | None) -> float | None:

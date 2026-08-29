@@ -182,11 +182,14 @@ stays `rejected` (non-deterministic, +RAM).
 
 INT8 is **7.4× faster per scene** (8.9× on p50 per tile) on the
 ARM target with the same detections and 3 % less RSS, so the variant is now
-`active` (migration 020). Every `sat-*` profile aborts under the new memory
-enforcement **before the first inference**: the pipeline holds all tiles of
-the scene in RAM (~4.7 GB), which is a pipeline design limit, not a model
-one — tracked as R17 (band streaming, as the validation harness already
-does).
+`active` (migration 020). Every `sat-*` profile aborted under the new memory
+enforcement **before the first inference**: the pipeline held all tiles of
+the scene in RAM (~4.7 GB), a pipeline design limit, not a model one (R17).
+Since 2026-08-29 the scene is processed in **bands of 4 tile rows**
+(`Settings.tile_stream_band_rows`; `PreprocessStream` + banded detection
+under one profile run, thumbnails per band, cross-band dedup at the end),
+so peak RSS no longer scales with the scene; the per-profile results below
+are being re-measured on OCI with the banded pipeline.
 
 ## Architecture
 
