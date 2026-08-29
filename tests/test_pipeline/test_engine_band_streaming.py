@@ -89,6 +89,18 @@ def test_detect_bands_pools_metrics_and_calls_band_hook():
     assert res.metrics.tile_ms_p95 >= res.metrics.tile_ms_p50 >= 0.0
     assert len(res.detections) == 1 and res.detections[0].tile_index == 0
     assert "streamed:2 bands" in (res.notes or "")
+    # R15 regression: the engine must forward tile["yolo_input"]; production
+    # ran with notes='yolo_input:fallback_filtered=1334/1334' until 703c9dd.
+    assert "fallback" not in (res.notes or "")
+
+
+def test_format_tiles_forwards_yolo_input_and_index():
+    eng = _engine(Settings(_env_file=None))
+    tiles = [{"array": np.zeros((8, 8), dtype=np.float32), "yolo_input": np.ones((8, 8), dtype=np.uint8),
+              "tile_index": 41, "row_offset": 3, "col_offset": 5, "geo_transform": (0, 1, 0, 0, 0, -1)}]
+    f = eng._format_tiles(tiles, "s1")[0]
+    assert f["tile_index"] == 41 and f["yolo_input"] is tiles[0]["yolo_input"]
+    assert f["geo_transform"] == (0, 1, 0, 0, 0, -1) and "geo_bounds" in f
 
 
 def test_memory_guard_is_checked_across_bands():
