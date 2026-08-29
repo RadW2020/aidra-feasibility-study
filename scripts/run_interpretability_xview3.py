@@ -21,7 +21,7 @@ Run::
         --dump reports/predictions/xview3_adriatic_full_vessels_r14r15/264ed833a13b7f2av.json \\
         --tar data/xview3/scenes/264ed833a13b7f2av.tar.gz \\
         --report reports/validation_xview3_adriatic_full_vessels_r14r15_aidra.json \\
-        --set aidra --n-per-stratum 5 --chip 256 --seed 42 \\
+        --set aidra --n-per-stratum 5 --chip 320 --seed 42 \\
         --out reports/interpretability/xview3_264ed833a13b7f2av_r14r15
 """
 
@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--set", default="aidra", help="Prediction set in the dump to explain.")
     parser.add_argument("--band", default="VH_dB.tif")
     parser.add_argument("--n-per-stratum", type=int, default=5)
-    parser.add_argument("--chip", type=int, default=256)
+    parser.add_argument("--chip", type=int, default=320, help="320 = gradcam_yolov8 input size, i.e. native scale without resampling.")
     parser.add_argument("--tol-px", type=float, default=20.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--models-dir", type=Path, default=Path("models"))

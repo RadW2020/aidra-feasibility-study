@@ -173,74 +173,84 @@ cannot say whether a heatmap *points at the vessel*. The xView3 validation
 dumps have ground truth, so `scripts/run_interpretability_xview3.py` draws a
 seeded, stratified sample — true positives at high and low confidence,
 false positives and **missed vessels** — from scene `264ed833a13b7f2av`
-(production output of the 2026-08-28 baseline run, `aidra` set), renders
-Grad-CAM + CFAR score map on 256 px chips and scores each heatmap with a
+(`aidra` set), renders Grad-CAM + CFAR score map on **320 px chips** (the
+Grad-CAM input size, so no resampling) and scores each heatmap with a
 pointing game (argmax inside the vessel box ± 20 px) and the fraction of
-heat inside that box.
+heat inside that box. 5 samples per stratum, seed 42.
 
 ### 6.1 What the check found
 
 The Grad-CAM used until 2026-08-29 hooked the **P5** C2f (`model.model.21`,
 stride 32) and back-propagated the mean |output| of the whole head. On
 Sentinel-1 vessels of 4–15 px it did **not localise anything**: pointing
-game 0/20, 0.3 % of the heat inside the box (worse than uniform). Two
-changes fix it and are now the defaults in `gradcam_yolov8` and in the
-production run: hook the **P3** C2f (`model.model.15`, stride 8 — the head
-that owns small objects) and back-propagate the **class score of the anchor
-nearest the detection** (thumbnails are centred on it). Legacy P5 with the
-detection target gives an all-zero CAM: the gradient of a P3 anchor does
+game **0/20**, ≤ 0.7 % of the heat inside the box (worse than uniform).
+Two changes, now the defaults in `gradcam_yolov8` and in the production
+run, make it point: hook the **P3** C2f (`model.model.15`, stride 8 — the
+head that owns small objects) and back-propagate the **class score of the
+anchor nearest the detection** (thumbnails are centred on it). P5 with the
+detection target yields an all-zero CAM — the gradient of a P3 anchor does
 not reach P5.
 
-**Legacy — P5 `model.model.21`, global target** (`d4_xview3_264ed833a13b7f2av_aidra_20260829T002612Z`)
+**Legacy — P5 `model.model.21`, global target** (`d4_xview3_264ed833a13b7f2av_aidra_20260829T003901Z`)
 
 | Estrato | Pool | Muestras | Grad-CAM pointing-game | Grad-CAM masa en caja | CFAR pointing-game | CFAR masa en caja |
 |---|---:|---:|---:|---:|---:|---:|
-| `tp_high` | 18 | 5 | 0.0 | 0.003 | 1.0 | 0.406 |
-| `tp_low` | 17 | 5 | 0.0 | 0.003 | 0.2 | 0.117 |
-| `fp` | 106 | 5 | 0.0 | 0.005 | 0.6 | 0.327 |
-| `fn` | 12 | 5 | 0.0 | 0.0 | 1.0 | 0.056 |
+| `tp_high` | 18 | 5 | 0.0 | 0.0 | 0.8 | 0.294 |
+| `tp_low` | 17 | 5 | 0.0 | 0.001 | 0.2 | 0.071 |
+| `fp` | 106 | 5 | 0.0 | 0.007 | 0.6 | 0.249 |
+| `fn` | 12 | 5 | 0.0 | 0.0 | 0.8 | 0.036 |
 
-**P3 `model.model.15`, global target** (`d4_xview3_264ed833a13b7f2av_aidra_20260829T002856Z`)
-
-| Estrato | Pool | Muestras | Grad-CAM pointing-game | Grad-CAM masa en caja | CFAR pointing-game | CFAR masa en caja |
-|---|---:|---:|---:|---:|---:|---:|
-| `tp_high` | 18 | 5 | 0.4 | 0.042 | 1.0 | 0.406 |
-| `tp_low` | 17 | 5 | 0.0 | 0.028 | 0.2 | 0.117 |
-| `fp` | 106 | 5 | 0.6 | 0.03 | 0.6 | 0.327 |
-| `fn` | 12 | 5 | 0.0 | 0.026 | 1.0 | 0.056 |
-
-**P3 `model.model.15`, detection-targeted — new default** (`d4_xview3_264ed833a13b7f2av_aidra_20260829T002845Z`)
+**P3 `model.model.15`, global target** (`d4_xview3_264ed833a13b7f2av_aidra_20260829T003912Z`)
 
 | Estrato | Pool | Muestras | Grad-CAM pointing-game | Grad-CAM masa en caja | CFAR pointing-game | CFAR masa en caja |
 |---|---:|---:|---:|---:|---:|---:|
-| `tp_high` | 18 | 5 | 1.0 | 0.681 | 1.0 | 0.406 |
-| `tp_low` | 17 | 5 | 0.0 | 0.108 | 0.2 | 0.117 |
-| `fp` | 106 | 5 | 0.4 | 0.415 | 0.6 | 0.327 |
-| `fn` | 12 | 5 | 0.6 | 0.298 | 1.0 | 0.056 |
+| `tp_high` | 18 | 5 | 0.4 | 0.032 | 0.8 | 0.294 |
+| `tp_low` | 17 | 5 | 0.0 | 0.009 | 0.2 | 0.071 |
+| `fp` | 106 | 5 | 0.4 | 0.015 | 0.6 | 0.249 |
+| `fn` | 12 | 5 | 0.0 | 0.011 | 0.8 | 0.036 |
+
+**P3 `model.model.15`, detection-targeted — new default** (`d4_xview3_264ed833a13b7f2av_aidra_20260829T003922Z`, baseline pipeline of 2026-08-28)
+
+| Estrato | Pool | Muestras | Grad-CAM pointing-game | Grad-CAM masa en caja | CFAR pointing-game | CFAR masa en caja |
+|---|---:|---:|---:|---:|---:|---:|
+| `tp_high` | 18 | 5 | 0.6 | 0.567 | 0.8 | 0.294 |
+| `tp_low` | 17 | 5 | 0.2 | 0.149 | 0.2 | 0.071 |
+| `fp` | 106 | 5 | 0.4 | 0.318 | 0.6 | 0.249 |
+| `fn` | 12 | 5 | 0.2 | 0.171 | 0.8 | 0.036 |
+
+**Same, on the re-validated pipeline (centre fusion + unfiltered YOLO input, R14/R15)** (`d4_xview3_264ed833a13b7f2av_aidra_20260829T003933Z`)
+
+| Estrato | Pool | Muestras | Grad-CAM pointing-game | Grad-CAM masa en caja | CFAR pointing-game | CFAR masa en caja |
+|---|---:|---:|---:|---:|---:|---:|
+| `tp_high` | 18 | 5 | 0.6 | 0.32 | 0.8 | 0.134 |
+| `tp_low` | 17 | 5 | 0.4 | 0.224 | 0.2 | 0.101 |
+| `fp` | 104 | 5 | 0.2 | 0.225 | 0.6 | 0.139 |
+| `fn` | 12 | 5 | 0.2 | 0.097 | 0.8 | 0.039 |
 
 ### 6.2 Reading
 
-- On high-confidence true positives the targeted P3 Grad-CAM points at the
-  vessel in 5/5 cases with 68 % of the heat inside the box; the CFAR map
-  points in 5/5 with 41 %. Both explain what they detect.
-- Low-confidence true positives (mostly CFAR-only, YOLO silent) get 0/5
-  from Grad-CAM: the YOLO features are simply not there — consistent with
-  YOLO's 0.09 Pd in the pipeline.
-- Missed vessels: Grad-CAM points at 3/5 of them (30 % heat) although YOLO
-  produced no box — the evidence is present in P3 features but below the
-  detection threshold; CFAR's map points at 5/5 with very little heat
-  (6 %). Both are the kind of sample the top-confidence-only production
-  sampler never showed.
-- False positives: Grad-CAM points at 2/5 with 42 % heat — those are
-  strong, vessel-like responses (likely unlabelled objects or wakes), the
-  remaining 3 are diffuse.
+- Targeted P3 Grad-CAM points at the vessel in 3/5 high-confidence true
+  positives (57 % of the heat inside the box on the baseline run, 32 % on
+  the R14/R15 run); the CFAR score map points in 4/5 with 13–29 %. Neither
+  is perfect; both are far from the 0/20 of the legacy heatmaps.
+- Low-confidence true positives are mostly CFAR-only detections: Grad-CAM
+  explains 1–2 of 5 (YOLO's features are weak there — consistent with its
+  0.09–0.14 Pd), CFAR's own map only 1/5 because these are low-SNR targets.
+- Missed vessels: CFAR's map points at 4/5 of them with very little heat
+  (4 %) — the target is there but below the clustering gate; Grad-CAM 1/5.
+- False positives: Grad-CAM points at 1–2 of 5 with ~25–30 % heat (strong,
+  vessel-like responses — likely unlabelled objects), the rest diffuse.
+- Residual weakness visible in every heatmap: heat along the chip border
+  (convolution padding) competes with the target. A border mask or
+  Grad-CAM++/EigenCAM is the next step if D4 needs sharper maps.
 
 Files: `reports/interpretability/xview3_264ed833a13b7f2av_baseline_p3_targeted/`
-(20 × input / gradcam / cfar_score PNG + `manifest.json` with per-sample
-SHA256, box, stratum, pointing-game scores + `summary.md`); the two
-comparison runs keep their `manifest.json` / `summary.md`. Renderer
+and `..._r14r15_p3_targeted/` (20 × input / gradcam / cfar_score PNG each,
+`manifest.json` with per-sample SHA256, box, stratum, source, pointing-game
+scores, `summary.md`); the two comparison runs (`..._baseline_p5_global/`,
+`..._baseline_p3_global/`) keep `manifest.json` + `summary.md`. Renderer
 `vesseltracker-sar-yolov8` FP32 (`18aec1bb…`), CFAR guard/training 8/20,
-commit `b63188567554`, seed 42.
+commit `59e028b4667d`.
 
 The production D4 run on the server still reflects the legacy settings;
 it must be regenerated (`POST /api/interpretability/run`) after the

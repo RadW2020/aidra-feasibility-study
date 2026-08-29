@@ -74,6 +74,15 @@ edge filter, clipping contra el borde de datos válidos, dedup) con
 | Salida AIDRA (CFAR ∪ YOLO) | full | 4 460 | 0.356 | 0.0080 | 0.159 | 0.103 | 0.220 |
 | Solo `source="fused"` (CFAR ∩ YOLO) | full | 0 | 0 | 0 | — | — | — |
 
+Re-validación 2026-08-29 con `fusion_mode=center` (20 px) y `yolo_input=unfiltered`
+(R14/R15; `reports/validation_xview3_adriatic_full_vessels_r14r15_*.json`):
+
+| Conjunto | Predicciones | Pd | FAR/km² | Precision | AP | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| **YOLO en pipeline (sin Lee)** | 2 178 | **0.143** | 0.0040 | 0.131 | 0.026 | 0.137 |
+| Salida AIDRA (CFAR ∪ YOLO) | 4 610 | 0.361 | 0.0083 | 0.156 | 0.110 | 0.218 |
+| Solo `source="fused"` (centro ≤ 20 px) | 763 | 0.119 | 0.0011 | **0.312** | 0.062 | 0.172 |
+
 Lecturas específicas de este modelo:
 
 1. **Lee degrada YOLO** (R15): mismos pesos, Pd 0.143 sobre el raster

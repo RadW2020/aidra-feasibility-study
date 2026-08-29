@@ -2,9 +2,9 @@
 
 | Estrato | Pool | Muestras | Grad-CAM pointing-game | Grad-CAM masa en caja | CFAR pointing-game | CFAR masa en caja |
 |---|---:|---:|---:|---:|---:|---:|
-| `tp_high` | 18 | 5 | 1.0 | 0.681 | 1.0 | 0.406 |
-| `tp_low` | 17 | 5 | 0.0 | 0.108 | 0.2 | 0.117 |
-| `fp` | 106 | 5 | 0.4 | 0.415 | 0.6 | 0.327 |
-| `fn` | 12 | 5 | 0.6 | 0.298 | 1.0 | 0.056 |
+| `tp_high` | 18 | 5 | 0.6 | 0.567 | 0.8 | 0.294 |
+| `tp_low` | 17 | 5 | 0.2 | 0.149 | 0.2 | 0.071 |
+| `fp` | 106 | 5 | 0.4 | 0.318 | 0.6 | 0.249 |
+| `fn` | 12 | 5 | 0.2 | 0.171 | 0.8 | 0.036 |
 
-Grad-CAM `targeted` @ `model.model.15`; renderer: `vesseltracker-sar-yolov8` (`18aec1bb3caf…`); sujeto: `vesseltracker-sar-yolov8` (`18aec1bb3caf…`); CFAR guard/training 8/20; tolerancia 20 px; seed 42; commit `b63188567554`.
+Grad-CAM `targeted` @ `model.model.15`; renderer: `vesseltracker-sar-yolov8` (`18aec1bb3caf…`); sujeto: `vesseltracker-sar-yolov8` (`18aec1bb3caf…`); CFAR guard/training 8/20; tolerancia 20 px; seed 42; commit `59e028b4667d`.

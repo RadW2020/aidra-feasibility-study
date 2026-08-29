@@ -94,6 +94,27 @@ What the measurements say:
   xView3, no threshold calibration — far below the xView3 leaderboard
   (F1 ≈ 0.6–0.7).
 
+**Re-validation after fixing R14/R15 (2026-08-29, same 11 scenes, same GT,
+`fusion_mode=center` 20 px, `yolo_input=unfiltered`,
+`reports/validation_xview3_adriatic_full_vessels_r14r15_*.json`):**
+
+| Prediction set | Predictions | Pd | FAR / km² | Precision | AP | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| CFAR inside the pipeline | 3 818 | 0.349 | 0.0067 | 0.183 | 0.134 | 0.240 |
+| YOLO inside the pipeline (unfiltered input) | 2 178 | **0.143** | 0.0040 | 0.131 | 0.026 | 0.137 |
+| AIDRA output (CFAR ∪ YOLO) | 4 610 | 0.361 | 0.0083 | 0.156 | 0.110 | 0.218 |
+| AIDRA `source="fused"` only (CFAR ∩ YOLO, centre ≤ 20 px) | **763** | 0.119 | **0.0011** | **0.312** | 0.062 | 0.172 |
+
+YOLO recovers all the recall the Lee filter had cost it (0.093 → 0.143,
+identical to the detector alone); the fusion now fires (0 → 763) and the
+fused subset is a **high-precision tier** (0.31, twice the union's) at
+1/8 of the union's false-alarm rate. The union itself is flat
+(F1 0.220 → 0.218): CFAR still carries the recall, YOLO adds precision
+only where both agree. The legacy behaviour stays selectable
+(`fusion_mode=iou`, `yolo_input=filtered`) and reproduces the 2026-08-28
+numbers bit for bit (regression check on scene 264ed833: 191 predictions,
+36 TP in both).
+
 Every report carries its provenance (`commit_sha`, `model_hash`,
 `settings_hash`, seed, per-scene tar SHA256, library versions) and the
 exact steps exercised. Two independent runs of the full pipeline
