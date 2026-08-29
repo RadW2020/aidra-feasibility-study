@@ -1,7 +1,7 @@
 {
   "model_id": "vesseltracker-sar-yolov8-int8-static",
-  "created_at": "2026-08-29T00:17:47.027803+00:00",
-  "commit_sha": "c42e1984f68ec0c1825bc6cbdf34d4998e69cbe0",
+  "created_at": "2026-08-29T00:21:03.478806+00:00",
+  "commit_sha": "b81f029cf189fed03718659f9084b1ed86a32d94",
   "int8": {
     "path": "/Users/rauljm/codeloper/AIDRA/models/vesseltracker-sar-yolov8-int8-static.onnx",
     "sha256": "dfe4c9669c0c19c1f03d71fbae4bc5aaa2119fefa89f78656b665e622e194521",

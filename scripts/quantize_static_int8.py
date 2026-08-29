@@ -143,12 +143,15 @@ fijaron las escalas de activación con el set de calibración descrito
 arriba. Ver `{base_name}.MODEL_CARD.md` para dataset, licencia y cobertura
 geográfica.
 
-# Sesgos y limitaciones
+# Sesgos
 
 - Mismos sesgos y domain shift que el baseline (`{base_name}.MODEL_CARD.md`).
 - Calibración con una única escena/track del Adriático (VH): las escalas de
   activación pueden no cubrir mares con mayor clutter (Gibraltar, Canal) ni
   otras polarizaciones.
+
+# Limitaciones
+
 - Cuantización de 8 bits en las Conv: las detecciones de confianza media
   son las primeras en perderse (in-sample: 2 de 55 perdidas, 12 extra).
 - Reproducibilidad del artefacto condicionada al FP32 ONNX intermedio: dos
@@ -174,7 +177,8 @@ como *sujeto* de la explicación (misma convención que la variante dinámica,
 
 # Conformidad AI Act
 
-Sistema de propósito limitado, no Anexo III (`AI_ACT_DECLARATION.md`).
+Reglamento (UE) 2024/1689: sistema de propósito limitado, no Anexo III
+(`AI_ACT_DECLARATION.md`).
 Documentación técnica (Anexo IV) = esta ficha + `models_registry` +
 `execution_log` + reportes de validación (`reports/`). Supervisión humana:
 las detecciones son una capa georreferenciada con confianza y
