@@ -200,19 +200,23 @@ Pd 0.143 → 0.147, FAR 0.0040 → 0.0036; union AP 0.110 → 0.118,
 Pd 0.360 → 0.355. I-MOD-3 (ΔmAP ≤ 5 pts) satisfied; deterministic.
 
 **Compression triplet, hardware leg (2026-08-29, OCI ARM A1, production
-commit `54201b8`, `POST /api/pipeline/trigger-all-profiles`, INT8 then FP32
-on the same image `4b5dfec3-a240-45ec-96d0-567b7b303ca3`):**
+commits `54201b8` (whole scene) and `703c9dd` (banded, R17),
+`POST /api/pipeline/trigger-all-profiles`, INT8 then FP32 on the same image
+`4b5dfec3-a240-45ec-96d0-567b7b303ca3`, memory budgets enforced):**
 
-| Perfil | Modelo | Estado | Detecciones (válidas mar) | Inferencia escena | p50 / p95 por tesela | RSS pico |
-|---|---|---|---:|---:|---:|---:|
-| ground (4 OCPU ARM, 24 GB) | FP32 `v1.0` | success | 468 (167) | 52.1 min | 2329 / 2369 ms | 4964 MB |
-| ground (4 OCPU ARM, 24 GB) | **INT8 estático** | success | 460 (165) | **7.1 min** | **263 / 590 ms** | 4835 MB |
-| sat-high (2 OCPU, 4 096 MB) | FP32 / INT8 | **error: OOM budget** | — | — | — | 4 939 / 4 739 MB al primer check |
-| sat-mid (1 OCPU, 2 048 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
-| sat-low (0.5 OCPU, 1 024 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
-| sat-extreme (0.25 OCPU, 512 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+| Profile | FP32 (whole scene in RAM) | FP32 banded | INT8 (whole scene) | INT8 banded |
+|---|---|---|---|---|
+| `ground` (4 OCPU · 24 GB) | ✅ 468 det (167 mar) · 52.1 min · p50/p95 2329/2369 ms · RSS 4.85 GB | ✅ 533 det (199 mar) · 52.1 min · p50/p95 2333/2380 ms · RSS 2.61 GB | ✅ 460 det (165 mar) · 7.1 min · p50/p95 263/590 ms · RSS 4.72 GB | ✅ 505 det (197 mar) · 6.3 min · p50/p95 252/371 ms · RSS 2.60 GB |
+| `sat-high` (2 OCPU · 4 GB) | ❌ OOM budget (RSS 4.82 GB) | ✅ 533 det (199 mar) · 51.9 min · p50/p95 2326/2368 ms · RSS 2.62 GB | ❌ OOM budget (RSS 4.63 GB) | ✅ 505 det (197 mar) · 6.3 min · p50/p95 254/369 ms · RSS 2.70 GB |
+| `sat-mid` (1 OCPU · 2 GB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
+| `sat-low` (0.5 OCPU · 1 GB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
+| `sat-extreme` (0.25 OCPU · 512 MB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
 
-Misma imagen Sentinel-1 (`image_id 4b5dfec3-a240-45ec-96d0-567b7b303ca3`), mismo commit de producción (`54201b8`), `profile_memory_enforcement=abort`. INT8 es **7.4× más rápido** por escena (8.9× en p50 por tesela) con el mismo número de detecciones (Δ −8 brutas, −2 válidas) y 130 MB menos de RSS pico. Ejecuciones: INT8 `58c7afdd…`, FP32 `9a5cf2ce…` (todas en `execution_log`, consultables vía `/api/traceability/{id}`).
+Band streaming (R17) cut peak RSS from ~4.9 GB to ~2.7 GB and made `sat-high`
+complete; `sat-mid` and below hit the runtime floor. The banded runs are the
+first production runs with YOLO on the unfiltered tile (R15 correction):
+fused 161 → 187, yolo 15 → 63 on this image. Executions: ground INT8 `65c644b3…`, sat-high INT8 `cbf8d2dd…`, ground FP32 `ac1ddd8f…`, sat-high FP32 `da012ff3…`; the
+`sat-*` rows carry the OOM message in `error_message`.
 
 Verify: `GET /api/traceability/58c7afdd-2a74-43a9-b50e-84da5c7292a0` (INT8 ground) and
 `GET /api/traceability/9a5cf2ce-7344-4623-afc2-ebb37daebc88` (FP32 ground); the `sat-*`

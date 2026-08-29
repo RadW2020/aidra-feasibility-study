@@ -173,23 +173,28 @@ No measurable degradation (ΔAP +0.6 pts on the YOLO set, within the
 declared ΔmAP ≤ 5 pts), deterministic run-to-run. The dynamic-INT8 variant
 stays `rejected` (non-deterministic, +RAM).
 
-**Hardware leg (OCI ARM A1, same Sentinel-1 image, 2026-08-29):**
+**Hardware leg (OCI ARM A1, same Sentinel-1 image `4b5dfec3…`, 2026-08-29,
+memory budgets enforced; "whole scene" = the pipeline before R17, "banded" =
+`tile_stream_band_rows=4`):**
 
-| Profile | FP32 | INT8 static |
-|---|---|---|
-| `ground` (4 OCPU) | 468 det, 52.1 min, p50/p95 **2329 / 2369 ms** per tile, RSS 4.85 GB | 460 det, **7.1 min**, p50/p95 **263 / 590 ms**, RSS 4.72 GB |
-| `sat-high` … `sat-extreme` | OOM budget (RSS 4.9 GB) | OOM budget (RSS 4.7 GB) |
+| Profile | FP32 (whole scene in RAM) | FP32 banded | INT8 (whole scene) | INT8 banded |
+|---|---|---|---|---|
+| `ground` (4 OCPU · 24 GB) | ✅ 468 det (167 mar) · 52.1 min · p50/p95 2329/2369 ms · RSS 4.85 GB | ✅ 533 det (199 mar) · 52.1 min · p50/p95 2333/2380 ms · RSS 2.61 GB | ✅ 460 det (165 mar) · 7.1 min · p50/p95 263/590 ms · RSS 4.72 GB | ✅ 505 det (197 mar) · 6.3 min · p50/p95 252/371 ms · RSS 2.60 GB |
+| `sat-high` (2 OCPU · 4 GB) | ❌ OOM budget (RSS 4.82 GB) | ✅ 533 det (199 mar) · 51.9 min · p50/p95 2326/2368 ms · RSS 2.62 GB | ❌ OOM budget (RSS 4.63 GB) | ✅ 505 det (197 mar) · 6.3 min · p50/p95 254/369 ms · RSS 2.70 GB |
+| `sat-mid` (1 OCPU · 2 GB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
+| `sat-low` (0.5 OCPU · 1 GB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
+| `sat-extreme` (0.25 OCPU · 512 MB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
 
-INT8 is **7.4× faster per scene** (8.9× on p50 per tile) on the
-ARM target with the same detections and 3 % less RSS, so the variant is now
-`active` (migration 020). Every `sat-*` profile aborted under the new memory
-enforcement **before the first inference**: the pipeline held all tiles of
-the scene in RAM (~4.7 GB), a pipeline design limit, not a model one (R17).
-Since 2026-08-29 the scene is processed in **bands of 4 tile rows**
-(`Settings.tile_stream_band_rows`; `PreprocessStream` + banded detection
-under one profile run, thumbnails per band, cross-band dedup at the end),
-so peak RSS no longer scales with the scene; the per-profile results below
-are being re-measured on OCI with the banded pipeline.
+Same image, same GT-free scene: INT8 is **8.3× faster per scene**
+(p50 per tile 2 333 → 252 ms) with the same detections as FP32 on every
+profile that fits. Band streaming cut peak RSS from ~4.9 GB to ~2.7 GB and
+made **`sat-high` viable** (it used to abort before the first inference).
+`sat-mid` and below still abort at ~2.7 GB: that is now the runtime floor
+(PyTorch + ONNX Runtime + GDAL + one band), not the scene — the next R17 step
+is a one-row band and running ONNX models without importing PyTorch. The
+banded runs are also the first production runs where YOLO saw the
+unfiltered tile (R15): fused detections 161 → 187, YOLO-only 15 → 63 on this
+image. INT8 is `active` (migration 020); FP32 stays the default.
 
 ## Architecture
 

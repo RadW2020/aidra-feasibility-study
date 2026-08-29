@@ -101,25 +101,25 @@ Tamaño 52.0 MB (`.pt`) → 26.5 MB (−49 %). Tiempo de motor (CFAR + YOLO + fu
 **no hay degradación** (ΔAP +0.6 pts, dentro del ruido).
 
 Terna I-MOD-1 **pata de hardware** (2026-08-29, despliegue OCI ARM A1 vía
-`POST /api/pipeline/trigger-all-profiles`, primero INT8 y después FP32
-sobre la misma imagen):
+`POST /api/pipeline/trigger-all-profiles`, INT8 y FP32 sobre la misma imagen
+`4b5dfec3…`, presupuestos de RAM aplicados; dos rondas: pipeline con la
+escena entera en RAM y pipeline por bandas de 4 filas de teselas, R17):
 
-| Perfil | Modelo | Estado | Detecciones (válidas mar) | Inferencia escena | p50 / p95 por tesela | RSS pico |
-|---|---|---|---:|---:|---:|---:|
-| ground (4 OCPU ARM, 24 GB) | FP32 `v1.0` | success | 468 (167) | 52.1 min | 2329 / 2369 ms | 4964 MB |
-| ground (4 OCPU ARM, 24 GB) | **INT8 estático** | success | 460 (165) | **7.1 min** | **263 / 590 ms** | 4835 MB |
-| sat-high (2 OCPU, 4 096 MB) | FP32 / INT8 | **error: OOM budget** | — | — | — | 4 939 / 4 739 MB al primer check |
-| sat-mid (1 OCPU, 2 048 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
-| sat-low (0.5 OCPU, 1 024 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
-| sat-extreme (0.25 OCPU, 512 MB) | FP32 / INT8 | error: OOM budget | — | — | — | idem |
+| Perfil | FP32 (escena entera en RAM) | FP32 por bandas | INT8 (escena entera) | INT8 por bandas |
+|---|---|---|---|---|
+| `ground` (4 OCPU · 24 GB) | ✅ 468 det (167 mar) · 52.1 min · p50/p95 2329/2369 ms · RSS 4.85 GB | ✅ 533 det (199 mar) · 52.1 min · p50/p95 2333/2380 ms · RSS 2.61 GB | ✅ 460 det (165 mar) · 7.1 min · p50/p95 263/590 ms · RSS 4.72 GB | ✅ 505 det (197 mar) · 6.3 min · p50/p95 252/371 ms · RSS 2.60 GB |
+| `sat-high` (2 OCPU · 4 GB) | ❌ OOM budget (RSS 4.82 GB) | ✅ 533 det (199 mar) · 51.9 min · p50/p95 2326/2368 ms · RSS 2.62 GB | ❌ OOM budget (RSS 4.63 GB) | ✅ 505 det (197 mar) · 6.3 min · p50/p95 254/369 ms · RSS 2.70 GB |
+| `sat-mid` (1 OCPU · 2 GB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
+| `sat-low` (0.5 OCPU · 1 GB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
+| `sat-extreme` (0.25 OCPU · 512 MB) | ❌ OOM budget (RSS 4.82 GB) | ❌ OOM budget (RSS 2.60 GB) | ❌ OOM budget (RSS 4.63 GB) | ❌ OOM budget (RSS 2.65 GB) |
 
-Misma imagen Sentinel-1 (`image_id 4b5dfec3-a240-45ec-96d0-567b7b303ca3`), mismo commit de producción (`54201b8`), `profile_memory_enforcement=abort`. INT8 es **7.4× más rápido** por escena (8.9× en p50 por tesela) con el mismo número de detecciones (Δ −8 brutas, −2 válidas) y 130 MB menos de RSS pico. Ejecuciones: INT8 `58c7afdd…`, FP32 `9a5cf2ce…` (todas en `execution_log`, consultables vía `/api/traceability/{id}`).
-
-Los perfiles `sat-*` no fallan por el modelo: el proceso alcanza ~4.7–4.9 GB
-de RSS antes de la primera inferencia porque `preprocess_full` mantiene
-todas las teselas de la escena en memoria (R17). Con ambas patas medidas,
-la variante pasa a **`active`** (migración 020); el baseline FP32 sigue
-siendo el modelo por defecto.
+INT8 es **8.3× más rápido por escena** (p50 por tesela 2 333 → 252 ms) con
+las mismas detecciones que FP32 en todos los perfiles que caben; el streaming
+por bandas baja el RSS pico de ~4.9 a ~2.7 GB y hace viable `sat-high`.
+`sat-mid` y menores abortan en el suelo del proceso (~2.7 GB: PyTorch + ORT +
+GDAL + una banda), no por el modelo (R17 residual). Ejecuciones: ground INT8 `65c644b3…`, sat-high INT8 `cbf8d2dd…`, ground FP32 `ac1ddd8f…`, sat-high FP32 `da012ff3…`.
+Con ambas patas medidas la variante es **`active`** (migración 020); el
+baseline FP32 sigue siendo el modelo por defecto.
 
 # Datos de entrenamiento
 
