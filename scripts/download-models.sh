@@ -49,6 +49,17 @@ else
     echo "  vesseltracker-sar-yolov8.pt already exists, skipping."
 fi
 
+# Static INT8 variant of vesselTracker (GitHub Release asset, SHA256-pinned;
+# card: models/cards/vesseltracker-sar-yolov8-int8-static.MODEL_CARD.md)
+INT8_SHA="dfe4c9669c0c19c1f03d71fbae4bc5aaa2119fefa89f78656b665e622e194521"
+if [ ! -f "$MODELS_DIR/vesseltracker-sar-yolov8-int8-static.onnx" ]; then
+    echo "Downloading vesseltracker-sar-yolov8-int8-static.onnx (~27 MB)..."
+    curl -L -o "$MODELS_DIR/vesseltracker-sar-yolov8-int8-static.onnx" \
+        "https://github.com/RadW2020/aidra-feasibility-study/releases/download/models-int8-static-v1/vesseltracker-sar-yolov8-int8-static.onnx"
+fi
+echo "$INT8_SHA  $MODELS_DIR/vesseltracker-sar-yolov8-int8-static.onnx" | shasum -a 256 -c - \
+    || { echo "ERROR: INT8 static weight SHA256 mismatch"; exit 1; }
+
 # Export YOLOv8n to ONNX
 if [ -f "$MODELS_DIR/yolov8n.pt" ] && [ ! -f "$MODELS_DIR/yolov8n.onnx" ]; then
     echo "Exporting YOLOv8n to ONNX..."

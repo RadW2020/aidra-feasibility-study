@@ -6,7 +6,8 @@ Weights are gitignored (size); every weight that runs needs a card under
 ## Download
 
 ```bash
-./scripts/download-models.sh   # vesseltracker-sar-yolov8.pt, yolov8n.pt (+ yolov8n.onnx export)
+./scripts/download-models.sh   # vesseltracker-sar-yolov8.pt, yolov8n.pt (+ yolov8n.onnx export),
+                               # vesseltracker-sar-yolov8-int8-static.onnx (GitHub Release asset, SHA256-pinned)
 ```
 
 ## Inventory (2026-08-29)
