@@ -18,6 +18,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
+from src.api.tiers import source_sql_clause, tier_of
 from src.db.connection import db
 from src.db.models import DetectionRecord, PaginatedResponse
 from src.db.queries import SELECT_DETECTION_BY_ID, SELECT_DETECTIONS
@@ -265,6 +266,14 @@ async def list_detections_geojson(
         None,
         description="Restrict to detections from a single pipeline execution.",
     ),
+    source: str | None = Query(
+        None, pattern="^(cfar|yolo|fused)$",
+        description="Detector that produced the detection. 'fused' = CFAR and YOLO agreed (high-precision tier).",
+    ),
+    tier: str | None = Query(
+        None, pattern="^(high|standard)$",
+        description="'high' = source=fused (precision 0.31 on xView3 vs 0.16 overall); 'standard' = the rest.",
+    ),
 ) -> Response:
     """Return detections as RFC 7946 GeoJSON FeatureCollection.
 
@@ -286,6 +295,11 @@ async def list_detections_geojson(
         select_q = select_q.replace(
             "ORDER BY d.confidence DESC",
             f"AND d.execution_id = '{execution_id}'::uuid\nORDER BY d.confidence DESC",
+        )
+    tier_clause = source_sql_clause(source, tier)
+    if tier_clause:
+        select_q = select_q.replace(
+            "ORDER BY d.confidence DESC", f"{tier_clause}\nORDER BY d.confidence DESC"
         )
     rows = await db.fetch(
         select_q, profile, model, min_confidence, dt_from, dt_to,
@@ -318,6 +332,9 @@ async def list_detections_geojson(
             "detected_at": r["created_at"].isoformat() if r.get("created_at") else None,
         })
     fc = detections_to_geojson(features_input)
+    for feature in fc.get("features", []):
+        props = feature.setdefault("properties", {})
+        props["tier"] = tier_of(props.get("source"))
     return Response(
         content=json.dumps(fc, default=str),
         media_type="application/geo+json",

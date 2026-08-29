@@ -25,6 +25,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
+from src.api.tiers import source_sql_clause, tier_of
 from src.db.connection import db
 from src.db.queries import SELECT_DETECTIONS
 
@@ -279,6 +280,7 @@ def _row_to_feature(row: Any, request: Request) -> dict[str, Any]:
         "on_land": bool(row.get("on_land", False)),
         "cluster_anomaly": bool(row.get("cluster_anomaly", False)),
         "quality_verdict": row.get("quality_verdict", "candidate"),
+        "tier": tier_of(row.get("source")),
         "bbox_pixel": bbox_pixel_list,
     }
 
@@ -411,6 +413,8 @@ async def list_items(
     ),
     limit: int = Query(100, ge=1, le=1000, description="Max features per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
+    source: str | None = Query(None, pattern="^(cfar|yolo|fused)$", description="cfar | yolo | fused (CFAR and YOLO agreed)"),
+    tier: str | None = Query(None, pattern="^(high|standard)$", description="high = source=fused; standard = the rest"),
 ) -> Response:
     """Return matching detections as an RFC 7946 FeatureCollection."""
     if collection_id != _COLLECTION_ID:
@@ -426,6 +430,11 @@ async def list_items(
     if bbox_geojson is not None:
         select_q = select_q.replace("$1::geometry", "ST_GeomFromGeoJSON($1::text)")
         count_q = count_q.replace("$1::geometry", "ST_GeomFromGeoJSON($1::text)")
+    tier_clause = source_sql_clause(source, tier)
+    if tier_clause:
+        # Both queries share one WHERE; splice the validated predicate in.
+        select_q = select_q.replace("WHERE ", f"WHERE {tier_clause[4:]} AND ", 1)
+        count_q = count_q.replace("WHERE ", f"WHERE {tier_clause[4:]} AND ", 1)
 
     try:
         rows = await db.fetch(

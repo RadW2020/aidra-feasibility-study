@@ -108,7 +108,13 @@ What the measurements say:
 YOLO recovers all the recall the Lee filter had cost it (0.093 → 0.143,
 identical to the detector alone); the fusion now fires (0 → 763) and the
 fused subset is a **high-precision tier** (0.31, twice the union's) at
-1/8 of the union's false-alarm rate. The union itself is flat
+1/8 of the union's false-alarm rate. That tier is exposed as an operating
+point, never as a default filter: `GET /api/detections.geojson?tier=high`
+(or `?source=fused`), the same `source`/`tier` parameters on OGC API
+Features items, a `tier` property on every feature, and the *Source / tier*
+selector plus the "High-confidence tier" panel in the Detection Map
+dashboard. Tip & Cue already re-tasks only on `yolo`/`fused` detections
+(`TipEvaluator`), so the tier is also what drives autonomous re-tasking. The union itself is flat
 (F1 0.220 → 0.218): CFAR still carries the recall, YOLO adds precision
 only where both agree. The legacy behaviour stays selectable
 (`fusion_mode=iou`, `yolo_input=filtered`) and reproduces the 2026-08-28

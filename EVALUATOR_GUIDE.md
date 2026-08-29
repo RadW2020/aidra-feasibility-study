@@ -48,6 +48,7 @@
 | OGC API Features-style pagination (`numberMatched` + `numberReturned` + `next`/`prev` rel-links) | item list payload |
 | Per-Item `assets.detections` filtered by `execution_id` (not by model) | open any Item, click the asset href |
 | **GeoJSON** RFC 7946 with `application/geo+json` and on_land / cluster_anomaly filters | `GET /api/detections.geojson?on_land=false&cluster_anomaly=false&execution_id=<UUID>` |
+| **High-precision tier** — detections where CFAR and YOLO agreed (`source=fused`; precision 0.31 vs 0.16, FAR 8× lower, Pd 0.12 vs 0.36 on xView3); `tier` property on every feature | `GET /api/detections.geojson?tier=high`, `GET /api/ogc/collections/detections/items?source=fused`, Grafana *Source / tier* selector |
 | **PNG thumbnails** of the SAR crop around each detection | `GET /api/detections/{id}/thumbnail.png` |
 | Ready for QGIS, ArcGIS, pystac, ogr2ogr (verified) | n/a |
 

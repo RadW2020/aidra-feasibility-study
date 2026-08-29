@@ -81,7 +81,7 @@ Re-validación 2026-08-29 con `fusion_mode=center` (20 px) y `yolo_input=unfilte
 |---|---:|---:|---:|---:|---:|---:|
 | **YOLO en pipeline (sin Lee)** | 2 178 | **0.143** | 0.0040 | 0.131 | 0.026 | 0.137 |
 | Salida AIDRA (CFAR ∪ YOLO) | 4 610 | 0.361 | 0.0083 | 0.156 | 0.110 | 0.218 |
-| Solo `source="fused"` (centro ≤ 20 px) | 763 | 0.119 | 0.0011 | **0.312** | 0.062 | 0.172 |
+| Solo `source="fused"` (centro ≤ 20 px) — expuesto como `tier=high` en API y dashboard | 763 | 0.119 | 0.0011 | **0.312** | 0.062 | 0.172 |
 
 Lecturas específicas de este modelo:
 
