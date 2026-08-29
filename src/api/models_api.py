@@ -7,9 +7,16 @@ available constraint profiles, and predefined search zones.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
+import shutil
+import urllib.request
+from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from src.db.connection import db
 from src.db.models import ModelInfo
@@ -171,3 +178,96 @@ async def list_zones() -> list[dict]:
     of the maritime area.
     """
     return SEARCH_ZONES
+
+
+# ---------------------------------------------------------------------------
+# POST /models/fetch — bring a weight into the models volume without SSH
+# ---------------------------------------------------------------------------
+
+_SAFE_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(onnx|pt)$")
+
+
+class ModelFetchRequest(BaseModel):
+    """Download a weight from an https URL into ``Settings.models_dir``.
+
+    The models directory is a Docker volume on the deployment, so weights
+    cannot be shipped in the image; this is the repo-provided, API-invokable
+    way to place one (e.g. a GitHub Release asset). The SHA256 is mandatory
+    and verified before the file is exposed; the card gate (I-MOD-4 /
+    I-AIA-1) is checked BEFORE downloading; the registry scan afterwards
+    records compressed variants as ``candidate`` (I-MOD-3).
+    """
+
+    filename: str = Field(pattern=_SAFE_FILENAME.pattern, description="Target file name under models_dir.")
+    url: str = Field(pattern=r"^https://", max_length=2048)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    overwrite: bool = False
+
+
+def _download(url: str, dest: Path, chunk: int = 1 << 20) -> str:
+    """Stream ``url`` into ``dest`` and return its SHA256 (module-level for tests)."""
+    h = hashlib.sha256()
+    req = urllib.request.Request(url, headers={"User-Agent": "aidra-models-fetch"})
+    with urllib.request.urlopen(req, timeout=120) as r, dest.open("wb") as out:
+        while data := r.read(chunk):
+            h.update(data)
+            out.write(data)
+    return h.hexdigest()
+
+
+@router.post("/models/fetch")
+async def fetch_model(request: ModelFetchRequest) -> dict[str, Any]:
+    from src.config import Settings
+    from src.models.manager import ModelManager, initial_variant_status
+
+    settings = Settings()
+    models_dir = Path(settings.models_dir)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    target = models_dir / request.filename
+    if target.exists() and not request.overwrite:
+        raise HTTPException(status_code=409, detail=f"{request.filename} already exists (set overwrite=true)")
+
+    manager = ModelManager(models_dir=models_dir, db=db)
+    stem = target.stem
+    try:
+        manager._require_model_card(stem, target)  # I-MOD-4 / I-AIA-1, before any download
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"No MODEL_CARD for {stem}: {exc}") from exc
+
+    tmp = models_dir / f".{request.filename}.part"
+    try:
+        digest = _download(request.url, tmp)
+    except Exception as exc:
+        tmp.unlink(missing_ok=True)
+        raise HTTPException(status_code=502, detail=f"download failed: {type(exc).__name__}: {exc}") from exc
+    if digest != request.sha256:
+        tmp.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=422,
+            detail=f"SHA256 mismatch: expected {request.sha256[:16]}…, got {digest[:16]}…; file discarded",
+        )
+    shutil.move(str(tmp), str(target))
+    size_mb = round(target.stat().st_size / (1024 * 1024), 2)
+
+    registered = []
+    try:
+        registered = await manager.scan_and_register()
+    except Exception:
+        logger.warning("scan_and_register after fetch failed", exc_info=True)
+    _name, version, _fmt = ModelManager._parse_model_name(request.filename)
+    technique = next((t for _s, v, t in manager_suffixes() if v == version), "none")
+    logger.info("Fetched model %s (%.2f MB, sha256 %s…)", request.filename, size_mb, digest[:12])
+    return {
+        "filename": request.filename,
+        "path": str(target),
+        "sha256": digest,
+        "size_mb": size_mb,
+        "registered_models": len(registered),
+        "initial_status": initial_variant_status(technique),
+    }
+
+
+def manager_suffixes() -> list[tuple[str, str, str]]:
+    from src.models.manager import _COMPRESSION_SUFFIXES
+
+    return list(_COMPRESSION_SUFFIXES)

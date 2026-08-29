@@ -34,6 +34,10 @@ class Settings(BaseSettings):
 
     # ---- Directorios ----
     models_dir: str = "/app/models"
+    # Cards copied by the Dockerfile outside the models volume; synced into
+    # ``models_dir/cards`` at startup (src/models/cards_sync.py). Empty or
+    # missing -> no sync (local dev runs from the repo).
+    model_cards_dist_dir: str = "/app/models_dist/cards"
     images_dir: str = "/data/images"
     thumbnails_dir: str = "/data/thumbnails"
 

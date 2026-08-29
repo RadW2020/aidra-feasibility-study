@@ -186,6 +186,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if migrations_dir.is_dir():
         await db.run_migrations(migrations_dir)
 
+    # --- 3b. Cards from git -> models volume (I-MOD-4 / I-AIA-1) ---
+    try:
+        from src.models.cards_sync import sync_model_cards
+
+        sync_model_cards(settings.model_cards_dist_dir, Path(settings.models_dir) / "cards")
+    except Exception:
+        logger.warning("Model card sync failed", exc_info=True)
+
     # --- 4. Scan and register models ---
     try:
         from src.models.manager import ModelManager

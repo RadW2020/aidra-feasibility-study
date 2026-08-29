@@ -575,6 +575,23 @@ class ModelManager:
     # se registra en models_registry y, por tanto, no se ejecuta.
     _MODEL_CARDS_DIR: Path = Path("models/cards")
 
+    def _cards_dir(self) -> Path:
+        """Cards live next to the weights (``<models_dir>/cards``).
+
+        On the deployment that is the ``aidra-models`` volume, populated at
+        startup by ``cards_sync``; locally it is ``models/cards`` in the repo.
+        Falls back to the historical relative path when ``models_dir`` has no
+        ``cards`` directory (e.g. a scratch models dir in a test).
+        """
+        if "_MODEL_CARDS_DIR" in self.__dict__:  # explicit per-instance override
+            return Path(self.__dict__["_MODEL_CARDS_DIR"])
+        models_dir = getattr(self, "models_dir", None)
+        if models_dir is not None:
+            candidate = Path(models_dir) / "cards"
+            if candidate.is_dir():
+                return candidate
+        return self._MODEL_CARDS_DIR
+
     def _require_model_card(self, name: str, model_path: Path) -> None:
         """Asegura que existe ``models/cards/<name>.MODEL_CARD.md``.
 
@@ -585,9 +602,9 @@ class ModelManager:
         """
         candidates = [
             # Ficha específica de variante (stem del archivo de pesos)
-            self._MODEL_CARDS_DIR / f"{model_path.stem}.MODEL_CARD.md",
+            self._cards_dir() / f"{model_path.stem}.MODEL_CARD.md",
             # Ficha genérica por nombre de modelo (FP32 baseline)
-            self._MODEL_CARDS_DIR / f"{name}.MODEL_CARD.md",
+            self._cards_dir() / f"{name}.MODEL_CARD.md",
         ]
         for c in candidates:
             if c.exists():

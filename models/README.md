@@ -36,3 +36,19 @@ scene before it counts as evidence (I-MOD-1/2/3).
 
 Detection quality of the models against xView3-SAR ground truth:
 `reports/validation_xview3_adriatic_full_vessels_*.json` (see README table).
+
+## How weights reach the server (no SSH)
+
+`/app/models` on the Coolify deployment is the `aidra-models` volume: it
+shadows the image's `models/` and was only seeded on the first deploy.
+
+- **Cards** (`models/cards/*.MODEL_CARD.md`) are versioned in git; the image
+  keeps a copy in `/app/models_dist/cards` and the app syncs them into the
+  volume at startup (`src/models/cards_sync.py`), backing up any card it
+  overwrites as `*.superseded-<timestamp>`.
+- **Weights** are fetched on demand through the API:
+  `POST /api/models/fetch {"filename", "url" (https), "sha256"}` (bearer
+  token). The card must already exist, the SHA256 is verified before the
+  file is exposed, and the registry scan records compressed variants as
+  `candidate` (I-MOD-3). Example for the static INT8 release asset:
+  `{"filename": "vesseltracker-sar-yolov8-int8-static.onnx", "url": "https://github.com/RadW2020/aidra-feasibility-study/releases/download/models-int8-static-v1/vesseltracker-sar-yolov8-int8-static.onnx", "sha256": "dfe4c9669c0c19c1f03d71fbae4bc5aaa2119fefa89f78656b665e622e194521"}`.

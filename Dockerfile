@@ -30,6 +30,10 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 COPY pyproject.toml ./
 COPY src/ ./src/
 COPY models/ ./models/
+# Second copy of the cards OUTSIDE the /app/models volume: the volume shadows
+# ./models at runtime and was only seeded on the first deploy, so git changes
+# to the cards never reached the server. Synced at startup (cards_sync).
+COPY models/cards/ ./models_dist/cards/
 COPY scripts/ ./scripts/
 
 # Install project dependencies, then swap opencv for headless

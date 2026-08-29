@@ -77,7 +77,7 @@ fi
 
 echo ""
 echo "=== Model Checksums ==="
-for f in "$MODELS_DIR"/*.pt "$MODELS_DIR"/*.onnx 2>/dev/null; do
+for f in "$MODELS_DIR"/*.pt "$MODELS_DIR"/*.onnx; do
     if [ -f "$f" ]; then
         hash=$(shasum -a 256 "$f" | cut -d' ' -f1)
         size=$(du -h "$f" | cut -f1)
