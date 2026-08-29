@@ -26,7 +26,7 @@ declarada antes del run (ΔmAP ≤ 5 pts, `Settings`).
 | Fichero | `vesseltracker-sar-yolov8-int8-static.onnx` |
 | Tamaño | 26.54 MB (74 % menor que el FP32 ONNX, 49 % menor que el `.pt`) |
 | SHA256 | `dfe4c9669c0c19c1f03d71fbae4bc5aaa2119fefa89f78656b665e622e194521` |
-| Creado | 2026-08-29 00:11 UTC por `scripts/quantize_static_int8.py` (commit `9156a3651ec7`) |
+| Creado | 2026-08-29 00:17 UTC por `scripts/quantize_static_int8.py` (commit `c42e1984f68e`) |
 
 # Método de compresión
 
@@ -83,11 +83,46 @@ Pendientes de la terna sobre las mismas 11 escenas xView3 que el baseline
 tesela, RAM pico, tamaño. Se anotan aquí al ejecutarla; hasta entonces esta
 variante **no** entra en evaluación (I-MOD-1/3).
 
-# Limitaciones
+# Datos de entrenamiento
 
-- Mismo dataset de entrenamiento, sesgos y domain shift que el baseline
-  (ver `vesseltracker-sar-yolov8.MODEL_CARD.md`).
-- Calibración con una única escena/track del Adriático: las escalas de
-  activación pueden no cubrir mares con mayor clutter (Gibraltar, Canal).
-- Anexo IV AI Act: esta ficha + `models_registry` (status, hash) +
-  `execution_log` constituyen la documentación técnica de la variante.
+Idénticos al modelo base — esta variante **no fue re-entrenada**; solo se
+fijaron las escalas de activación con el set de calibración descrito
+arriba. Ver `vesseltracker-sar-yolov8.MODEL_CARD.md` para dataset, licencia y cobertura
+geográfica.
+
+# Sesgos y limitaciones
+
+- Mismos sesgos y domain shift que el baseline (`vesseltracker-sar-yolov8.MODEL_CARD.md`).
+- Calibración con una única escena/track del Adriático (VH): las escalas de
+  activación pueden no cubrir mares con mayor clutter (Gibraltar, Canal) ni
+  otras polarizaciones.
+- Cuantización de 8 bits en las Conv: las detecciones de confianza media
+  son las primeras en perderse (in-sample: 2 de 55 perdidas, 12 extra).
+- Reproducibilidad del artefacto condicionada al FP32 ONNX intermedio: dos
+  exportaciones de ultralytics del mismo `.pt` no son byte-idénticas (metadatos),
+  pero dado el mismo FP32 ONNX + mismo set de calibración el INT8 sí lo es
+  (verificado 2026-08-29: SHA256 idéntico en dos cuantizaciones).
+
+# Interpretabilidad
+
+Grad-CAM no es aplicable al grafo ONNX cuantizado (sin autograd). El anexo D4
+usa el baseline FP32 `.pt` como *renderer* del mapa de calor y esta variante
+como *sujeto* de la explicación (misma convención que la variante dinámica,
+`EVIDENCE.md` § D4); el manifest registra ambos hashes por separado.
+
+# Trazabilidad
+
+- `models_registry`: nombre `vesseltracker-sar-yolov8`, versión `int8-static`,
+  `compression_technique=static_int8`, `status=candidate`, SHA256 del fichero.
+- Cada run persiste `model_hash` (SHA256 de este `.onnx`), `commit_sha`,
+  `input_params_hash` e `inference_p50_ms` / `inference_p95_ms` (I-MOD-2).
+- Provenance del artefacto: `/Users/rauljm/codeloper/AIDRA/models/vesseltracker-sar-yolov8-int8-static.calibration.json` (config de cuantización,
+  hashes del `.pt` / FP32 ONNX / INT8, set de calibración con centros y SHA256).
+
+# Conformidad AI Act
+
+Sistema de propósito limitado, no Anexo III (`AI_ACT_DECLARATION.md`).
+Documentación técnica (Anexo IV) = esta ficha + `models_registry` +
+`execution_log` + reportes de validación (`reports/`). Supervisión humana:
+las detecciones son una capa georreferenciada con confianza y
+`quality_verdict`; ninguna decisión automatizada sobre personas.
