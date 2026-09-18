@@ -85,7 +85,7 @@ TIPS_GENERATED_TOTAL = Counter(
 CUES_EXECUTED_TOTAL = Counter(
     "aidra_cues_executed_total",
     "Total cues executed",
-    ["status"],  # confirmed, discarded
+    ["status"],  # confirmed, discarded, skipped
 )
 
 DECISION_ACTION = Counter(

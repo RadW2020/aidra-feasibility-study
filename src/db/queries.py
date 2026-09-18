@@ -299,6 +299,44 @@ INSERT_CUE = """
     RETURNING id
 """
 
+# Ultima ejecucion con exito para la MISMA terna (escena, modelo, params).
+#
+# Es la clave de deduplicacion del pipeline: la busqueda de Copernicus pide
+# productos de los ultimos 7 dias con max_results=1, asi que hasta que se
+# publica una escena nueva devuelve siempre la misma. Sin esta consulta, cada
+# scan programado volvia a descargar 1,7 GB y a recalcular una hora de
+# inferencia para reproducir detecciones que ya estaban en PostGIS.
+#
+# La terna es exactamente la de I-TRACE-4: misma imagen, mismo modelo, mismos
+# parametros de entrada => mismo output_hash. Si algo de eso cambia, el hash
+# cambia y la ejecucion vuelve a correr.
+SELECT_SUCCESSFUL_EXECUTION_FOR_INPUTS = """
+    SELECT id, num_detections, output_hash, created_at
+    FROM execution_log
+    WHERE image_id = $1
+      AND model_hash = $2
+      AND input_params_hash = $3
+      AND status = 'success'
+    ORDER BY created_at DESC
+    LIMIT 1
+"""
+
+# Escena procesada por la ejecucion que genero un cue: el cue no debe volver
+# a procesarla (ver process_pending_cues).
+SELECT_EXECUTION_IMAGE_ID = """
+    SELECT image_id
+    FROM execution_log
+    WHERE id = $1
+"""
+
+# Cues que todavia pueden necesitar la escena descargada. Mientras haya
+# alguno, el .zip no se borra al terminar el run.
+COUNT_LIVE_CUES = """
+    SELECT COUNT(*) AS live
+    FROM tasking_queue
+    WHERE status IN ('pending', 'processing')
+"""
+
 SELECT_PENDING_CUES = """
     WITH picked AS (
         SELECT id

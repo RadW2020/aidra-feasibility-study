@@ -171,6 +171,12 @@ class PipelineRequest(BaseModel):
         Tipo de trigger (``"manual"``, ``"scheduled"``, ``"cue"``).
     triggered_by:
         UUID de la ejecucion que genero un cue que disparo esta.
+    exclude_image_id:
+        Escena que esta ejecucion NO debe procesar. Lo rellena el procesador
+        de cues con la imagen de la ejecucion que genero el cue: un cue
+        existe para mirar algo *nuevo*, no para repetir el trabajo que
+        acaba de terminar. Si la busqueda devuelve esa misma escena, el run
+        termina en ``skipped`` sin descargar nada.
     """
 
     zone: str = "gibraltar"
@@ -179,6 +185,7 @@ class PipelineRequest(BaseModel):
     profile: str = "ground"
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None
+    exclude_image_id: str | None = None
     aoi_bbox: list[float] | None = None
     # I-DET-4: ``None`` means "use Settings". Resolved once by
     # ``PipelineEngine._apply_settings_defaults`` so cron, Tip & Cue and
@@ -375,6 +382,37 @@ class PipelineEngine:
 
             # ---- Step 3: Search for image ----
             product = await self._search_image(request)
+
+            # ---- Step 3b: Is there anything new to do? ----
+            skip_reason = await self._skip_reason(
+                product=product,
+                request=request,
+                model_hash=model_info["hash"],
+                input_params_hash=input_params_hash,
+            )
+            if skip_reason is not None:
+                total_ms = (time.monotonic() - start_time) * 1000.0
+                await self.recorder.update(
+                    execution_id=execution_id,
+                    status="skipped",
+                    total_duration_ms=total_ms,
+                    notes=skip_reason,
+                )
+                self._log.info(
+                    "Pipeline skipped: nothing new to process",
+                    extra={
+                        "execution_id": str(execution_id),
+                        "product_id": product.product_id,
+                        "reason": skip_reason,
+                        "trigger_type": request.trigger_type,
+                    },
+                )
+                return PipelineResult(
+                    execution_id=execution_id,
+                    status="skipped",
+                    num_detections=0,
+                    total_duration_ms=total_ms,
+                )
 
             # ---- Step 4: Download image ----
             download_start = time.monotonic()
@@ -699,10 +737,24 @@ class PipelineEngine:
 
         finally:
             # ---- Step 14: Cleanup temporary files ----
+            #
+            # El .SAFE extraido se borra siempre: es lo voluminoso (~3-4 GB)
+            # y se regenera en 17 s desde el zip. El zip sobrevive mientras
+            # queden cues vivos, porque el siguiente run puede necesitar esa
+            # misma escena y bajarla otra vez cuesta 1,7 GB por la VNIC —que
+            # es como el pipeline acabo tumbando el host el 17/09/2026—.
+            # cleanup_old_images (diario, TTL 24 h) es el que cierra la
+            # puerta: nada se queda ahi indefinidamente.
             if extract_path and extract_path.exists():
                 await self._cleanup(extract_path)
             if image_path and image_path.exists():
-                await self._cleanup(image_path)
+                if await self._has_live_cues():
+                    self._log.info(
+                        "Keeping downloaded product: cues still queued",
+                        extra={"path": str(image_path)},
+                    )
+                else:
+                    await self._cleanup(image_path)
 
     async def run_all_profiles(
         self,
@@ -1013,6 +1065,100 @@ class PipelineEngine:
         if request.iou_threshold is None:
             update["iou_threshold"] = self.config.iou_threshold
         return request.model_copy(update=update) if update else request
+
+    async def _has_live_cues(self) -> bool:
+        """True si hay cues en cola que podrian necesitar esta escena.
+
+        Deliberadamente generoso: cualquier cue vivo basta para conservar el
+        zip. Equivocarse por exceso cuesta 1,7 GB de disco durante como mucho
+        24 h; equivocarse por defecto cuesta volver a descargarlos por una
+        VNIC que OCI estrangula, y con ella el resto de servicios de la
+        maquina.
+        """
+        from src.db.connection import db as _db
+        from src.db.queries import COUNT_LIVE_CUES
+
+        try:
+            row = await _db.fetchrow(COUNT_LIVE_CUES)
+        except Exception:
+            # Sin respuesta de la BD se conserva el comportamiento antiguo
+            # (borrar), que es el que no llena el disco.
+            self._log.error(
+                "Live-cue lookup failed; cleaning up",
+                exc_info=True,
+            )
+            return False
+
+        return bool(row and row["live"] > 0)
+
+    async def _skip_reason(
+        self,
+        product: CopernicusSearchResult,
+        request: PipelineRequest,
+        model_hash: str,
+        input_params_hash: str,
+    ) -> str | None:
+        """Devuelve por que este run no tiene nada que hacer, o ``None``.
+
+        Dos motivos, los dos comprobados ANTES de descargar, que es donde
+        esta el coste: 1,7 GB de escena y ~55 min de inferencia.
+
+        1. **El cue apunta a su propia escena.** Un cue nace de una ejecucion
+           y existe para mirar algo que esa ejecucion no cubrio. Si la
+           busqueda le devuelve la misma imagen que proceso su padre, el cue
+           solo repetiria el trabajo. El 17/09/2026 eso encadeno cuatro runs
+           sobre el mismo producto en 95 minutos.
+
+        2. **Esa terna ya se proceso con exito.** Misma escena, mismo modelo
+           y mismos parametros de entrada dan el mismo ``output_hash`` por
+           construccion (I-TRACE-4), asi que volver a correr no produce
+           evidencia nueva: produce una fila duplicada. Y ocurria en cada
+           scan programado, porque la busqueda devuelve la escena mas
+           reciente de los ultimos 7 dias hasta que Copernicus publica otra.
+
+        No se usa el ``image_hash`` como clave aunque seria el criterio mas
+        fuerte: solo se conoce despues de descargar el fichero, que es
+        justamente lo que se quiere evitar. El ``product_id`` de Copernicus
+        es estable para un producto dado.
+        """
+        if request.trigger_type == "manual":
+            # Una peticion explicita de una persona se ejecuta siempre. El
+            # automatismo se deduplica; el operador que pide un run sabe lo
+            # que pide y no tiene que pelearse con una cache.
+            return None
+
+        if request.exclude_image_id and product.product_id == request.exclude_image_id:
+            return (
+                f"skipped: cue would reprocess its own scene ({product.product_id})"
+            )
+
+        from src.db.connection import db as _db
+        from src.db.queries import SELECT_SUCCESSFUL_EXECUTION_FOR_INPUTS
+
+        try:
+            row = await _db.fetchrow(
+                SELECT_SUCCESSFUL_EXECUTION_FOR_INPUTS,
+                product.product_id,
+                model_hash,
+                input_params_hash,
+            )
+        except Exception:
+            # Un fallo de BD no debe impedir procesar: como mucho se repite
+            # trabajo, que es el comportamiento anterior a este cambio.
+            self._log.error(
+                "Dedup lookup failed; running anyway",
+                exc_info=True,
+            )
+            return None
+
+        if row:
+            return (
+                f"skipped: scene {product.product_id} already processed by "
+                f"execution {row['id']} with the same model and parameters "
+                f"({row['num_detections']} detections)"
+            )
+
+        return None
 
     def _build_input_params(
         self, request: PipelineRequest, model_info: dict[str, Any]
