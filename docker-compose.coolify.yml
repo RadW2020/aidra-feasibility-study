@@ -1,5 +1,15 @@
 # AIDRA demo deployment for Coolify.
 #
+# Las imagenes NO se construyen aqui: las publica .github/workflows/images.yml
+# en GHCR y el servidor solo hace pull. Construir en la instancia descargaba
+# capas base y ruedas de PyTorch a toda velocidad, y esa rafaga hace que OCI
+# empiece a descartar paquetes de entrada en la VNIC: dos despliegues seguidos
+# costaron ~76.000 paquetes tirados y un check en timeout (18/09/2026). Ademas
+# competia por las 4 OCPUs con todo lo demas.
+#
+# AIDRA_IMAGE_TAG permite fijar un SHA concreto para volver atras sin tocar
+# git; por defecto sigue a main.
+#
 # This file is intentionally separate from docker-compose.yml:
 # - no host port bindings, so it cannot collide with Coolify or other apps
 # - only aidra-app and aidra-grafana are meant to be routed by Coolify
@@ -11,10 +21,7 @@
 
 services:
   aidra-app:
-    build:
-      context: .
-      args:
-        AIDRA_COMMIT_SHA: ${AIDRA_COMMIT_SHA:-unknown}
+    image: ghcr.io/radw2020/aidra-app:${AIDRA_IMAGE_TAG:-main}
     restart: unless-stopped
     expose:
       - "8000"
@@ -51,9 +58,7 @@ services:
           memory: 3G
 
   aidra-db:
-    build:
-      context: .
-      dockerfile: Dockerfile.postgis
+    image: ghcr.io/radw2020/aidra-db:${AIDRA_IMAGE_TAG:-main}
     restart: unless-stopped
     environment:
       - POSTGRES_DB=aidra
@@ -74,9 +79,7 @@ services:
           memory: 512M
 
   aidra-grafana:
-    build:
-      context: .
-      dockerfile: Dockerfile.grafana
+    image: ghcr.io/radw2020/aidra-grafana:${AIDRA_IMAGE_TAG:-main}
     restart: unless-stopped
     expose:
       - "3000"
@@ -147,9 +150,7 @@ services:
           memory: 256M
 
   aidra-prom:
-    build:
-      context: .
-      dockerfile: Dockerfile.prometheus
+    image: ghcr.io/radw2020/aidra-prom:${AIDRA_IMAGE_TAG:-main}
     restart: unless-stopped
     expose:
       - "9090"
@@ -167,9 +168,7 @@ services:
           memory: 256M
 
   aidra-loki:
-    build:
-      context: .
-      dockerfile: Dockerfile.loki
+    image: ghcr.io/radw2020/aidra-loki:${AIDRA_IMAGE_TAG:-main}
     restart: unless-stopped
     expose:
       - "3100"

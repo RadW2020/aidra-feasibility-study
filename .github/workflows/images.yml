@@ -84,3 +84,25 @@ jobs:
           # etiqueta, para que execution_log lo siga registrando sin /.git.
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # El despliegue lo dispara el workflow, no el push: si Coolify se lanzase
+  # solo con el commit, haria pull de una etiqueta :main que todavia apunta a
+  # la imagen anterior. Aqui ya esta publicada.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Coolify deployment
+        env:
+          WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          # Sin secreto no se falla el workflow: se avisa. Un rojo aqui
+          # taparia los fallos de build, que si importan.
+          if [ -z "$WEBHOOK" ] || [ -z "$TOKEN" ]; then
+            echo "::warning::COOLIFY_WEBHOOK/COOLIFY_TOKEN sin configurar: las imagenes estan publicadas pero el servidor seguira con la anterior hasta que alguien despliegue"
+            exit 0
+          fi
+          curl --fail --silent --show-error --request GET \
+            "$WEBHOOK" --header "Authorization: Bearer $TOKEN"
