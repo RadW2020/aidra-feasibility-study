@@ -22,6 +22,8 @@ services:
       - DEFAULT_MODEL=${DEFAULT_MODEL:-vesseltracker-sar-yolov8}
       - DEFAULT_MODEL_VERSION=${DEFAULT_MODEL_VERSION:-v1.0}
       - LOG_LEVEL=INFO
+      # Aggregate Copernicus download ceiling in Mbps; 0 to uncap locally.
+      - DOWNLOAD_RATE_LIMIT_MBPS=${DOWNLOAD_RATE_LIMIT_MBPS:-20}
       - PROMETHEUS_ENABLED=true
       - LOKI_URL=http://aidra-loki:3100
       - AIDRA_COMMIT_SHA=${AIDRA_COMMIT_SHA:-unknown}

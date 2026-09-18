@@ -21,7 +21,9 @@ Notas:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import time
 import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -54,6 +56,11 @@ HASH_CHUNK_SIZE = 64 * 1024  # 64 KB
 # - Token expires in 10 min, refresh within 60 min
 PARALLEL_DOWNLOAD_WORKERS = 4  # max concurrent connections
 CHUNK_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB per chunk for parallel download
+
+# Socket reads while throttled: small enough that the pacing is smooth
+# instead of a burst at line rate followed by a pause.
+THROTTLED_READS_PER_SECOND = 8
+MIN_THROTTLED_READ_SIZE = 64 * 1024  # 64 KB
 
 SEARCH_ZONES: dict[str, dict[str, Any]] = {
     "gibraltar": {
@@ -179,6 +186,78 @@ class CopernicusAuth:
 
 
 # ---------------------------------------------------------------------------
+# Download throttle
+# ---------------------------------------------------------------------------
+
+
+class DownloadThrottle:
+    """Token bucket shared by every download worker of one ingester.
+
+    A per-connection limit would not bound what the host actually pulls:
+    a product is fetched with :data:`PARALLEL_DOWNLOAD_WORKERS` parallel
+    Range requests and what saturates the link is their sum, so the budget
+    has to be shared. Reading slower is enough to slow the sender down —
+    TCP flow control closes the receive window on its own.
+
+    Args:
+        rate_bytes_per_second: Aggregate ceiling. ``<= 0`` disables the
+            throttle and every call becomes a no-op.
+    """
+
+    def __init__(self, rate_bytes_per_second: float) -> None:
+        self._rate = max(0.0, float(rate_bytes_per_second))
+        # One second of burst, but never less than a single read, or a
+        # read larger than the bucket could never be paid for.
+        self._capacity = max(self._rate, float(MIN_THROTTLED_READ_SIZE))
+        self._tokens = self._capacity
+        self._updated = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    @property
+    def enabled(self) -> bool:
+        """Whether a ceiling is in force."""
+        return self._rate > 0
+
+    @property
+    def rate_mbps(self) -> float:
+        """The ceiling in megabits per second (0 when disabled)."""
+        return self._rate * 8 / 1_000_000
+
+    @property
+    def read_size(self) -> int:
+        """Socket read size to request from httpx.
+
+        Unthrottled this is the plain :data:`DOWNLOAD_CHUNK_SIZE`; while
+        throttled it is about an eighth of a second of traffic, so the
+        transfer is paced instead of arriving as 8 MB bursts at line rate
+        separated by sleeps — which is exactly the shape that trips the
+        VNIC ingress throttle.
+        """
+        if not self.enabled:
+            return DOWNLOAD_CHUNK_SIZE
+        target = int(self._rate / THROTTLED_READS_PER_SECOND)
+        return max(MIN_THROTTLED_READ_SIZE, min(DOWNLOAD_CHUNK_SIZE, target))
+
+    async def consume(self, amount: int) -> None:
+        """Wait until ``amount`` bytes fit in the budget, then spend them."""
+        if not self.enabled or amount <= 0:
+            return
+
+        async with self._lock:
+            while True:
+                now = time.monotonic()
+                self._tokens = min(
+                    self._capacity,
+                    self._tokens + (now - self._updated) * self._rate,
+                )
+                self._updated = now
+                if self._tokens >= amount:
+                    self._tokens -= amount
+                    return
+                await asyncio.sleep((amount - self._tokens) / self._rate)
+
+
+# ---------------------------------------------------------------------------
 # Image ingester
 # ---------------------------------------------------------------------------
 
@@ -189,12 +268,23 @@ class ImageIngester:
     Args:
         auth: A :class:`CopernicusAuth` instance for bearer-token management.
         images_dir: Local directory to store downloaded products.
+        rate_limit_mbps: Aggregate download ceiling in megabits per second,
+            shared by every parallel connection. 0 (the default here) means
+            no limit; production passes ``Settings.download_rate_limit_mbps``
+            so a scene download cannot saturate the host NIC and take the
+            services sharing it down with it.
     """
 
-    def __init__(self, auth: CopernicusAuth, images_dir: Path) -> None:
+    def __init__(
+        self,
+        auth: CopernicusAuth,
+        images_dir: Path,
+        rate_limit_mbps: float = 0.0,
+    ) -> None:
         self.auth = auth
         self.images_dir = Path(images_dir)
         self.images_dir.mkdir(parents=True, exist_ok=True)
+        self.throttle = DownloadThrottle(rate_limit_mbps * 1_000_000 / 8)
         self._log = StructuredLogger("aidra.ingestion")
 
     # -- Search --
@@ -432,6 +522,7 @@ class ImageIngester:
                 "product_id": product.product_id,
                 "title": product.title,
                 "size_mb": product.size_mb,
+                "rate_limit_mbps": round(self.throttle.rate_mbps, 1),
             },
         )
 
@@ -527,7 +618,8 @@ class ImageIngester:
                 resp.raise_for_status()
 
             with open(dest, mode) as fh:
-                async for chunk in resp.aiter_bytes(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                async for chunk in resp.aiter_bytes(chunk_size=self.throttle.read_size):
+                    await self.throttle.consume(len(chunk))
                     fh.write(chunk)
                     downloaded += len(chunk)
 
@@ -593,8 +685,9 @@ class ImageIngester:
                             resp.raise_for_status()
                         with open(path, "wb") as fh:
                             async for data in resp.aiter_bytes(
-                                chunk_size=DOWNLOAD_CHUNK_SIZE
+                                chunk_size=self.throttle.read_size
                             ):
+                                await self.throttle.consume(len(data))
                                 fh.write(data)
                 except Exception as exc:
                     errors.append(f"Chunk {start}-{end}: {exc}")

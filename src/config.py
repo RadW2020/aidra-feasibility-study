@@ -32,6 +32,22 @@ class Settings(BaseSettings):
     copernicus_user: str = ""
     copernicus_password: str = ""
 
+    # ---- Descarga de productos ----
+    # Aggregate ceiling, in megabits per second, for pulling a Sentinel-1
+    # product out of Copernicus. It is shared by the four parallel Range
+    # connections, not applied per connection: what saturates the host is
+    # the sum. 0 disables the limit.
+    #
+    # Why it exists (2026-09-17 incident): the four workers together
+    # sustained ~50 Mbps of ingress for six minutes and OCI answered by
+    # dropping ~81 000 inbound packets on the instance VNIC
+    # (VnicIngressDropsThrottle). Every other service on the same box
+    # started losing SYNs — external monitoring recorded a 20 s TCP
+    # connect timeout and response times 5-20x worse — while AIDRA itself
+    # was perfectly healthy. 20 Mbps keeps a ~1.9 GB scene at ~13 min,
+    # far inside both scheduler_interval_hours and the orphan reaper.
+    download_rate_limit_mbps: float = 20.0
+
     # ---- Directorios ----
     models_dir: str = "/app/models"
     # Cards copied by the Dockerfile outside the models volume; synced into

@@ -26,6 +26,11 @@ services:
       - IMAGES_DIR=/data/images
       - DEFAULT_MODEL=${DEFAULT_MODEL:-vesseltracker-sar-yolov8}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Aggregate ceiling for Copernicus downloads (Mbps, 0 = unlimited).
+      # Keeps a scene download from saturating the host NIC: at ~50 Mbps
+      # OCI throttles the VNIC and drops inbound packets, which times out
+      # every other service on the same machine (2026-09-17).
+      - DOWNLOAD_RATE_LIMIT_MBPS=${DOWNLOAD_RATE_LIMIT_MBPS:-20}
       - PROMETHEUS_ENABLED=true
       - LOKI_URL=http://aidra-loki:3100
       - AIDRA_COMMIT_SHA=${AIDRA_COMMIT_SHA:-unknown}

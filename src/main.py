@@ -98,7 +98,11 @@ def _build_engine(settings: Settings):
             username=settings.copernicus_user,
             password=settings.copernicus_password,
         )
-        ingester = ImageIngester(auth=auth, images_dir=Path(settings.images_dir))
+        ingester = ImageIngester(
+            auth=auth,
+            images_dir=Path(settings.images_dir),
+            rate_limit_mbps=settings.download_rate_limit_mbps,
+        )
 
         # Find a model file to load
         models_dir = Path(settings.models_dir)
