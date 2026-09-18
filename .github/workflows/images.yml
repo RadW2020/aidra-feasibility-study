@@ -23,6 +23,9 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
+  # En minusculas y a mano: github.repository_owner es "RadW2020" y un tag
+  # de registro no admite mayusculas.
+  OWNER: radw2020
 
 jobs:
   build:
@@ -73,8 +76,8 @@ jobs:
           # El SHA es la etiqueta que identifica lo desplegado; main es la
           # que lee el compose. Las dos apuntan al mismo digest.
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:main
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.image }}:main
           build-args: |
             AIDRA_COMMIT_SHA=${{ github.sha }}
           # I-TRACE-4: el commit queda dentro de la imagen, no solo en la
