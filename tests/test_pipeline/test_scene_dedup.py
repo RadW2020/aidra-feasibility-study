@@ -161,6 +161,16 @@ class TestLiveCueGuard:
 
         assert await eng._has_live_cues() is False
 
+    async def test_stuck_cues_do_not_pin_the_zip_forever(self, monkeypatch) -> None:
+        # Un redespliegue en mitad de un cue deja la fila en 'processing'
+        # para siempre. La consulta acota esas filas en el tiempo; aqui se
+        # comprueba que la condicion sigue en el SQL, porque sin ella el
+        # disco se llena solo.
+        from src.db.queries import COUNT_LIVE_CUES
+
+        assert "status = 'pending'" in COUNT_LIVE_CUES
+        assert "INTERVAL '6 hours'" in COUNT_LIVE_CUES
+
     async def test_db_failure_falls_back_to_cleaning(self, monkeypatch) -> None:
         # Aqui se falla cerrado: el riesgo de no borrar es llenar un disco
         # que ya esta al 100 % de la cuota del Free Tier.

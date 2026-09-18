@@ -331,10 +331,17 @@ SELECT_EXECUTION_IMAGE_ID = """
 
 # Cues que todavia pueden necesitar la escena descargada. Mientras haya
 # alguno, el .zip no se borra al terminar el run.
+#
+# El corte temporal sobre 'processing' no es decorativo: un redespliegue en
+# mitad de un cue deja la fila en 'processing' para siempre (SELECT_PENDING_CUES
+# la marca antes de ejecutar y nadie la devuelve). Ahora mismo hay dos asi.
+# Sin el corte, esas filas fantasma mantendrian vivo el zip de cada escena
+# indefinidamente, en un disco que ya esta al 100 % de la cuota del Free Tier.
 COUNT_LIVE_CUES = """
     SELECT COUNT(*) AS live
     FROM tasking_queue
-    WHERE status IN ('pending', 'processing')
+    WHERE status = 'pending'
+       OR (status = 'processing' AND scheduled_at > NOW() - INTERVAL '6 hours')
 """
 
 SELECT_PENDING_CUES = """
