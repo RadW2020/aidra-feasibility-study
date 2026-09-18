@@ -1,0 +1,78 @@
+# Construye las imagenes fuera del servidor.
+#
+# Por que: hasta ahora Coolify construia las cinco imagenes en la propia
+# instancia OCI. Un build descarga capas base y ruedas de PyTorch a toda
+# velocidad, y esa rafaga es exactamente la que hace que OCI empiece a
+# descartar paquetes de entrada en la VNIC: el 18/09/2026, dos despliegues
+# seguidos costaron ~76.000 paquetes tirados y un check en timeout. Ademas el
+# build competia por las 4 OCPUs con todo lo que vive en la maquina.
+#
+# Con esto el servidor solo hace `pull`. El runner es ARM nativo
+# (ubuntu-24.04-arm, gratis en repos publicos): compilar torch bajo emulacion
+# QEMU tardaria horas.
+name: images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: aidra-app
+            dockerfile: Dockerfile
+          - image: aidra-db
+            dockerfile: Dockerfile.postgis
+          - image: aidra-grafana
+            dockerfile: Dockerfile.grafana
+          - image: aidra-prom
+            dockerfile: Dockerfile.prometheus
+          - image: aidra-loki
+            dockerfile: Dockerfile.loki
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64
+          push: true
+          # El SHA es la etiqueta que identifica lo desplegado; main es la
+          # que lee el compose. Las dos apuntan al mismo digest.
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:main
+          build-args: |
+            AIDRA_COMMIT_SHA=${{ github.sha }}
+          # I-TRACE-4: el commit queda dentro de la imagen, no solo en la
+          # etiqueta, para que execution_log lo siga registrando sin /.git.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
