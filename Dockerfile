@@ -45,6 +45,11 @@ RUN pip install --no-cache-dir ".[all]" && \
 # works even when /.git is not present at runtime.
 ARG AIDRA_COMMIT_SHA=unknown
 ENV AIDRA_COMMIT_SHA=${AIDRA_COMMIT_SHA}
+# The same SHA under a name no runtime config sets: the compose file and
+# Coolify override AIDRA_COMMIT_SHA / SOURCE_COMMIT with the *pushed* commit,
+# which a deploy can run before its image exists. This one always names the
+# code inside the image (get_commit_sha prefers it).
+ENV AIDRA_IMAGE_COMMIT=${AIDRA_COMMIT_SHA}
 
 EXPOSE 8000
 

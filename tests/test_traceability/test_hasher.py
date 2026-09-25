@@ -332,6 +332,27 @@ class TestCommitSha:
         finally:
             get_commit_sha.cache_clear()
 
+    def test_image_commit_wins_over_the_deployed_commit(self, monkeypatch):
+        """The SHA baked into the image names the running code; SOURCE_COMMIT
+        names the pushed commit, which a deploy can run before its image exists."""
+        get_commit_sha.cache_clear()
+        monkeypatch.setenv("AIDRA_IMAGE_COMMIT", "1604084" + "0" * 33)
+        monkeypatch.setenv("SOURCE_COMMIT", "69f2c64" + "0" * 33)
+        try:
+            assert get_commit_sha() == "1604084" + "0" * 33
+        finally:
+            get_commit_sha.cache_clear()
+
+    def test_unknown_image_commit_falls_through(self, monkeypatch):
+        """Local builds without the build-arg bake 'unknown'; it must not shadow the rest."""
+        get_commit_sha.cache_clear()
+        monkeypatch.setenv("AIDRA_IMAGE_COMMIT", "unknown")
+        monkeypatch.setenv("SOURCE_COMMIT", "c0ffee0" + "0" * 33)
+        try:
+            assert get_commit_sha() == "c0ffee0" + "0" * 33
+        finally:
+            get_commit_sha.cache_clear()
+
     def test_empty_env_falls_through(self, monkeypatch):
         """An env var set to empty/whitespace must not shadow git fallback."""
         get_commit_sha.cache_clear()

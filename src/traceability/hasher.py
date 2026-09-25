@@ -269,9 +269,17 @@ def get_commit_sha() -> str:
 
     Orden de resolucion (de mas a menos fiable):
 
+    0. ``AIDRA_IMAGE_COMMIT`` — horneada en la imagen por el Dockerfile a
+       partir del build-arg de ``images.yml``; ninguna config de runtime la
+       define. Es el unico valor que nombra el codigo que *realmente* corre:
+       desde que las imagenes se construyen fuera del servidor, Coolify
+       despliega al recibir el push, antes de que exista la imagen nueva, y
+       ``SOURCE_COMMIT`` pasa a nombrar un commit que aun no se ejecuta
+       (2026-09-25: un contenedor con el codigo de 1604084 declaraba 69f2c64).
+       Se ignora si vale ``unknown`` (builds locales sin build-arg).
     1. ``SOURCE_COMMIT`` — env var auto-establecida por Coolify (y otros
-       PaaS tipo Heroku/Dokku) en cada deploy. Es la fuente de verdad
-       cuando hay CI/CD: refleja el SHA del build actual.
+       PaaS tipo Heroku/Dokku) en cada deploy. Fiable solo cuando el PaaS
+       construye la imagen a partir de ese mismo commit.
     2. ``AIDRA_COMMIT_SHA`` — env var de override manual. Solo deberia
        usarse si el operador necesita anclar el SHA a algo distinto del
        build (raro). Si esta hardcoded en la config del PaaS, queda
@@ -291,11 +299,11 @@ def get_commit_sha() -> str:
     """
     import os
 
-    for env_name in ("SOURCE_COMMIT", "AIDRA_COMMIT_SHA"):
+    for env_name in ("AIDRA_IMAGE_COMMIT", "SOURCE_COMMIT", "AIDRA_COMMIT_SHA"):
         value = os.getenv(env_name)
         if value:
             stripped = value.strip()
-            if stripped:
+            if stripped and not (env_name == "AIDRA_IMAGE_COMMIT" and stripped == "unknown"):
                 return stripped
 
     try:
