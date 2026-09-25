@@ -145,3 +145,60 @@ jobs:
           tail -100 uvicorn.log || true
           kill $UVICORN_PID || true
           exit 1
+
+  evals:
+    # Agent-interface evals: the real API (evals/api_app.py = src.main.app with
+    # the Copernicus/inference engine stubbed) on a real PostGIS, driven through
+    # the real MCP server over stdio by the scripted reference agent. Catches
+    # contract regressions a mocked-DB unit test cannot (it found the bbox 500s).
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: aidra_eval
+          POSTGRES_PASSWORD: eval
+          POSTGRES_DB: aidra_eval
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U aidra_eval -d aidra_eval"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      EVAL_DATABASE_URL: postgresql://aidra_eval:eval@localhost:5434/aidra_eval
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdal-bin libgdal-dev libgeos-dev libproj-dev libspatialindex-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,mcp]' uvicorn
+
+      - name: Run scripted agent evals
+        run: python -m evals.run --agent scripted --output eval-report.json
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval-report.json
