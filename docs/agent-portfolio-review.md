@@ -12,9 +12,19 @@ is thin and tested to stay that way. The interface is permission-scoped, idempot
 audited and evaluated against a real database. The evals paid for themselves on their
 first run: they caught a production bug that 574 mocked-DB tests had never seen. The
 weakness is on the "actually use" half of the claim. **No real model has been run
-through the evals yet** (no API key was available where this was built), and the
-public deployment still serves the pre-agent API. Today the repository proves an agent
-*could* operate AIDRA well. It doesn't yet show one doing it.
+through the evals yet** (no API key was available where this was built). The interface
+is live on the public deployment, but no agent traffic has hit it yet. Today the
+repository proves an agent *could* operate AIDRA well. It doesn't yet show one doing
+it.
+
+Shipping it surfaced three more real defects, all now fixed:
+- **Deploys never pulled.** Coolify ran `docker compose up -d` against a cached
+  `:main`, so no build after 2026-09-18 had reached the server. The workflow that was
+  meant to deploy after the build turned out to be a no-op (missing secrets).
+- **Mislabelled provenance.** The container reported Coolify's pushed commit, not the
+  image it ran; I-TRACE-4 now uses the SHA baked into the image.
+- **Unrecognised annotations.** Operator notes like "killed by container redeploy" on
+  real rows fell into `failed_other`.
 
 ## Scores
 
@@ -28,7 +38,7 @@ public deployment still serves the pre-agent API. Today the repository proves an
 | Safety | **Good for a demonstrator** | `read` < `run` < `admin` scopes; secure default for unknown routes; no destructive tool exists; `read-only` MCP mode by default; `out_dir` confinement; DB-aware single-run guard; write rate limit; secrets censored in `/config` | Tokens are plaintext env vars with no expiry, rotation or hashing. Rate limit and early-failure memory are in-process (lost on restart, not multi-replica). `X-AIDRA-Client` is self-declared |
 | Observability | **Adequate** | Every mutating call, refused ones included, gets an audit row, a Loki JSON line and a Prometheus counter, with the request id echoed in errors | No Grafana panel for agent actions; reads aren't audited; no API for a run's logs, so an agent facing `failed_other` can't read the traceback |
 | Developer experience | **Adequate** | `python -m src.mcp_server` needs only `mcp` + `httpx`; `claude mcp add …` one-liner; opt-in compose service over HTTP; `python -m evals.run` | The full stack is heavy (torch image, weights download, Copernicus credentials); on a fresh clone the engine is disabled and the DB is empty, so there's nothing for an agent to explore |
-| Demo quality | **Weak until deployed** | The traces in `examples/agent-workflows/` are real responses | The public API (`aidra-api.uliber.com`) predates this work; there's no hosted MCP endpoint, so a reviewer can't try it in a minute |
+| Demo quality | **Adequate** | The traces in `examples/agent-workflows/` are real responses; the agent endpoints run on the public deployment (`aidra-api.uliber.com`), so `python -m src.mcp_server` with `AIDRA_API_URL` set explores real production data read-only | No hosted MCP endpoint, so a reviewer still needs a checkout and two packages; no recorded session of a real agent using it |
 
 ## Weak areas → concrete next steps
 
@@ -37,11 +47,14 @@ public deployment still serves the pre-agent API. Today the repository proves an
    iterate the tool descriptions and server instructions on the failures, and keep
    each change only if the pass rate moves. That turns "designed for agents" into
    "measured with agents".
-2. **Deploy, and host a read-only MCP endpoint.** Push to `main` when
-   `GET /api/pipeline/status` is not `busy` (a deploy restarts the container). Then
-   expose `aidra-mcp` behind Coolify in `read-only` mode:
+2. **Host a read-only MCP endpoint.** The API is deployed. Expose `aidra-mcp`
+   behind Coolify in `read-only` mode and
    `claude mcp add --transport http aidra https://…/mcp` becomes the 30-second demo on
-   real production data.
+   real production data. At the same time, fix the deploy trigger. Set the
+   `COOLIFY_WEBHOOK`/`COOLIFY_TOKEN` repo secrets (a deploy-scoped token), which
+   `images.yml` expects but which are missing, so its deploy job is a no-op. Then turn
+   off Coolify's auto-deploy on push. Today every push restarts production on the
+   previous image and needs a manual deploy afterwards.
 3. **Give fresh clones something to look at.** Add a `demo` seed: the eval fixture
    under a separate database name, loaded by one command, so `docker compose up`
    plus the MCP server gives an agent a populated world without Copernicus

@@ -74,7 +74,7 @@ Unknown mutating routes default to `admin`. The legacy `AIDRA_API_TOKEN` is
 | `start_detection_run` | ~1.7 GB download, 6–52 min of the only detection slot; the OCI VNIC throttles above ~50 Mbps and takes down other services on the host | preview, one run at a time (409 `pipeline_busy`), `run` scope, idempotency |
 | `POST /api/pipeline/trigger-all-profiles` | 5 sequential runs, hours | `run` scope; not an MCP tool |
 | `POST /api/models/fetch` with `overwrite=true` | Replaces weights that evidence references by hash | `admin` only; not an MCP tool |
-| Pushing to `main` | Coolify redeploys and **restarts the container, killing any run in progress** | Never push while `GET /api/pipeline/status` says `busy` |
+| Pushing to `main` | Restarts the app, killing any run in progress. Coolify redeploys on the push itself, **before** `images.yml` has published the new image (~4 min), so the restart runs the previous image. `images.yml`'s own deploy job only works if the repo secrets `COOLIFY_WEBHOOK`/`COOLIFY_TOKEN` are set; they were not as of 2026-09-25. Until then, trigger a Coolify deploy once the images workflow is green | Never push or deploy while `GET /api/pipeline/status` says `busy` |
 
 ## Working on the code
 
@@ -120,6 +120,11 @@ Conventions and traps:
 - `med_patrol` (a Tip & Cue zone) maps to the `mediterranean_west` search zone, whose
   bbox doesn't cover it. Cues there re-observe the wrong scenes, and the cue endpoint
   now warns `bbox_outside_search_zone`.
-- The live demonstrator (`https://aidra-api.uliber.com`) is public read-only. The
-  agent endpoints (`/api/executions`, `/api/catalog`, `/api/audit/…`) exist only on
-  deployments of this version or later (migration 021).
+- The live demonstrator (`https://aidra-api.uliber.com`) is public for reads and runs
+  the agent endpoints since 2026-09-25. Point the MCP server at it in `read-only` mode
+  to explore real production data.
+- The restart Coolify does on a push runs the *previous* image, because it deploys
+  before the new image exists. `commit_sha` comes from `AIDRA_IMAGE_COMMIT` (baked
+  into the image), not from Coolify's `SOURCE_COMMIT`, so runs always record the code
+  that actually ran, and `GET /api/config` → `commit_sha` shows which build is live.
+  Images built before 2026-09-25 lack the variable and still report the pushed commit.
