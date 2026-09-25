@@ -69,9 +69,16 @@ def _outcome(status_code: int) -> str:
 
 
 def _operation(request: Request) -> str:
-    route = request.scope.get("route")
-    template = getattr(route, "path", None) or request.url.path
-    return f"{request.method} {template}"
+    """``METHOD /api/path/{param}``: the request path with its path parameters templated.
+
+    Built from the path, not from ``scope["route"].path``: from FastAPI 0.14x
+    a route included through a router keeps a path relative to that router
+    (``/tasking/cue``), so the route object would drop the ``/api`` prefix.
+    """
+    path = request.url.path
+    for name, value in (request.scope.get("path_params") or {}).items():
+        path = path.replace(f"/{value}", f"/{{{name}}}", 1)
+    return f"{request.method} {path}"
 
 
 async def audit_middleware(request: Request, call_next):

@@ -131,6 +131,19 @@ async def test_refused_and_accepted_writes_are_audited(app_client, mock_db):
     assert (created[13], created[14]) == ("cue", str(cue_id))
 
 
+def test_operation_label_keeps_prefix_and_templates_path_parameters():
+    from starlette.requests import Request
+
+    from src.api.audit import _operation
+
+    eid = str(uuid4())
+    scope = {"type": "http", "method": "POST", "path": f"/api/executions/{eid}/retry", "headers": [],
+             "query_string": b"", "path_params": {"execution_id": eid}}
+    assert _operation(Request(scope)) == "POST /api/executions/{execution_id}/retry"
+    scope = {**scope, "path": "/api/tasking/cue", "path_params": {}}
+    assert _operation(Request(scope)) == "POST /api/tasking/cue"
+
+
 async def test_audit_failure_never_breaks_the_request(app_client, mock_db):
     mock_db.execute = AsyncMock(side_effect=RuntimeError("db down"))
     resp = await app_client.post("/api/pipeline/preview", json={})
