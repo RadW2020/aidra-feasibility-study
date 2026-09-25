@@ -23,6 +23,7 @@ _BUDGET_RE = re.compile(
     r"peak RSS (?P<peak>[\d.]+) MB > (?P<limit>[\d.]+) MB budget of profile '(?P<profile>[^']+)'"
 )
 _DUP_RE = re.compile(r"already processed by execution (?P<eid>[0-9a-f-]{36})")
+_RESTART_RE = re.compile(r"redeploy|container restart", re.I)
 
 # Fields a successful run must carry to count as evidence (I-TRACE-1, I-TRACE-4).
 _PROVENANCE_FIELDS: tuple[tuple[str, str], ...] = (
@@ -119,6 +120,10 @@ def diagnose(
 
     if status in ("error", "failed"):
         evidence["error_message"] = error
+        if _RESTART_RE.search(error):
+            # Operator annotations on runs cut short by a deploy or restart (production, May 2026).
+            steps.append("Not a pipeline result. Re-run if needed; a push to main redeploys and kills in-flight runs.")
+            return out("interrupted_by_restart", "Interrupted: the container was restarted or redeployed mid-run.")
         m = _BUDGET_RE.search(error)
         if m or "MemoryError" in error or "OOM under profile" in error:
             peak_mb = float(m.group("peak")) if m else peak

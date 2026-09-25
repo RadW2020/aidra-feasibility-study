@@ -78,6 +78,9 @@ def test_skips_are_not_failures():
         ("ValueError: Model is not approved for Sentinel-1 SAR vessel detection", "model_unavailable"),
         ("TimeoutError: preprocessing timed out", "timeout"),
         ("RuntimeError: something else", "failed_other"),
+        # Real production annotations (May 2026).
+        ("killed by container redeploy", "interrupted_by_restart"),
+        ("Orphaned by container restart at 18:33 UTC during throttle bug investigation", "interrupted_by_restart"),
     ],
 )
 def test_error_categories(message, category):
