@@ -149,6 +149,38 @@ services:
         reservations:
           memory: 128M
 
+  # ====== MCP SERVER (agents) — opt-in: docker compose --profile agent up ======
+  # Streamable HTTP on 127.0.0.1:8765/mcp, a thin client of aidra-app's API
+  # (same auth scopes, audit log and validation as any other client).
+  #   claude mcp add --transport http aidra http://localhost:8765/mcp
+  # Read-only by default; AIDRA_MCP_MODE=operator + a run-scoped
+  # AIDRA_MCP_TOKEN (listed in AIDRA_API_TOKENS) enables the write tools.
+  aidra-mcp:
+    # Same Dockerfile as aidra-app (layers are cached); only src/mcp_server is imported at runtime.
+    build:
+      context: .
+      args:
+        AIDRA_COMMIT_SHA: ${AIDRA_COMMIT_SHA:-unknown}
+    container_name: aidra-mcp
+    profiles: ["agent"]
+    restart: unless-stopped
+    command: ["python", "-m", "src.mcp_server", "--transport", "http", "--host", "0.0.0.0", "--port", "8765"]
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      - AIDRA_API_URL=http://aidra-app:8000
+      - AIDRA_MCP_MODE=${AIDRA_MCP_MODE:-read-only}
+      - AIDRA_API_TOKEN=${AIDRA_MCP_TOKEN:-}
+      - AIDRA_MCP_CLIENT_NAME=aidra-mcp/1.0.0 (compose)
+    depends_on:
+      - aidra-app
+    networks:
+      - aidra-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   # Promtail retirado: la app empuja a Loki directamente vía LOKI_URL
   # (src/observability/loki_logger.LokiHandler). Mantenerlo aqui duplicaria
   # cada linea en Loki y divergiria de produccion, que nunca lo tuvo por no

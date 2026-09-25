@@ -67,7 +67,21 @@ dev = [
     "httpx>=0.27.0",
     "ruff>=0.4.0",
 ]
-all = ["aidra[dev]"]
+# MCP adapter over the HTTP API (src/mcp_server). Needs nothing else from the
+# backend: `pip install "mcp>=2.2,<3" httpx` is enough to run it from a checkout.
+mcp = [
+    "mcp>=2.2,<3",
+    "httpx>=0.27.0",
+]
+# Agent evals (evals/): the Claude driver needs the Anthropic SDK.
+evals = [
+    "aidra[mcp]",
+    "anthropic>=1.0",
+]
+all = ["aidra[dev,mcp]"]
+
+[project.scripts]
+aidra-mcp = "src.mcp_server.__main__:main"
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
