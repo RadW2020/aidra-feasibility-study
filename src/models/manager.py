@@ -322,6 +322,11 @@ class ModelManager:
                     "Asegurate de que existe el binario en models/ "
                     "con su MODEL_CARD.md (gate ai-act-card)."
                 )
+            # A weight file without a registry row usually means its
+            # registration failed at the card gate; loading it by file name
+            # would let it run without a card (I-AIA-1 / I-MOD-4).
+            if not name.startswith("cfar"):
+                self._require_model_card(name, model_path)
         else:
             model_path = Path(row["file_path"])
             if not model_path.exists():

@@ -42,6 +42,24 @@ async def test_model_manager_rejects_ambiguous_base_model(tmp_path: Path):
         await mgr.get_model("vesseltracker-sar-yolov8")
 
 
+@pytest.mark.asyncio
+async def test_unregistered_weight_without_card_is_not_loaded(tmp_path: Path):
+    """I-AIA-1: a weight file with no registry row (its registration failed at the card
+    gate) must not be loadable by file name, which used to skip the card check."""
+    from src.models.manager import ModelManager
+
+    (tmp_path / "ghost-sar.pt").write_bytes(b"not a real model")
+    mgr = ModelManager.__new__(ModelManager)
+    mgr.db = _FakeDB([])
+    mgr.models_dir = tmp_path
+    mgr.max_cached_models = 2
+    mgr._cache = {}
+    mgr._load_order = []
+
+    with pytest.raises(FileNotFoundError, match="AI Act gate"):
+        await mgr.get_model("ghost-sar")
+
+
 def test_sar_pipeline_rejects_coco_classes():
     from src.pipeline.engine import PipelineEngine
 
