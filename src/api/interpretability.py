@@ -33,7 +33,8 @@ class InterpretabilityRunRequest(BaseModel):
     execution_id: UUID | None = None
     n_samples: int = 20
     model: str | None = None
-    out_dir: str = "/data/interpretability"
+    # Confined to Settings.interpretability_dir; None = that directory.
+    out_dir: str | None = None
 
 
 @router.post("/run")
@@ -47,14 +48,16 @@ async def run_interpretability(req: InterpretabilityRunRequest) -> dict:
     Returns the run_id, manifest path, and OK counts so the caller can
     verify completeness without listing the output directory.
     """
+    from src.api.auth import confined_dir
     from src.models.interpretability import run_interpretability_for_execution
 
     settings = Settings()
+    out_root = confined_dir(req.out_dir, settings.interpretability_dir)
     try:
         result = await run_interpretability_for_execution(
             db=db,
             models_dir=Path(settings.models_dir),
-            out_root=Path(req.out_dir),
+            out_root=out_root,
             execution_id=req.execution_id,
             n_samples=req.n_samples,
             model_name=req.model,

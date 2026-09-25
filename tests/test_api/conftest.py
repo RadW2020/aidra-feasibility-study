@@ -68,7 +68,10 @@ def test_app(mock_db) -> FastAPI:
     The lifespan is intentionally omitted to avoid requiring a running
     database, scheduler, or model files.
     """
+    from src.api import errors
+
     app = FastAPI(title="AIDRA Test")
+    errors.install(app)  # same error envelope as src.main.app
     app.include_router(router)
     return app
 

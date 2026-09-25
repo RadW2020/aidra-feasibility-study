@@ -58,7 +58,8 @@ async def test_get_traceability_includes_traceability_fields(
 # ---------------------------------------------------------------------------
 
 
-async def test_post_bundle_returns_path_and_status(client, mock_db, tmp_path):
+async def test_post_bundle_returns_path_and_status(client, mock_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("EVIDENCE_DIR", str(tmp_path))  # out_dir is confined to it
     fake_bundle_path = tmp_path / "d3-20260505T120000Z.tar.gz"
     fake_bundle_path.touch()
 
@@ -79,7 +80,8 @@ async def test_post_bundle_returns_path_and_status(client, mock_db, tmp_path):
     assert "bundle_path" in body
 
 
-async def test_post_bundle_passes_filters_to_bundler(client, mock_db, tmp_path):
+async def test_post_bundle_passes_filters_to_bundler(client, mock_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("EVIDENCE_DIR", str(tmp_path))  # out_dir is confined to it
     fake_bundle_path = tmp_path / "d3-filtered.tar.gz"
     fake_bundle_path.touch()
 
@@ -110,7 +112,8 @@ async def test_post_bundle_passes_filters_to_bundler(client, mock_db, tmp_path):
     assert build_call.kwargs["date_to"] is not None
 
 
-async def test_post_bundle_propagates_bundler_error_as_500(client, mock_db, tmp_path):
+async def test_post_bundle_propagates_bundler_error_as_500(client, mock_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("EVIDENCE_DIR", str(tmp_path))  # out_dir is confined to it
     with patch(
         "src.traceability.bundler.EvidenceBundler"
     ) as MockBundler:

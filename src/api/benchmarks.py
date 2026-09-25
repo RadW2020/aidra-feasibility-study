@@ -43,7 +43,7 @@ def _row_to_benchmark(row) -> BenchmarkResult:  # type: ignore[no-untyped-def]
 @router.get("/benchmarks", response_model=list[BenchmarkResult])
 async def list_benchmarks(
     model: str | None = Query(
-        None, description="Filter by model name (e.g. yolov8n-sar)"
+        None, description="Filter by model name (e.g. vesseltracker-sar-yolov8, cfar-default)"
     ),
     profile: str | None = Query(
         None, description="Filter by constraint profile (e.g. ground, sat-high)"
@@ -68,11 +68,108 @@ async def list_benchmarks(
         ) from exc
 
 
+_SELECT_VALIDATION_LEGS = """
+    SELECT id, created_at, model_name, model_version, dataset, pipeline_path,
+           commit_sha, num_scenes, num_ground_truth, num_predictions,
+           map_at_iou, pd_recall, far_per_km2, precision, notes, provenance_json
+    FROM validation_runs
+    WHERE model_name = $1 AND model_version = $2
+      AND ($3::text IS NULL OR dataset = $3)
+      AND ($4::text IS NULL OR pipeline_path = $4)
+    ORDER BY created_at DESC
+    LIMIT 50
+"""
+
+_SELECT_HARDWARE_LEGS = """
+    SELECT constraint_profile, model_version,
+           COUNT(*) FILTER (WHERE status = 'success') AS runs,
+           COUNT(*) FILTER (WHERE status IN ('error', 'failed')) AS failed_runs,
+           COUNT(*) FILTER (WHERE error_message LIKE '%memory budget exceeded%') AS budget_aborts,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY inference_p50_ms)
+               FILTER (WHERE status = 'success') AS tile_p50_ms,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY inference_p95_ms)
+               FILTER (WHERE status = 'success') AS tile_p95_ms,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total_duration_ms)
+               FILTER (WHERE status = 'success') AS run_p50_ms,
+           MAX(peak_ram_mb) FILTER (WHERE status = 'success') AS peak_ram_mb,
+           MAX(model_size_mb) AS model_size_mb
+    FROM execution_log
+    WHERE model_name = $1 AND model_version = ANY($2::text[])
+      AND ($3::text IS NULL OR constraint_profile = $3)
+    GROUP BY constraint_profile, model_version
+"""
+
+_SELECT_REGISTRY_VERSIONS = """
+    SELECT version, status, rejection_reason, compression_technique, size_mb
+    FROM models_registry WHERE name = $1 ORDER BY version
+"""
+
+
+@router.get("/benchmarks/triplet")
+async def compression_triplet(
+    model: str = Query(..., description="Base model name, e.g. vesseltracker-sar-yolov8."),
+    variant_version: str = Query(..., description="Compressed variant version, e.g. int8-static."),
+    baseline_version: str = Query("v1.0", description="FP32 baseline version."),
+    profile: str | None = Query(None, description="Constraint profile for the hardware leg; omit for all profiles."),
+    dataset: str | None = Query(None, description="Validation dataset, e.g. xview3-sar/validation/adriatic; omit for the variant's latest."),
+    pipeline_path: str | None = Query(None, pattern="^(detector|full|synthetic)$", description="detector (model alone) or full (production pipeline)."),
+) -> dict:
+    """Grade a compression triplet {baseline, variant, profile} (I-MOD-1/2/3).
+
+    Quality deltas come from ``validation_runs`` (legs paired by
+    ``settings_hash`` so both were computed under the same pipeline settings),
+    latency / RAM / size from ``execution_log``. The verdict is
+    ``within_budget``, ``exceeds_budget`` or ``insufficient_evidence``
+    against ``Settings.triplet_max_delta_map_pts``; ``missing_evidence`` names
+    the legs still to produce.
+    """
+    from src.api.errors import ApiError
+    from src.config import Settings
+    from src.profiles.definitions import PROFILES
+    from src.validation.triplet import grade
+
+    if profile is not None and profile not in PROFILES:
+        raise ApiError(422, "unknown_profile", f"Unknown profile '{profile}'", valid_values=list(PROFILES))
+    registry = {r["version"]: dict(r) for r in await db.fetch(_SELECT_REGISTRY_VERSIONS, model)}
+    baseline_rows = [dict(r) for r in await db.fetch(_SELECT_VALIDATION_LEGS, model, baseline_version, dataset, pipeline_path)]
+    variant_rows = [dict(r) for r in await db.fetch(_SELECT_VALIDATION_LEGS, model, variant_version, dataset, pipeline_path)]
+    for version, rows in ((baseline_version, baseline_rows), (variant_version, variant_rows)):
+        if version not in registry and not rows:
+            raise ApiError(
+                422, "unknown_model_version",
+                f"'{model}' has no registered version or validation run '{version}'",
+                valid_values=sorted(registry),
+                hint="GET /api/catalog lists registered models and versions.",
+            )
+    hardware_rows = [
+        dict(r) for r in await db.fetch(_SELECT_HARDWARE_LEGS, model, [baseline_version, variant_version], profile)
+    ]
+    result = grade(
+        baseline_rows=baseline_rows,
+        variant_rows=variant_rows,
+        hardware_rows=hardware_rows,
+        baseline_version=baseline_version,
+        variant_version=variant_version,
+        max_delta_map_pts=Settings().triplet_max_delta_map_pts,
+    )
+    return {
+        "model": model,
+        "baseline_version": baseline_version,
+        "variant_version": variant_version,
+        "profile": profile,
+        "registry": {
+            "baseline": registry.get(baseline_version),
+            "variant": registry.get(variant_version),
+        },
+        **result,
+    }
+
+
 @router.get("/benchmarks/compare")
 async def compare_benchmarks(
     models: str | None = Query(
         None,
-        description="Comma-separated model names to compare (e.g. yolov8n-sar,yolov8n-sar-int8)",
+        description="Comma-separated model names to compare (e.g. vesseltracker-sar-yolov8,cfar-default)",
     ),
     profiles: str | None = Query(
         None,

@@ -159,7 +159,28 @@ class Settings(BaseSettings):
     # ---- API protection ----
     # Optional bearer token for state-changing endpoints. When empty,
     # local development and tests keep the unauthenticated behavior.
+    # Legacy single secret: it maps to the principal ``operator`` with the
+    # ``admin`` scope (every write), exactly what it authorised before.
     aidra_api_token: str = ""
+    # Scoped tokens, comma-separated ``name:scope:token`` (scope = read | run
+    # | admin; see src/api/auth.py). Lets an operator hand an agent "may
+    # launch runs and queue observations" (run) without "may replace model
+    # weights or rebuild evidence" (admin). The name is what the audit log
+    # records as the actor.
+    aidra_api_tokens: str = ""
+    # Mutating calls allowed per actor per minute before 429 rate_limited.
+    # A guard against runaway agent loops, not a quota: a pipeline run is
+    # already limited to one at a time. 0 disables the limit.
+    api_write_rate_limit_per_minute: int = 30
+
+    # ---- Evidence ----
+    # Root under which POST /api/traceability/bundle may write (``out_dir``
+    # is confined to it). Default matches the historical request default.
+    evidence_dir: str = "/data/evidence"
+    # I-MOD-3: degradation budget declared before a compression run
+    # (ΔmAP in points, i.e. 0.05 AP). GET /api/benchmarks/triplet grades a
+    # variant against it; changing it is a methodology decision.
+    triplet_max_delta_map_pts: float = 5.0
 
     # ---- CORS ----
     # Comma-separated list of origins allowed to call the API. Default

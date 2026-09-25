@@ -65,6 +65,78 @@ COUNT_EXECUTIONS = """
       AND ($3::text IS NULL OR status = $3)
 """
 
+# GET /api/executions: every status (unlike STAC, which is success-only), so
+# failures, skips and reaped runs are listable. $1 is a text[] of statuses.
+_EXECUTION_FILTERS = """
+    WHERE ($1::text[] IS NULL OR e.status = ANY($1::text[]))
+      AND ($2::text IS NULL OR e.constraint_profile = $2)
+      AND ($3::text IS NULL OR e.model_name = $3)
+      AND ($4::text IS NULL OR e.model_version = $4)
+      AND ($5::text IS NULL OR e.trigger_type = $5)
+      AND ($6::text IS NULL OR e.search_zone = $6)
+      AND ($7::text IS NULL OR e.image_id = $7)
+      AND ($8::timestamptz IS NULL OR e.created_at >= $8)
+      AND ($9::timestamptz IS NULL OR e.created_at <= $9)
+"""
+
+SELECT_EXECUTION_SUMMARIES = """
+    SELECT e.id, e.created_at, e.status, e.trigger_type, e.triggered_by,
+           e.search_zone, e.image_id, e.image_title, e.image_sensing_date,
+           e.model_name, e.model_version, e.compression_technique,
+           e.constraint_profile, e.memory_limit_mb, e.num_detections,
+           e.num_valid_targets, e.total_duration_ms, e.inference_p50_ms,
+           e.inference_p95_ms, e.peak_ram_mb, e.error_message, e.notes
+    FROM execution_log e
+""" + _EXECUTION_FILTERS + """
+    ORDER BY e.created_at DESC
+    LIMIT $10 OFFSET $11
+"""
+
+COUNT_EXECUTION_SUMMARIES = "SELECT COUNT(*) FROM execution_log e" + _EXECUTION_FILTERS
+
+# Runs this process may still be executing: pending/running rows younger than
+# the orphan reaper threshold. Scheduled and cue runs call engine.run()
+# directly, so this — not the API's in-memory flag — is the truth about
+# what is on the box.
+SELECT_IN_FLIGHT_EXECUTIONS = """
+    SELECT id, created_at, status, trigger_type, constraint_profile,
+           model_name, model_version, search_zone
+    FROM execution_log
+    WHERE status IN ('pending', 'running')
+      AND created_at > NOW() - make_interval(mins => $1::int)
+    ORDER BY created_at
+"""
+
+SELECT_DETECTION_BREAKDOWN = """
+    SELECT source, quality_verdict, COUNT(*) AS n
+    FROM detections
+    WHERE execution_id = $1
+    GROUP BY source, quality_verdict
+"""
+
+SELECT_TOP_DETECTIONS = """
+    SELECT id, confidence, source, quality_verdict, on_land, cluster_anomaly,
+           ST_X(center_geo) AS longitude, ST_Y(center_geo) AS latitude
+    FROM detections
+    WHERE execution_id = $1
+    ORDER BY confidence DESC
+    LIMIT $2
+"""
+
+SELECT_CUE_LINEAGE = """
+    SELECT id, created_at, status, target_zone, priority, reason,
+           execution_id, triggered_by, result_status, confirmed_detections
+    FROM tasking_queue
+    WHERE execution_id = $1 OR triggered_by = $1
+    ORDER BY created_at
+"""
+
+SELECT_MODEL_STATUS = """
+    SELECT status, rejection_reason
+    FROM models_registry
+    WHERE name = $1 AND version = $2
+"""
+
 # Reaper: marks executions stuck in pending/running past a threshold as
 # failed. The CTE captures the previous status before the UPDATE so the
 # annotation in error_message is accurate (PostgreSQL evaluates the SET

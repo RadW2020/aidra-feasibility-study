@@ -441,22 +441,10 @@ class EvidenceBundler:
         )
 
     def _write_settings(self, path: Path, manifest: BundleManifest) -> None:
-        # pydantic v2: model_dump
-        try:
-            data = self._settings.model_dump()
-        except AttributeError:
-            data = self._settings.dict()
-        # Censor secrets: name-based + URL-embedded credentials.
-        for k in list(data.keys()):
-            data[k] = _censor_secret(k, data[k])
-        payload = json.dumps(data, indent=2, sort_keys=True, default=str)
+        _data, payload, digest = censored_settings_snapshot(self._settings)
         path.write_text(payload, encoding="utf-8")
         # settings_hash for traceability
-        import hashlib
-
-        manifest.settings_hash = hashlib.sha256(
-            payload.encode("utf-8")
-        ).hexdigest()
+        manifest.settings_hash = digest
 
     def _copy_model_cards(
         self,
@@ -600,6 +588,27 @@ class EvidenceBundler:
 
 
 _URL_CRED_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+\-.]*://)([^:/@]+):([^@/]+)@")
+
+
+def censored_settings_snapshot(settings: Any) -> tuple[dict[str, Any], str, str]:
+    """Settings with secrets censored, their canonical JSON and its SHA256.
+
+    The hash is the ``settings_hash`` a D3 bundle records in its manifest;
+    ``GET /api/config`` publishes the same value, so a bundle can be matched
+    to the configuration a deployment is running.
+    """
+    import hashlib
+
+    # pydantic v2: model_dump
+    try:
+        data = settings.model_dump()
+    except AttributeError:
+        data = settings.dict()
+    # Censor secrets: name-based + URL-embedded credentials.
+    for k in list(data.keys()):
+        data[k] = _censor_secret(k, data[k])
+    payload = json.dumps(data, indent=2, sort_keys=True, default=str)
+    return data, payload, hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _censor_secret(key: str, value: Any) -> Any:

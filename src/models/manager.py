@@ -146,7 +146,24 @@ def _row_to_model_info(row: Any) -> ModelInfo:
         num_params=row.get("num_params"),
         input_size=list(row["input_size"]) if row.get("input_size") else [640, 640],
         classes=list(row["classes"]) if row.get("classes") else ["vessel"],
+        status=row.get("status") or "active",
+        rejection_reason=row.get("rejection_reason"),
     )
+
+
+def model_card_exists(models_dir: Path | str, name: str, model_path: Path) -> bool:
+    """Non-raising form of :meth:`ModelManager._require_model_card`.
+
+    Same lookup order (variant card by file stem, then the model's card), so
+    what the API reports as ``has_model_card`` is what the gate would decide.
+    """
+    probe = ModelManager.__new__(ModelManager)  # no DB, no cache: only the card lookup
+    probe.models_dir = Path(models_dir)
+    try:
+        probe._require_model_card(name, Path(model_path))
+        return True
+    except FileNotFoundError:
+        return False
 
 
 # ------------------------------------------------------------------

@@ -18,15 +18,46 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
+from src.api.errors import ApiError
 from src.api.tiers import source_sql_clause, tier_of
 from src.db.connection import db
 from src.db.models import DetectionRecord, PaginatedResponse
 from src.db.queries import SELECT_DETECTION_BY_ID, SELECT_DETECTIONS
 from src.pipeline.postprocessing import detections_to_geojson
+from src.vocabulary import QUALITY_VERDICTS
 
 logger = logging.getLogger("aidra.api.detections")
 
 router = APIRouter(tags=["detections"])
+
+# One successful run per scene, honouring the request's profile ($1) and
+# model ($2) filters so the chosen run is one the caller asked for. Ground
+# is preferred because it is the unconstrained baseline, then the newest.
+_ONE_RUN_PER_SCENE = """
+      AND d.execution_id IN (
+          SELECT DISTINCT ON (x.image_id) x.id
+          FROM execution_log x
+          WHERE x.status = 'success'
+            AND ($1::text IS NULL OR x.constraint_profile = $1)
+            AND ($2::text IS NULL OR x.model_name = $2)
+          ORDER BY x.image_id, (x.constraint_profile = 'ground') DESC, x.created_at DESC
+      )"""
+
+
+def zone_bbox(zone: str) -> list[float]:
+    """bbox of a pipeline search zone or a Tip & Cue zone; 422 with valid values otherwise."""
+    from src.pipeline.ingestion import SEARCH_ZONES
+    from src.tipcue.zones import DEFAULT_ZONES
+
+    if zone in SEARCH_ZONES:
+        return list(SEARCH_ZONES[zone]["bbox"])
+    for z in DEFAULT_ZONES:
+        if z.id == zone:
+            return list(z.bbox)
+    raise ApiError(
+        422, "unknown_zone", f"Unknown zone '{zone}'",
+        valid_values=list(SEARCH_ZONES) + [z.id for z in DEFAULT_ZONES],
+    )
 
 # ---------------------------------------------------------------------------
 # SQL helpers
@@ -116,6 +147,10 @@ def _row_to_detection(row) -> DetectionRecord:  # type: ignore[no-untyped-def]
         quality_verdict=row.get("quality_verdict", "candidate"),
         thumbnail_path=row.get("thumbnail_path"),
         has_thumbnail=row.get("thumbnail_path") is not None,
+        thumbnail_url=(
+            f"/api/detections/{row['id']}/thumbnail.png" if row.get("thumbnail_path") else None
+        ),
+        tier=tier_of(row["source"]),
     )
 
 
@@ -132,7 +167,7 @@ async def list_detections(
         None, description="Filter by constraint profile (e.g. ground, sat-high)"
     ),
     model: str | None = Query(
-        None, description="Filter by model name (e.g. yolov8n-sar)"
+        None, description="Filter by model name (e.g. vesseltracker-sar-yolov8, cfar-default)"
     ),
     min_confidence: float | None = Query(
         None, ge=0, le=1, description="Minimum confidence threshold"
@@ -165,16 +200,63 @@ async def list_detections(
             "land_artifact, cluster_artifact, outside_footprint."
         ),
     ),
+    execution_id: UUID | None = Query(
+        None, description="Only detections of this pipeline execution.",
+    ),
+    source: str | None = Query(
+        None, pattern="^(cfar|yolo|fused)$",
+        description="Detector that produced the detection; 'fused' = CFAR and YOLO agreed.",
+    ),
+    tier: str | None = Query(
+        None, pattern="^(high|standard)$",
+        description="'high' = source fused (precision 0.31 on xView3); 'standard' = the rest.",
+    ),
+    zone: str | None = Query(
+        None,
+        description="Search zone or Tip & Cue zone name; filters by its bbox (instead of bbox=).",
+    ),
+    sort: str = Query(
+        "confidence", pattern="^(confidence|recent)$",
+        description="'confidence' (highest first, default) or 'recent' (newest first).",
+    ),
+    one_run_per_scene: bool = Query(
+        False,
+        description=(
+            "Keep one successful run per scene (ground profile preferred, then the newest) so a "
+            "vessel is not counted once per profile and once per re-run. Respects profile/model."
+        ),
+    ),
 ) -> PaginatedResponse:
     """List vessel detections with optional filters.
 
     Supports filtering by constraint profile, model name, minimum
     confidence, geospatial bounding box and date range.  Results are
     ordered by descending confidence and paginated via *limit* / *offset*.
+
+    The same vessel appears once per run that saw it: five profile runs of
+    one scene persist five copies. Pass ``one_run_per_scene=true`` when
+    counting vessels, and ``on_land=false`` for sea-only figures (I-DET-2).
     """
+    if quality_verdict is not None and quality_verdict not in QUALITY_VERDICTS:
+        raise ApiError(422, "unknown_quality_verdict", f"Unknown quality_verdict '{quality_verdict}'",
+                       valid_values=list(QUALITY_VERDICTS))
+    if zone is not None:
+        if bbox:
+            raise ApiError(422, "conflicting_parameters", "Pass either zone or bbox, not both")
+        bbox = ",".join(str(v) for v in zone_bbox(zone))
     dt_from = _parse_date(date_from)
     dt_to = _parse_date(date_to)
     bbox_geojson = _parse_bbox(bbox)
+
+    extra = ""
+    if execution_id is not None:
+        # Validated UUID: safe to inline without shifting the positional contract.
+        extra += f"\n      AND d.execution_id = '{execution_id}'::uuid"
+    tier_clause = source_sql_clause(source, tier)
+    if tier_clause:
+        extra += f"\n      {tier_clause}"
+    if one_run_per_scene:
+        extra += _ONE_RUN_PER_SCENE
 
     try:
         # Build the geometry parameter for PostGIS
@@ -194,6 +276,11 @@ async def list_detections(
         else:
             select_q = SELECT_DETECTIONS
             count_q = COUNT_DETECTIONS
+        if extra:
+            select_q = select_q.replace("ORDER BY d.confidence DESC", f"{extra}\n    ORDER BY d.confidence DESC")
+            count_q = count_q + extra
+        if sort == "recent":
+            select_q = select_q.replace("ORDER BY d.confidence DESC", "ORDER BY d.created_at DESC")
 
         rows = await db.fetch(
             select_q,
@@ -224,12 +311,23 @@ async def list_detections(
         )
 
         items = [_row_to_detection(r) for r in rows]
+        total = int(total or 0)
 
         return PaginatedResponse(
             items=items,
-            total=total or 0,
+            total=total,
             limit=limit,
             offset=offset,
+            next_offset=offset + limit if offset + limit < total else None,
+            filters={
+                "profile": profile, "model": model, "min_confidence": min_confidence,
+                "bbox": bbox, "zone": zone, "date_from": date_from, "date_to": date_to,
+                "on_land": on_land, "cluster_anomaly": cluster_anomaly,
+                "quality_verdict": quality_verdict,
+                "execution_id": str(execution_id) if execution_id else None,
+                "source": source, "tier": tier, "sort": sort,
+                "one_run_per_scene": one_run_per_scene,
+            },
         )
     except Exception as exc:
         logger.error("Failed to list detections: %s", exc, exc_info=True)
@@ -365,13 +463,17 @@ async def get_detection(detection_id: UUID) -> dict:
         ) from exc
 
     if row is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Detection {detection_id} not found",
+        raise ApiError(
+            404, "detection_not_found", f"Detection {detection_id} not found",
+            hint="Find detection ids with GET /api/detections (filters: zone, bbox, execution_id, dates).",
         )
 
     # Convert the joined row to a rich response dict
     record = dict(row)
+    record["tier"] = tier_of(record.get("source"))
+    record["thumbnail_url"] = (
+        f"/api/detections/{detection_id}/thumbnail.png" if record.get("thumbnail_path") else None
+    )
 
     # Convert geometry columns to serializable values
     for key in list(record.keys()):

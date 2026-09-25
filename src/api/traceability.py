@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
@@ -149,7 +148,8 @@ async def get_traceability(execution_id: UUID) -> dict:
 
 
 class BundleRequest(BaseModel):
-    out_dir: str = "/data/evidence"
+    # Confined to Settings.evidence_dir; None = that directory.
+    out_dir: str | None = None
     date_from: str | None = None
     date_to: str | None = None
     zone: str | None = None
@@ -166,6 +166,7 @@ async def build_evidence_bundle(req: BundleRequest) -> dict:
     bundle under ``out_dir``.  Returns the bundle path and key counts so
     the caller can verify completeness before download.
     """
+    from src.api.auth import confined_dir
     from src.config import Settings
     from src.traceability.bundler import EvidenceBundler
 
@@ -174,11 +175,12 @@ async def build_evidence_bundle(req: BundleRequest) -> dict:
             return None
         return datetime.fromisoformat(v.replace("Z", "+00:00"))
 
+    settings = Settings()
+    out_dir = confined_dir(req.out_dir, settings.evidence_dir)
     try:
-        settings = Settings()
         bundler = EvidenceBundler(db=db, settings=settings)
         bundle_path = await bundler.build(
-            out_dir=Path(req.out_dir),
+            out_dir=out_dir,
             date_from=_parse(req.date_from),
             date_to=_parse(req.date_to),
             zone=req.zone,

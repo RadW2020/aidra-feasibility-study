@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import platform
-import secrets
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -22,8 +21,10 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
+from src.api import errors
+from src.api.audit import audit_middleware
+from src.api.auth import auth_middleware
 from src.api.router import router as api_router
 from src.config import Settings
 from src.db.connection import db
@@ -267,13 +268,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="AIDRA \u2014 AI-Enabled On-Board Data Processing Assessment",
     description=(
-        "Pipeline de deteccion de barcos con IA en imagenes SAR. "
-        "Trazabilidad completa, benchmarks de compresion y "
-        "simulacion de restricciones de hardware espacial."
+        "Sentinel-1 SAR vessel detection under simulated on-board hardware "
+        "constraints, with full provenance (SHA256 of image, model and output) "
+        "for every run.\n\n"
+        "**Start here:** `GET /api/catalog` (zones, profiles, models), "
+        "`GET /api/vocabulary` (what every status and verdict means), "
+        "`GET /api/pipeline/status` (what is running), `GET /api/executions` "
+        "(run history with outcomes).\n\n"
+        "**Errors** carry `error.code` (stable), `hint`, `valid_values` and "
+        "`request_id`. **Writes** need a bearer token with scope `run` or "
+        "`admin`; `POST /api/pipeline/preview` is a free dry run of a trigger. "
+        "See AGENTS.md in the repository."
     ),
     version="1.0.0",
     lifespan=lifespan,
 )
+errors.install(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -292,28 +302,13 @@ async def add_process_time_header(request: Request, call_next):
     return response
 
 
-@app.middleware("http")
-async def require_api_token_for_writes(request: Request, call_next):
-    if request.method in {"GET", "HEAD", "OPTIONS"}:
-        return await call_next(request)
-
-    if not request.url.path.startswith("/api/"):
-        return await call_next(request)
-
-    token = Settings().aidra_api_token
-    if not token:
-        return await call_next(request)
-
-    expected = f"Bearer {token}"
-    provided = request.headers.get("authorization", "")
-    if not secrets.compare_digest(provided, expected):
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Missing or invalid API bearer token"},
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return await call_next(request)
+# Middleware added last runs first. Effective order, outermost first:
+#   request id -> audit -> auth (scopes, rate limit) -> timing -> CORS -> routes
+# Audit sits outside auth so refused calls are recorded too; auth sets
+# request.state.principal before refusing, so the audit row names the caller.
+app.middleware("http")(auth_middleware)
+app.middleware("http")(audit_middleware)
+app.middleware("http")(errors.request_id_middleware)
 
 
 app.include_router(api_router)

@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 
-async def test_post_run_returns_summary(client, mock_db, tmp_path):
+async def test_post_run_returns_summary(client, mock_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("INTERPRETABILITY_DIR", str(tmp_path))  # out_dir is confined to it
     fake_result = {
         "run_id": "abc_interp_deadbeef",
         "execution_id": str(uuid4()),
@@ -45,7 +46,8 @@ async def test_post_run_returns_summary(client, mock_db, tmp_path):
     assert body["gradcam_model_hash"] == "f" * 64
 
 
-async def test_post_run_propagates_runtime_error_as_400(client, mock_db, tmp_path):
+async def test_post_run_propagates_runtime_error_as_400(client, mock_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("INTERPRETABILITY_DIR", str(tmp_path))  # out_dir is confined to it
     with patch(
         "src.models.interpretability.run_interpretability_for_execution",
         new=AsyncMock(side_effect=RuntimeError("No detections with thumbnails available.")),
@@ -59,7 +61,8 @@ async def test_post_run_propagates_runtime_error_as_400(client, mock_db, tmp_pat
     assert "thumbnails" in resp.json()["detail"]
 
 
-async def test_post_run_unexpected_exception_returns_500(client, mock_db, tmp_path):
+async def test_post_run_unexpected_exception_returns_500(client, mock_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("INTERPRETABILITY_DIR", str(tmp_path))  # out_dir is confined to it
     with patch(
         "src.models.interpretability.run_interpretability_for_execution",
         new=AsyncMock(side_effect=ValueError("boom")),
@@ -73,7 +76,8 @@ async def test_post_run_unexpected_exception_returns_500(client, mock_db, tmp_pa
     assert "boom" in resp.json()["detail"]
 
 
-async def test_post_run_passes_filters_through(client, mock_db, tmp_path):
+async def test_post_run_passes_filters_through(client, mock_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("INTERPRETABILITY_DIR", str(tmp_path))  # out_dir is confined to it
     exec_id = uuid4()
     fake_result = {
         "run_id": "x",

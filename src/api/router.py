@@ -11,8 +11,11 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from src.api import (
+    audit,
     benchmarks,
+    catalog,
     detections,
+    executions,
     health,
     interpretability,
     metrics,
@@ -30,6 +33,9 @@ from src.api import (
 router = APIRouter(prefix="/api")
 
 router.include_router(health.router)
+router.include_router(catalog.router)
+router.include_router(executions.router)
+router.include_router(audit.router)
 router.include_router(detections.router)
 router.include_router(pipeline.router)
 router.include_router(benchmarks.router)

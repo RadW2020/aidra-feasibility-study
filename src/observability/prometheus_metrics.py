@@ -100,6 +100,13 @@ DRIFT_ALERTS = Counter(
     ["metric"],  # "num_detections", "avg_confidence", "spatial"
 )
 
+API_ACTIONS_TOTAL = Counter(
+    "aidra_api_actions_total",
+    "Mutating API calls by operation, actor and outcome (see api_audit_log)",
+    # actor = token name: a handful of configured principals, bounded.
+    ["operation", "actor", "outcome"],  # outcome: success, rejected, error
+)
+
 # ---------------------------------------------------------------------------
 # Histograms
 # ---------------------------------------------------------------------------

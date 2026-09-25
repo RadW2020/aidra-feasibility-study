@@ -106,6 +106,10 @@ class DetectionRecord(BaseModel):
     quality_verdict: str = "candidate"
     thumbnail_path: str | None = None
     has_thumbnail: bool = False
+    # URL of the SAR crop served by GET /api/detections/{id}/thumbnail.png;
+    # thumbnail_path is the server-side file and only kept for old clients.
+    thumbnail_url: str | None = None
+    tier: str | None = None
 
 
 class ModelInfo(BaseModel):
@@ -122,6 +126,14 @@ class ModelInfo(BaseModel):
     num_params: int | None = None
     input_size: list[int] = Field(default=[640, 640])
     classes: list[str] = Field(default=["vessel"])
+    # Registry status (I-MOD-3): active | candidate | rejected | retired, and
+    # whether the SAR gate and the AI Act card gate (I-AIA-1) would accept
+    # the model. Without these a client cannot tell a rejected variant or a
+    # COCO detector from an evaluated one.
+    status: str = "active"
+    rejection_reason: str | None = None
+    sar_compatible: bool | None = None
+    has_model_card: bool | None = None
 
 
 class TaskingEntry(BaseModel):
@@ -174,6 +186,10 @@ class PaginatedResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    # Offset of the next page, or None on the last one; and the effective
+    # filters, so a client can state exactly what a count means.
+    next_offset: int | None = None
+    filters: dict[str, Any] | None = None
 
 
 class PipelineTriggerRequest(BaseModel):
@@ -200,6 +216,12 @@ class PipelineTriggerResponse(BaseModel):
 
     execution_id: UUID | None = None
     status: str = "started"
+    # What will actually run (model version and thresholds resolved from
+    # Settings, I-DET-4), non-blocking preflight warnings, and how to follow
+    # the run. Additive: older clients only read execution_id/status.
+    resolved_request: dict[str, Any] | None = None
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
+    poll: dict[str, Any] | None = None
 
 
 class PipelineStatusResponse(BaseModel):
@@ -209,6 +231,13 @@ class PipelineStatusResponse(BaseModel):
     current_profile: str | None = None
     progress: float | None = None
     current_execution_id: UUID | None = None
+    # ``running`` above only reflects runs started through this API. The
+    # fields below come from execution_log and the scheduler, so scheduled
+    # and cue runs are visible too; ``busy`` is what a client should check.
+    busy: bool = False
+    in_flight: list[dict[str, Any]] = Field(default_factory=list)
+    engine_available: bool | None = None
+    scheduler: dict[str, Any] | None = None
 
 
 class HealthResponse(BaseModel):
@@ -227,10 +256,16 @@ class HealthResponse(BaseModel):
 class CueCreateRequest(BaseModel):
     """Solicitud para crear una entrada Tip & Cue."""
 
-    bbox: list[float]
-    priority: int = 1
-    reason: str = "manual"
-    zone: str | None = None
+    bbox: list[float] = Field(description="[lon_min, lat_min, lon_max, lat_max] in WGS-84 degrees.")
+    priority: int = Field(1, description="0-10; the cue processor serves higher priorities first.")
+    reason: str = Field("manual", max_length=500, description="Why the area needs another look.")
+    zone: str | None = Field(
+        None,
+        description="Tip & Cue zone id or pipeline search zone; decides which scenes the processor searches.",
+    )
+    allow_duplicate: bool = Field(
+        False, description="Queue even if an identical cue is already pending or processing.",
+    )
 
 
 class ComparisonRequest(BaseModel):
