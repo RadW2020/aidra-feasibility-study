@@ -86,7 +86,7 @@ _SELECT_OGC_ITEMS = """
     FROM detections d
     JOIN execution_log e ON d.execution_id = e.id
     WHERE e.status = 'success'
-      AND ($1::geometry IS NULL OR ST_Intersects(d.center_geo, $1))
+      AND ($1::geometry IS NULL OR ST_Intersects(d.center_geo, $1::geometry))
       AND ($2::timestamptz IS NULL OR e.image_sensing_date >= $2)
       AND ($3::timestamptz IS NULL OR e.image_sensing_date <= $3)
     ORDER BY d.created_at DESC, d.id
@@ -98,7 +98,7 @@ _COUNT_OGC_ITEMS = """
     FROM detections d
     JOIN execution_log e ON d.execution_id = e.id
     WHERE e.status = 'success'
-      AND ($1::geometry IS NULL OR ST_Intersects(d.center_geo, $1))
+      AND ($1::geometry IS NULL OR ST_Intersects(d.center_geo, $1::geometry))
       AND ($2::timestamptz IS NULL OR e.image_sensing_date >= $2)
       AND ($3::timestamptz IS NULL OR e.image_sensing_date <= $3)
 """

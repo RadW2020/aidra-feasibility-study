@@ -152,7 +152,7 @@ SELECT_DETECTIONS = """
       AND ($3::real IS NULL OR d.confidence >= $3)
       AND ($4::timestamptz IS NULL OR d.created_at >= $4)
       AND ($5::timestamptz IS NULL OR d.created_at <= $5)
-      AND ($6::geometry IS NULL OR ST_Intersects(d.center_geo, $6))
+      AND ($6::geometry IS NULL OR ST_Intersects(d.center_geo, $6::geometry))
       AND ($9::boolean IS NULL OR d.on_land = $9)
       AND ($10::boolean IS NULL OR d.cluster_anomaly = $10)
       AND ($11::text IS NULL OR d.quality_verdict = $11)

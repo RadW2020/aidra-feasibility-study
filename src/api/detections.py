@@ -42,7 +42,7 @@ COUNT_DETECTIONS = """
       AND ($3::real IS NULL OR d.confidence >= $3)
       AND ($4::timestamptz IS NULL OR d.created_at >= $4)
       AND ($5::timestamptz IS NULL OR d.created_at <= $5)
-      AND ($6::geometry IS NULL OR ST_Intersects(d.center_geo, $6))
+      AND ($6::geometry IS NULL OR ST_Intersects(d.center_geo, $6::geometry))
       AND ($7::boolean IS NULL OR d.on_land = $7)
       AND ($8::boolean IS NULL OR d.cluster_anomaly = $8)
       AND ($9::text IS NULL OR d.quality_verdict = $9)
