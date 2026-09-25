@@ -48,6 +48,7 @@ AIDRA = **Artificial Intelligence In-orbit Data pRocessing Assessment**. Proof-o
 | Orbital (extra) | `src/orbital/` | `tests/test_orbital/` | Latencia / resiliencia orbital |
 | AI Act (D1, D4) | `models/cards/*.MODEL_CARD.md`, `src/models/manager.py` | `tests/test_models/test_ai_act_gate.py`, `test_invariants.py::TestIAIA1AICardGate` | Gate sin ficha → no carga |
 | Observabilidad | `src/observability/` | `tests/test_observability/`, `test_invariants.py::TestITRACE3RunIdPropagation` | Prometheus + Loki, run_id end-to-end |
+| Interfaz para agentes (MCP/API) | `src/mcp_server/`, `src/api/{executions,catalog,audit,auth,idempotency,errors}.py`, `src/pipeline/preflight.py` | `tests/test_mcp/`, `tests/test_api/test_agent_*.py`, `evals/` (`python -m evals.run`) | Agentes = clientes de la misma API (scopes, audit log). Ver `AGENTS.md` |
 
 > Cuando aparezca *pendiente*, crear el test al tocar ese módulo. No dejar nuevos *pendientes*.
 

@@ -45,6 +45,92 @@ A working end-to-end pipeline that:
 
 ---
 
+## Agent-first architecture
+
+AI agents (Claude Code, Codex, Cursor, any MCP or HTTP client) are **first-class
+clients of the same product**, not a side demo. Anything the operator does through
+Grafana SQL, `curl` or scratch scripts, an agent can do through a typed interface.
+It goes through the same domain code, the same permission checks and the same
+audit trail.
+
+```
+  Human (operator, evaluator)      GIS client / CI           AI agent
+          │                              │                       │
+   Grafana · curl                 STAC · OGC · REST        MCP (stdio / HTTP)  ─ or plain REST
+          │                              │                       │
+          │                              │              src/mcp_server  (typed tools, no business logic, no DB)
+          └──────────────────────────────┴───────────┬───────────┘
+                                                      ▼
+                     FastAPI /api — scoped tokens · audit log · idempotency · error envelope
+                                                      │
+              preflight · execution diagnosis · triplet verdict · vocabulary        (domain)
+              PipelineEngine · ModelManager · ExecutionRecorder · EvidenceBundler
+                                                      │
+                                    PostgreSQL + PostGIS (execution_log, detections, …)
+```
+
+**What an agent can do.** There are 11 MCP tools. Nine are read-only:
+`get_system_status`, `get_catalog`, `list_executions`, `get_execution`,
+`search_detections`, `get_detection`, `compare_model_variants`,
+`preview_detection_run` and `list_recent_actions`. Two write, and only in `operator`
+mode with a `run`-scoped token: `start_detection_run` and `request_observation`.
+Each tool is one or two REST calls, so the new endpoints serve `curl` users too:
+
+| Agent need | Endpoint |
+|---|---|
+| What ran, what failed, why | `GET /api/executions`, `GET /api/executions/{id}`: outcome category (`memory_budget_exceeded`, `reaped_orphan`, `skipped_duplicate`, …) with the evidence fields and a provenance-completeness check |
+| What is running *now* (scheduled and cue runs included) | `GET /api/pipeline/status` → `busy`, `in_flight` from the DB |
+| Try before spending 1.7 GB and 50 min | `POST /api/pipeline/preview`: resolved request, blocking issues, warnings (rejected variant, config that OOM'd last time), duration from history |
+| Valid values and what they mean | `GET /api/catalog`, `GET /api/vocabulary`, `GET /api/config` (its `settings_hash` matches the D3 bundle manifest) |
+| Is a compressed model good enough? | `GET /api/benchmarks/triplet`: I-MOD-1/2/3 verdict, legs paired by `settings_hash` |
+| Who did what | `GET /api/audit/actions` (scope `read`) |
+
+**Examples** (full traces in [`examples/agent-workflows/`](examples/agent-workflows/)):
+
+- *"Which runs failed this week, and was it the model or the hardware budget?"* → the
+  sat-mid INT8 run aborted at 2 650 MB peak RSS against a 2 048 MB budget, and the
+  same model succeeds on sat-high: the limit is the runtime floor, not the model.
+- *"Is static INT8 good enough to replace FP32?"* → within budget (+0.61 AP pts, legs
+  computed under identical settings). The agent also warns that a sat-mid run would
+  repeat a known memory abort before any bandwidth is spent.
+- *"Queue another look at lat 35.85–35.95, lon −5.40 to −5.50"* → the reversed corners
+  come back as `invalid_bbox` with a hint, the agent corrects them, and one cue is
+  queued. A retry with the same idempotency key is a replay, not a duplicate.
+
+**Safety.**
+
+- Scoped tokens: `read` < `run` < `admin`. Agents get `run`; weight replacement,
+  bundles, imports and resets are `admin` and are not MCP tools.
+- Idempotency keys on every write an agent is likely to retry.
+- One run at a time, checked against the DB rather than the in-process flag.
+- A per-actor write rate limit, and `out_dir` confined to the evidence roots.
+- `read-only` MCP mode by default. There is no delete operation at all: evidence is
+  marked, never deleted.
+
+**Observability.** Every mutating call, refused ones included, writes an
+`api_audit_log` row (actor, client, operation, resource, outcome, error code,
+duration, request id), a Loki line and an `aidra_api_actions_total` sample.
+
+**Evals.** [`evals/`](evals/) runs 20 scenarios against the real API, a real PostGIS
+and the real MCP server over stdio. They cover investigations, runs, cues and the
+failure paths: unknown id, ambiguity, missing scope, malformed input, engine down,
+pipeline busy, "delete everything", missing area. The checks grade tool use, database
+state and stated facts, never wording. A scripted reference agent runs in CI; `--agent
+claude` runs Claude through the same checks. The first run caught a production bug:
+every bbox query on the detections and OGC endpoints returned 500.
+
+Start here: [`AGENTS.md`](AGENTS.md) · design: [`docs/agent-first-plan.md`](docs/agent-first-plan.md)
+· audit: [`docs/agent-readiness-review.md`](docs/agent-readiness-review.md)
+· self-review: [`docs/agent-portfolio-review.md`](docs/agent-portfolio-review.md)
+
+```bash
+docker compose up -d                      # the product
+python -m src.mcp_server                  # the agent interface (stdio); or: docker compose --profile agent up
+claude mcp add aidra --env AIDRA_API_URL=http://localhost:8000 -- python -m src.mcp_server
+```
+
+---
+
 ## Real validation numbers (xView3-SAR Adriatic, 11 scenes, 2026-08-28)
 
 Measured on `468 575 km²` of Sentinel-1 GRD, **1 997 ground-truth
@@ -238,7 +324,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 cp .env.example .env                          # edit Copernicus creds, etc.
 docker compose up -d aidra-db                  # local PostGIS
-# schema: 18 migrations under src/db/migrations/, applied idempotently at
+# schema: 21 migrations under src/db/migrations/, applied idempotently at
 # startup by Database.run_migrations (tracked in the _migrations table)
 ./scripts/download-models.sh                   # pulls vesseltracker-sar-yolov8.pt
 python -m src.main                             # FastAPI on :8000
@@ -288,7 +374,10 @@ src/
   observability/    Prometheus metrics (with run_id exemplars) + Loki logger
   orbital/          Tip&Cue, energy, downlink, latency, resilience
   tipcue/           Re-tasking evaluator + scheduler
-  traceability/     SHA256 hasher + recorder + verifier + D3 bundler
+  traceability/     SHA256 hasher + recorder + verifier + D3 bundler + run diagnosis
+  mcp_server/       MCP adapter over the HTTP API (agents); no backend imports
+evals/              Agent-interface scenario evals (seed, scenarios, scripted + Claude agents)
+examples/agent-workflows/  End-to-end agent traces on real tool responses
 models/
   *.pt              Active model weights (only with a MODEL_CARD)
   archived/         Weights retired from evaluation (provenance unknown)
@@ -320,6 +409,8 @@ tests/
 | [`mvp_oci.md`](mvp_oci.md) | Implementation plan + formal **WBS / Gantt / per-WP load** + risk register links. | Executive overview |
 | [`TECHNICAL_SPEC.md`](TECHNICAL_SPEC.md) | Full technical reference — interfaces, SQL, APIs, profiles, compression, Tip & Cue (4500+ lines). | Implementation reference |
 | [`CLAUDE.md`](CLAUDE.md) | LLM operating contract for the repo — invariants (§5), DoD (§3), gates (§6). | Before touching code |
+| [`AGENTS.md`](AGENTS.md) | Operating AIDRA as an agent: vocabulary, permissions, dangerous operations, conventions, edge cases. | Before connecting an agent |
+| [`docs/agent-*.md`](docs/) | Agent-readiness audit, use cases, plan and a critical self-review of the agent interface. | Reviewing the agent work |
 | [`AI_ACT_DECLARATION.md`](AI_ACT_DECLARATION.md) | EU AI Act 2024/1689 voluntary classification + Art. 14 governance. | D1 / D4 deliverables |
 | [`D4_INTERPRETABILITY_ANNEX.md`](D4_INTERPRETABILITY_ANNEX.md) | Grad-CAM and CFAR heatmap samples on real production runs. | D4 deliverable |
 | [`RISK_REGISTER.md`](RISK_REGISTER.md) | Live risk + mitigation log (Copernicus quota, OCI reclaim, dataset license, AI Act re-classification, drift, reproducibility, geographic bias, **R8 Terrain Correction formal scope exclusion**). | Risk reviews |
@@ -333,7 +424,8 @@ tests/
 | Gate | Command | Status |
 |---|---|---|
 | Lint | `ruff check src/ tests/ scripts/` | ✅ All checks passed |
-| Tests | `pytest -q` | ✅ 499 / 499 |
+| Tests | `pytest -q` | ✅ 653 passed (1 DB-backed eval test skips without `EVAL_DATABASE_URL`) |
+| Agent evals | `python -m evals.run` (PostGIS) | ✅ 20 / 20 scenarios, scripted reference agent |
 | Invariants | `pytest -k invariant -x` | ✅ Enforced (I-SAR-1..3, I-DET-2..4, I-MOD-3..4, I-TRACE-1..4, I-AIA-1) |
 | Reproducibility | `pytest -k reproducibility -x` | ✅ Same input → same `output_hash` end-to-end |
 | AI Act gate | `ModelManager` refuses any weight without a `MODEL_CARD.md` | ✅ Tested |
