@@ -22,6 +22,9 @@
 services:
   aidra-app:
     image: ghcr.io/radw2020/aidra-app:${AIDRA_IMAGE_TAG:-main}
+    # Coolify only runs `docker compose up -d`: without this, the host keeps
+    # its cached :main and a deploy never picks up a newly published image.
+    pull_policy: always
     restart: unless-stopped
     expose:
       - "8000"
@@ -59,6 +62,7 @@ services:
 
   aidra-db:
     image: ghcr.io/radw2020/aidra-db:${AIDRA_IMAGE_TAG:-main}
+    pull_policy: always
     restart: unless-stopped
     environment:
       - POSTGRES_DB=aidra
@@ -80,6 +84,7 @@ services:
 
   aidra-grafana:
     image: ghcr.io/radw2020/aidra-grafana:${AIDRA_IMAGE_TAG:-main}
+    pull_policy: always
     restart: unless-stopped
     expose:
       - "3000"
@@ -151,6 +156,7 @@ services:
 
   aidra-prom:
     image: ghcr.io/radw2020/aidra-prom:${AIDRA_IMAGE_TAG:-main}
+    pull_policy: always
     restart: unless-stopped
     expose:
       - "9090"
@@ -169,6 +175,7 @@ services:
 
   aidra-loki:
     image: ghcr.io/radw2020/aidra-loki:${AIDRA_IMAGE_TAG:-main}
+    pull_policy: always
     restart: unless-stopped
     expose:
       - "3100"
