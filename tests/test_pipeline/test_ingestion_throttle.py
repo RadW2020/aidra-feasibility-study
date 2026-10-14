@@ -11,15 +11,20 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from src.config import Settings
+from src.observability.loki_logger import StructuredLogger
+from src.pipeline import engine as engine_module
+from src.pipeline.engine import TIMEOUTS, PipelineEngine
 from src.pipeline.ingestion import (
     DOWNLOAD_CHUNK_SIZE,
     MIN_THROTTLED_READ_SIZE,
     CopernicusAuth,
+    CopernicusSearchResult,
     DownloadThrottle,
     ImageIngester,
 )
@@ -111,7 +116,79 @@ class TestIngesterWiring:
 
     def test_settings_default_is_conservative(self) -> None:
         # I-DET-4 style: the ceiling lives in Settings, not in the logic.
-        assert Settings().download_rate_limit_mbps == 20.0
+        # 20 Mbps still lost 5-10 % of packets per minute on 2026-10-13.
+        assert Settings(_env_file=None).download_rate_limit_mbps == 10.0
+
+
+class TestDownloadTimeoutFollowsTheCeiling:
+    """A lower ceiling must not turn into a download timeout.
+
+    The fixed 30 min timeout was sized for 20 Mbps. At 10 Mbps a 2 GB scene
+    needs ~27 min even at full speed, and on 2026-10-13 a 20 Mbps ceiling
+    only delivered 11 Mbps.
+    """
+
+    @staticmethod
+    def _engine(rate_mbps: float) -> PipelineEngine:
+        eng = object.__new__(PipelineEngine)
+        eng.config = Settings(_env_file=None, download_rate_limit_mbps=rate_mbps)
+        eng._log = StructuredLogger("aidra.test.download_timeout")
+        return eng
+
+    @staticmethod
+    def _product(size_mb: float) -> CopernicusSearchResult:
+        return CopernicusSearchResult(
+            product_id="prod-1",
+            title="S1C_IW_GRDH_TEST",
+            sensing_date=datetime.now(UTC),
+            size_mb=size_mb,
+            download_url="https://example.invalid/p.zip",
+        )
+
+    def test_scene_from_2026_10_13_fits_at_the_default_ceiling(self) -> None:
+        timeout = self._engine(10.0)._download_timeout(self._product(1665.92))
+
+        # Twice what 10 Mbps needs (~22 min), well above the old 30 min.
+        assert timeout == pytest.approx(2 * 1665.92 * 8 / 10.0)
+        assert timeout > TIMEOUTS["copernicus_download"]
+
+    def test_never_below_the_fixed_timeout(self) -> None:
+        timeout = self._engine(20.0)._download_timeout(self._product(500.0))
+
+        assert timeout == TIMEOUTS["copernicus_download"]
+
+    def test_unknown_size_assumes_the_largest_scene(self) -> None:
+        eng = self._engine(10.0)
+        timeout = eng._download_timeout(self._product(0.0))
+
+        assert timeout == pytest.approx(2 * eng.config.max_image_size_gb * 1024 * 8 / 10.0)
+
+    def test_disabled_ceiling_keeps_the_fixed_timeout(self) -> None:
+        timeout = self._engine(0.0)._download_timeout(self._product(1665.92))
+
+        assert timeout == TIMEOUTS["copernicus_download"]
+
+    async def test_retry_loop_waits_with_the_scaled_timeout(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        seen: list[float] = []
+        real_wait_for = asyncio.wait_for
+
+        async def recording_wait_for(aw, timeout):  # type: ignore[no-untyped-def]
+            seen.append(timeout)
+            return await real_wait_for(aw, timeout)
+
+        class _Ingester:
+            async def download(self, product: CopernicusSearchResult) -> Path:
+                return tmp_path / f"{product.title}.zip"
+
+        eng = self._engine(10.0)
+        eng.ingester = _Ingester()  # type: ignore[assignment]
+        monkeypatch.setattr(engine_module.asyncio, "wait_for", recording_wait_for)
+
+        await eng._download_with_retry(self._product(1665.92))
+
+        assert seen == [pytest.approx(2 * 1665.92 * 8 / 10.0)]
 
 
 class TestThrottledDownloadPath:
