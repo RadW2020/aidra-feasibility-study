@@ -40,7 +40,7 @@ services:
       # Keeps a scene download from saturating the host NIC: at ~50 Mbps
       # OCI throttles the VNIC and drops inbound packets, which times out
       # every other service on the same machine (2026-09-17).
-      - DOWNLOAD_RATE_LIMIT_MBPS=${DOWNLOAD_RATE_LIMIT_MBPS:-20}
+      - DOWNLOAD_RATE_LIMIT_MBPS=${DOWNLOAD_RATE_LIMIT_MBPS:-10}
       - PROMETHEUS_ENABLED=true
       - LOKI_URL=http://aidra-loki:3100
       - AIDRA_COMMIT_SHA=${AIDRA_COMMIT_SHA:-unknown}

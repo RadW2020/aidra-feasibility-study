@@ -125,6 +125,10 @@ TIMEOUTS: dict[str, int] = {
     "pipeline_total": 1800,
 }
 
+# A download attempt gets this many times what the bandwidth ceiling needs
+# for the scene (see PipelineEngine._download_timeout).
+DOWNLOAD_TIMEOUT_MARGIN = 2.0
+
 RETRY_CONFIG: dict[str, dict[str, Any]] = {
     "copernicus_auth": {"max_retries": 3, "backoff_seconds": [2, 5, 10]},
     "copernicus_search": {"max_retries": 2, "backoff_seconds": [3, 10]},
@@ -1347,6 +1351,24 @@ class PipelineEngine:
 
         return search_results[0]
 
+    def _download_timeout(self, product: CopernicusSearchResult) -> float:
+        """Seconds one download attempt may take under the bandwidth ceiling.
+
+        The fixed ``TIMEOUTS["copernicus_download"]`` (30 min) was sized for
+        the 20 Mbps ceiling; at 10 Mbps a 2 GB scene needs ~27 min at full
+        speed and the ceiling is never reached in practice (2026-10-13: 11
+        Mbps effective under a 20 Mbps ceiling). Allow
+        ``DOWNLOAD_TIMEOUT_MARGIN`` times what the ceiling needs, never less
+        than the fixed timeout. An unknown size is taken as
+        ``max_image_size_gb``.
+        """
+        base = float(TIMEOUTS["copernicus_download"])
+        rate_mbps = self.config.download_rate_limit_mbps
+        if rate_mbps <= 0:
+            return base
+        size_mb = product.size_mb if product.size_mb > 0 else self.config.max_image_size_gb * 1024
+        return max(base, DOWNLOAD_TIMEOUT_MARGIN * size_mb * 8 / rate_mbps)
+
     async def _download_with_retry(self, product: CopernicusSearchResult) -> Path:
         """Download a product with retry logic.
 
@@ -1367,18 +1389,17 @@ class PipelineEngine:
         """
         retry_cfg = RETRY_CONFIG["copernicus_download"]
         last_error: Exception | None = None
+        timeout = self._download_timeout(product)
 
         for attempt in range(retry_cfg["max_retries"] + 1):
             try:
                 path = await asyncio.wait_for(
                     self.ingester.download(product),
-                    timeout=TIMEOUTS["copernicus_download"],
+                    timeout=timeout,
                 )
                 return path
             except builtins.TimeoutError:
-                last_error = IngestionError(
-                    f"Download timed out after {TIMEOUTS['copernicus_download']}s"
-                )
+                last_error = IngestionError(f"Download timed out after {timeout:.0f}s")
             except Exception as exc:
                 last_error = exc
 

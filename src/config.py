@@ -44,9 +44,17 @@ class Settings(BaseSettings):
     # (VnicIngressDropsThrottle). Every other service on the same box
     # started losing SYNs — external monitoring recorded a 20 s TCP
     # connect timeout and response times 5-20x worse — while AIDRA itself
-    # was perfectly healthy. 20 Mbps keeps a ~1.9 GB scene at ~13 min,
-    # far inside both scheduler_interval_hours and the orphan reaper.
-    download_rate_limit_mbps: float = 20.0
+    # was perfectly healthy.
+    #
+    # 20 Mbps was not low enough (2026-10-13): a single-stream download of
+    # a 1.67 GB scene still lost 5-10 % of its packets in most minutes above
+    # ~19 Mbps (60 000 drops in 20 min, enough to trip the Checkly alert),
+    # while minutes under ~13 Mbps were nearly clean. Each throttled read is
+    # also half the size at 10 Mbps, so the bursts that refill the TCP window
+    # shrink with it. A ~1.9 GB scene takes ~25 min;
+    # PipelineEngine._download_timeout scales with this value so the
+    # download timeout never undercuts it.
+    download_rate_limit_mbps: float = 10.0
 
     # ---- Directorios ----
     models_dir: str = "/app/models"
