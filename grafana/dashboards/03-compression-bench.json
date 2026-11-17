@@ -1,7 +1,7 @@
 {
   "uid": "aidra-compression-bench",
   "title": "AIDRA — Compression Benchmarks",
-  "description": "Comparison of model variants across size, latency, RAM and accuracy. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency. Benchmark rows date from the pre-affine-mask era (May 2026), when both variants ran under the same flawed sea mask: fp32-vs-int8 comparisons are internally consistent, but detection counts are not comparable with post-2026-08-16 runs.",
+  "description": "Compressed model variants against their FP32 baseline. Runtime panels use triplets only: {FP32 baseline, variant, constraint profile} on the same scene (I-MOD-1). Accuracy is compared on the same validation set with the same matching parameters (I-MOD-2); the tolerated loss is 5 mAP points (I-MOD-3). Rejected variants are kept and labelled, never removed. Cue runs (AOI crops) are excluded.",
   "tags": [
     "aidra",
     "compression",
@@ -37,19 +37,19 @@
         "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
         "query": "all,ground,sat-high,sat-mid,sat-low,sat-extreme",
         "current": {
-          "text": "ground",
-          "value": "ground"
+          "text": "all",
+          "value": "all"
         },
         "options": [
           {
             "text": "all",
             "value": "all",
-            "selected": false
+            "selected": true
           },
           {
             "text": "ground",
             "value": "ground",
-            "selected": true
+            "selected": false
           },
           {
             "text": "sat-high",
@@ -78,15 +78,15 @@
   },
   "panels": [
     {
-      "id": 1,
-      "title": "Model Size per Variant (MB) · full-scene runs",
-      "description": "Model file size per compression variant.",
-      "type": "barchart",
+      "id": 5,
+      "title": "Compression Triplets: Variant vs FP32, Same Scene and Profile (I-MOD-1)",
+      "description": "One row per {variant, profile} with at least one scene also run by FP32 under that profile; averages are over those shared scenes only. speedup = FP32 time / variant time. A variant with no shared scene shows 'NO TRIPLET' and its runs are not evidence. registry_status and rejection_reason come from models_registry: rejected variants stay listed (I-MOD-3).",
+      "type": "table",
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 12,
-        "h": 8
+        "w": 24,
+        "h": 7
       },
       "datasource": {
         "type": "postgres",
@@ -99,7 +99,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    model_size_mb\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique, model_size_mb\nORDER BY model_size_mb DESC",
+          "rawSql": "WITH runs AS (\n    SELECT\n        image_hash,\n        constraint_profile AS profile,\n        COALESCE(NULLIF(compression_technique, ''), 'none') AS technique,\n        AVG(inference_ms) AS inf_ms,\n        AVG(peak_ram_mb) AS ram_mb,\n        AVG(num_detections) AS dets,\n        COUNT(*) AS n\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status = 'success'\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\n        AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    GROUP BY 1, 2, 3\n),\npairs AS (\n    -- I-MOD-1: a variant is only compared with FP32 runs of the SAME scene\n    -- (image_hash) under the SAME constraint profile.\n    SELECT\n        v.technique, v.profile, v.image_hash,\n        v.n AS v_n, b.n AS b_n,\n        v.inf_ms AS v_inf, b.inf_ms AS b_inf,\n        v.ram_mb AS v_ram, b.ram_mb AS b_ram,\n        v.dets AS v_dets, b.dets AS b_dets\n    FROM runs v\n    JOIN runs b\n      ON b.image_hash = v.image_hash AND b.profile = v.profile AND b.technique = 'none'\n    WHERE v.technique <> 'none'\n)\n,\nvariants AS (\n    SELECT DISTINCT COALESCE(NULLIF(compression_technique, ''), 'none') AS technique\n    FROM execution_log\n    WHERE COALESCE(NULLIF(compression_technique, ''), 'none') <> 'none'\n),\nreg AS (\n    SELECT compression_technique AS technique, status, rejection_reason\n    FROM models_registry\n    WHERE compression_technique <> 'none'\n)\nSELECT\n    va.technique AS variant,\n    COALESCE(reg.status, 'unregistered') AS registry_status,\n    CASE WHEN p.profile IS NULL THEN 'NO TRIPLET' ELSE 'triplet' END AS evidence,\n    p.profile,\n    COUNT(p.image_hash) AS shared_scenes,\n    SUM(p.v_n) AS variant_runs,\n    SUM(p.b_n) AS fp32_runs,\n    ROUND((AVG(p.b_inf) / 60000.0)::numeric, 1) AS fp32_min,\n    ROUND((AVG(p.v_inf) / 60000.0)::numeric, 1) AS variant_min,\n    ROUND((AVG(p.b_inf) / NULLIF(AVG(p.v_inf), 0))::numeric, 1) AS speedup,\n    ROUND(AVG(p.b_ram)::numeric, 0) AS fp32_ram_mb,\n    ROUND(AVG(p.v_ram)::numeric, 0) AS variant_ram_mb,\n    ROUND(AVG(p.b_dets)::numeric, 0) AS fp32_detections,\n    ROUND(AVG(p.v_dets)::numeric, 0) AS variant_detections,\n    ROUND((100.0 * (AVG(p.v_dets) - AVG(p.b_dets)) / NULLIF(AVG(p.b_dets), 0))::numeric, 1) AS delta_detections_pct,\n    COALESCE(reg.rejection_reason, '') AS rejection_reason\nFROM variants va\nLEFT JOIN pairs p ON p.technique = va.technique\nLEFT JOIN reg ON reg.technique = va.technique\nGROUP BY va.technique, reg.status, reg.rejection_reason, p.profile\nORDER BY (p.profile IS NULL), va.technique, p.profile",
           "format": "table",
           "editorMode": "code"
         }
@@ -107,43 +107,281 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "axisCenteredZero": false
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "decmbytes"
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": true
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "registry_status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "active": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "rejected": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "candidate": {
+                        "color": "yellow",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "evidence"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "triplet": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "NO TRIPLET": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "speedup"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:x"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rejection_reason"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 480
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto",
+                  "wrapText": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "orientation": "horizontal",
-        "xTickLabelRotation": 0,
-        "showValue": "always",
-        "barWidth": 0.7,
-        "groupWidth": 0.7,
-        "stacking": "none",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
+        "sortBy": [
+          {
+            "displayName": "Size (MB)",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "title": "Accuracy vs FP32 on the Same Validation Set (I-MOD-2 / I-MOD-3)",
+      "description": "Each validated variant against the FP32 baseline measured on the same dataset with the same pipeline path, matching mode, thresholds, YOLO input and fusion mode (latest run of each). delta_map_pts = variant - baseline, in mAP points; a loss above 5 points rejects the variant (I-MOD-3). 'NO BASELINE' = no FP32 run on that dataset with those parameters, so the row is not evidence. The YOLO-only rows are low in absolute terms (about 0.03 mAP on xView3): that is the detector alone; the pipeline output is the CFAR + YOLO union row.",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH v AS (\n    SELECT *, COALESCE(NULLIF(compression_technique, ''), 'none') AS technique\n    FROM validation_runs\n),\nensemble_baseline(variant_model, baseline_model) AS (\n    VALUES ('aidra-cfar+vesseltracker-sar-yolov8-int8-static-union', 'aidra-cfar+yolo-union')\n),\nvariant_runs AS (\n    SELECT DISTINCT ON (model_name, model_version, dataset, pipeline_path) *\n    FROM v\n    WHERE technique <> 'none'\n    ORDER BY model_name, model_version, dataset, pipeline_path, created_at DESC\n),\nreg AS (\n    SELECT compression_technique AS technique, status\n    FROM models_registry\n    WHERE compression_technique <> 'none'\n)\nSELECT\n    vr.model_name || ':' || vr.model_version AS variant,\n    COALESCE(reg.status, 'unregistered') AS registry_status,\n    vr.dataset,\n    ROUND(b.map_at_iou::numeric, 4) AS fp32_map,\n    ROUND(vr.map_at_iou::numeric, 4) AS variant_map,\n    ROUND(((vr.map_at_iou - b.map_at_iou) * 100)::numeric, 2) AS delta_map_pts,\n    ROUND(b.pd_recall::numeric, 3) AS fp32_pd,\n    ROUND(vr.pd_recall::numeric, 3) AS variant_pd,\n    ROUND(b.far_per_km2::numeric, 4) AS fp32_far_km2,\n    ROUND(vr.far_per_km2::numeric, 4) AS variant_far_km2,\n    CASE\n        WHEN b.id IS NULL THEN 'NO BASELINE'\n        WHEN (b.map_at_iou - vr.map_at_iou) * 100 > 5 THEN 'REJECT (> 5 pts)'\n        ELSE 'within budget'\n    END AS verdict\nFROM variant_runs vr\nLEFT JOIN LATERAL (\n    SELECT *\n    FROM v b\n    WHERE b.technique = 'none'\n      AND b.model_name = COALESCE(\n            (SELECT baseline_model FROM ensemble_baseline WHERE variant_model = vr.model_name),\n            regexp_replace(vr.model_name, '-int8-(dynamic|static)$', ''))\n      AND b.dataset = vr.dataset\n      AND b.pipeline_path IS NOT DISTINCT FROM vr.pipeline_path\n      AND b.match_mode = vr.match_mode\n      AND b.iou_threshold = vr.iou_threshold\n      AND b.confidence_threshold = vr.confidence_threshold\n      AND (b.params_json ->> 'yolo_input') IS NOT DISTINCT FROM (vr.params_json ->> 'yolo_input')\n      AND (b.params_json ->> 'fusion_mode') IS NOT DISTINCT FROM (vr.params_json ->> 'fusion_mode')\n    ORDER BY b.created_at DESC\n    LIMIT 1\n) b ON true\nLEFT JOIN reg ON reg.technique = vr.technique\nORDER BY (b.id IS NULL), vr.dataset, vr.model_name",
+          "format": "table",
+          "editorMode": "code"
         }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "registry_status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "active": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "rejected": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "candidate": {
+                        "color": "yellow",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "variant"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "verdict"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "within budget": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "REJECT (> 5 pts)": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "NO BASELINE": {
+                        "color": "orange",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Avg Latency",
+            "desc": false
+          }
+        ]
       }
     },
     {
       "id": 2,
-      "title": "Total Inference Time per Variant (minutes) · full-scene runs",
-      "description": "Total wall-clock time (minutes) to process the full scene across all tiles. Both variants take tens of minutes because this is full-scene time, not per-tile latency. The key metric is the ratio: INT8 ÷ FP32 ≈ 1.5x speedup.",
+      "title": "Inference Time: Variant vs FP32 on the Same Scenes (minutes)",
+      "description": "Full-scene inference time of each variant next to FP32 on the same scenes and profile. Triplet rule (I-MOD-1): a variant is compared only with FP32 runs of the same scene (same image_hash) under the same constraint profile. Variants without such a pair produce no comparison.",
       "type": "barchart",
       "gridPos": {
-        "x": 12,
-        "y": 0,
+        "x": 0,
+        "y": 14,
         "w": 12,
         "h": 8
       },
@@ -158,7 +396,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric / 60000.0, 1) AS avg_inference_min\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_inference_min DESC",
+          "rawSql": "WITH runs AS (\n    SELECT\n        image_hash,\n        constraint_profile AS profile,\n        COALESCE(NULLIF(compression_technique, ''), 'none') AS technique,\n        AVG(inference_ms) AS inf_ms,\n        AVG(peak_ram_mb) AS ram_mb,\n        AVG(num_detections) AS dets,\n        COUNT(*) AS n\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status = 'success'\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\n        AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    GROUP BY 1, 2, 3\n),\npairs AS (\n    -- I-MOD-1: a variant is only compared with FP32 runs of the SAME scene\n    -- (image_hash) under the SAME constraint profile.\n    SELECT\n        v.technique, v.profile, v.image_hash,\n        v.n AS v_n, b.n AS b_n,\n        v.inf_ms AS v_inf, b.inf_ms AS b_inf,\n        v.ram_mb AS v_ram, b.ram_mb AS b_ram,\n        v.dets AS v_dets, b.dets AS b_dets\n    FROM runs v\n    JOIN runs b\n      ON b.image_hash = v.image_hash AND b.profile = v.profile AND b.technique = 'none'\n    WHERE v.technique <> 'none'\n)\nSELECT\n    technique || ' · ' || profile AS triplet,\n    ROUND((AVG(b_inf) / 60000.0)::numeric, 1) AS \"FP32 (min)\",\n    ROUND((AVG(v_inf) / 60000.0)::numeric, 1) AS \"Variant (min)\"\nFROM pairs\nGROUP BY technique, profile\nORDER BY technique, profile",
           "format": "table",
           "editorMode": "code"
         }
@@ -196,182 +434,13 @@
       }
     },
     {
-      "id": 3,
-      "title": "Operational Proxy: Confidence vs Latency · full-scene runs",
-      "description": "Runtime proxy only. Confidence is useful for operational drift, but compression acceptance still requires persisted validation metrics: mAP@0.5, Pd and FAR/km2.",
-      "type": "table",
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "PostgreSQL"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "PostgreSQL"
-          },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_latency_ms,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(model_size_mb)::numeric, 1) AS size_mb,\n    (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n    (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n    (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n    CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS validation_gap\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND avg_confidence IS NOT NULL\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_latency_ms",
-          "format": "table",
-          "editorMode": "code"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": false
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_latency_ms"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "ms"
-              },
-              {
-                "id": "displayName",
-                "value": "Total Time"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "variant"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 160
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_confidence"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              },
-              {
-                "id": "displayName",
-                "value": "Avg Confidence"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "yellow",
-                      "value": null
-                    },
-                    {
-                      "color": "green",
-                      "value": 0.5
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "size_mb"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "decmbytes"
-              },
-              {
-                "id": "displayName",
-                "value": "Size (MB)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "validation_gap"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 210
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
-        },
-        "sortBy": [
-          {
-            "displayName": "Avg Latency",
-            "desc": false
-          }
-        ]
-      }
-    },
-    {
       "id": 4,
-      "title": "Peak RAM per Variant (MB) · full-scene runs",
-      "description": "Peak RSS during inference per model variant. NOT a hard limit — measured after removing RLIMIT_AS enforcement (which killed the host process). Budget breaches are recorded in execution_log.notes. Variation between variants is real: INT8 loads a smaller weight blob but ONNX Runtime allocates additional buffers.",
+      "title": "Peak RAM: Variant vs FP32 on the Same Scenes (MB)",
+      "description": "Peak RSS during inference of each variant next to FP32 on the same scenes and profile. A smaller weight file does not imply less RAM: ONNX Runtime allocates its own buffers. Triplet rule (I-MOD-1): a variant is compared only with FP32 runs of the same scene (same image_hash) under the same constraint profile. Variants without such a pair produce no comparison.",
       "type": "barchart",
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 14,
         "w": 12,
         "h": 8
       },
@@ -386,7 +455,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    CASE WHEN compression_technique IS NULL OR compression_technique = 'none'\n         THEN 'fp32 (baseline)'\n         ELSE compression_technique\n    END AS variant,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY compression_technique\nORDER BY avg_peak_ram_mb DESC",
+          "rawSql": "WITH runs AS (\n    SELECT\n        image_hash,\n        constraint_profile AS profile,\n        COALESCE(NULLIF(compression_technique, ''), 'none') AS technique,\n        AVG(inference_ms) AS inf_ms,\n        AVG(peak_ram_mb) AS ram_mb,\n        AVG(num_detections) AS dets,\n        COUNT(*) AS n\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status = 'success'\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\n        AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    GROUP BY 1, 2, 3\n),\npairs AS (\n    -- I-MOD-1: a variant is only compared with FP32 runs of the SAME scene\n    -- (image_hash) under the SAME constraint profile.\n    SELECT\n        v.technique, v.profile, v.image_hash,\n        v.n AS v_n, b.n AS b_n,\n        v.inf_ms AS v_inf, b.inf_ms AS b_inf,\n        v.ram_mb AS v_ram, b.ram_mb AS b_ram,\n        v.dets AS v_dets, b.dets AS b_dets\n    FROM runs v\n    JOIN runs b\n      ON b.image_hash = v.image_hash AND b.profile = v.profile AND b.technique = 'none'\n    WHERE v.technique <> 'none'\n)\nSELECT\n    technique || ' · ' || profile AS triplet,\n    ROUND(AVG(b_ram)::numeric, 0) AS \"FP32 (MB)\",\n    ROUND(AVG(v_ram)::numeric, 0) AS \"Variant (MB)\"\nFROM pairs\nGROUP BY technique, profile\nORDER BY technique, profile",
           "format": "table",
           "editorMode": "code"
         }
@@ -422,15 +491,15 @@
       }
     },
     {
-      "id": 5,
-      "title": "Benchmark Comparison Table (Runtime + Validation Gap) · full-scene runs",
-      "description": "Full runtime comparison. The AIDRA invariant for compression also requires mAP@0.5, Pd and FAR/km2; those validation metrics are currently documented in model cards/offline artefacts and should be persisted for a fully self-contained dashboard.",
-      "type": "table",
+      "id": 1,
+      "title": "Model Size per Variant (MB)",
+      "description": "File size of each registered variant of the model under compression evaluation, with its registry status (models_registry).",
+      "type": "barchart",
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 22,
         "w": 24,
-        "h": 8
+        "h": 7
       },
       "datasource": {
         "type": "postgres",
@@ -443,7 +512,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    model_name,\n    model_version,\n    compression_technique,\n    model_size_mb,\n    ROUND(AVG(inference_ms)::numeric, 1) AS avg_inference_ms,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_peak_ram_mb,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections,\n    ROUND(AVG(avg_confidence)::numeric, 3) AS avg_confidence,\n    COUNT(*) AS num_runs,\n    (SELECT ROUND(AVG(map_at_iou)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS map_at_iou,\n    (SELECT ROUND(AVG(pd_recall)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS pd_recall,\n    (SELECT ROUND(AVG(far_per_km2)::numeric, 4) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) AS far_per_km2,\n    CASE WHEN (SELECT COUNT(*) FROM validation_runs v WHERE v.model_name = execution_log.model_name AND COALESCE(NULLIF(v.compression_technique,''),'none') = COALESCE(NULLIF(compression_technique,''),'none')) > 0 THEN 'validated' ELSE 'NEEDS_DB_METRIC: mAP/Pd/FAR' END AS validation_gap\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (LEFT('$profile', 1) = '$' OR constraint_profile = '$profile')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY model_name, model_version, compression_technique, model_size_mb\nORDER BY model_size_mb",
+          "rawSql": "SELECT\n    CASE WHEN compression_technique = 'none' THEN 'fp32 (baseline)' ELSE compression_technique END\n        || ' · ' || status AS variant,\n    size_mb AS model_size_mb\nFROM models_registry\nWHERE name IN (SELECT name FROM models_registry WHERE compression_technique <> 'none')\nORDER BY size_mb DESC",
           "format": "table",
           "editorMode": "code"
         }
@@ -451,166 +520,33 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": true
-          }
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "axisCenteredZero": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "decmbytes"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "model_size_mb"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "decmbytes"
-              },
-              {
-                "id": "displayName",
-                "value": "Size (MB)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_inference_ms"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "ms"
-              },
-              {
-                "id": "displayName",
-                "value": "Avg Total Time"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_peak_ram_mb"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "decmbytes"
-              },
-              {
-                "id": "displayName",
-                "value": "Avg Peak RAM (MB)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_confidence"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              },
-              {
-                "id": "displayName",
-                "value": "Avg Confidence"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "compression_technique"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Compression"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "model_name"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 280
-              },
-              {
-                "id": "displayName",
-                "value": "Model"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "model_version"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 90
-              },
-              {
-                "id": "displayName",
-                "value": "Ver."
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "validation_gap"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 220
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
-          ],
-          "countRows": false
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
         },
-        "sortBy": [
-          {
-            "displayName": "Size (MB)",
-            "desc": false
-          }
-        ]
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     }
   ],
