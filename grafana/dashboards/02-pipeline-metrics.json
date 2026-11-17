@@ -461,7 +461,7 @@
     {
       "id": 6,
       "title": "Error Rate",
-      "description": "Share of execution_log rows that finished with status != 'success'. Sourced from Postgres (the previous Prometheus rate query reset on every redeploy and inflated to 100% with a single failed run).",
+      "description": "Share of runs in the selected time range that ended in 'error' or 'failed'. 'skipped' runs (nothing new to process: the scene was already analysed) are not attempts and are left out of both sides; 'No data' means no run was attempted in the range. Sourced from Postgres (the previous Prometheus rate query reset on every redeploy).",
       "type": "stat",
       "gridPos": {
         "x": 18,
@@ -480,7 +480,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COALESCE(COUNT(*) FILTER (WHERE status != 'success')::float / NULLIF(COUNT(*), 0), 0) AS error_rate FROM execution_log",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE status IN ('error', 'failed'))::float\n    / NULLIF(COUNT(*) FILTER (WHERE status <> 'skipped'), 0) AS error_rate\nFROM execution_log\nWHERE $__timeFilter(created_at)",
           "format": "table"
         }
       ],

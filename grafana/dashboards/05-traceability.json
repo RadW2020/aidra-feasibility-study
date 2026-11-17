@@ -229,7 +229,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ROUND(\n        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::numeric\n        / NULLIF(COUNT(*)::numeric, 0),\n        3\n    ) AS success_rate\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')",
+          "rawSql": "SELECT\n    ROUND(\n        COUNT(*) FILTER (WHERE status = 'success')::numeric\n        / NULLIF(COUNT(*) FILTER (WHERE status <> 'skipped')::numeric, 0),\n        3\n    ) AS success_rate\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -277,7 +277,8 @@
         "justifyMode": "auto",
         "textMode": "auto",
         "orientation": "auto"
-      }
+      },
+      "description": "Successful runs over attempted runs in the selected time range. 'skipped' runs (nothing new to process) are not attempts and are excluded; 'No data' means no run was attempted in the range."
     },
     {
       "id": 3,
@@ -300,7 +301,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(DISTINCT image_id) AS unique_images\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')",
+          "rawSql": "SELECT COUNT(DISTINCT image_id) AS unique_images\nFROM execution_log\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n    AND image_id <> 'pending'\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\n    AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR status = '$status')",
           "format": "table",
           "editorMode": "code"
         }
@@ -335,7 +336,8 @@
         "justifyMode": "auto",
         "textMode": "auto",
         "orientation": "auto"
-      }
+      },
+      "description": "Distinct Sentinel-1 scenes referenced by runs in the selected range. Runs that never resolved a scene (image_id = 'pending') are not counted."
     },
     {
       "id": 4,
@@ -691,7 +693,7 @@
     {
       "id": 7,
       "title": "Execution Timeline",
-      "description": "Timeline of executions by status.",
+      "description": "Executions per hour by outcome. 'skipped' = nothing new to process (scene already analysed), not a failure; 'invalid' = scene rejected by the preprocessing quality gate (I-SAR-1); 'error' = runs that ended in 'error' or 'failed'.",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
@@ -710,7 +712,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    $__timeGroup(created_at, '1h') AS \"time\",\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::int AS success,\n    SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END)::int AS error\nFROM execution_log\nWHERE $__timeFilter(created_at)\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY 1\nORDER BY 1",
+          "rawSql": "SELECT\n    $__timeGroup(created_at, '1h') AS \"time\",\n    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)::int AS success,\n    SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END)::int AS skipped,\n    SUM(CASE WHEN status = 'invalid' THEN 1 ELSE 0 END)::int AS invalid,\n    SUM(CASE WHEN status IN ('error', 'failed') THEN 1 ELSE 0 END)::int AS error\nFROM execution_log\nWHERE $__timeFilter(created_at)\n    AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR model_name = '$model')\n    AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR constraint_profile = '$profile')\nGROUP BY 1\nORDER BY 1",
           "format": "time_series",
           "editorMode": "code"
         }
@@ -757,6 +759,36 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "skipped"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#8e8e8e",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "invalid"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
                   "mode": "fixed"
                 }
               }
