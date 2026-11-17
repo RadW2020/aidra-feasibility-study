@@ -1,7 +1,7 @@
 {
   "uid": "aidra-constraint-profiles",
   "title": "AIDRA — Constraint Profiles",
-  "description": "Performance comparison under space-grade hardware constraint profiles. Aggregates include full-scene runs only (trigger_type <> cue): cue runs process an AOI crop (~1-4% of the scene) and are not comparable in detections or latency. Aggregates exclude the pre-affine-mask era (methodology:pre-affine-mask in notes): before 2026-08-16 the CFAR sea mask was axis-aligned on ~13deg-rotated scenes and detection counts are not comparable.",
+  "description": "Performance of the same scene and model under space-grade hardware constraint profiles, with a pass/fail verdict against each profile's RAM and CPU budget. Cue runs (AOI crops) and runs from the pre-affine-mask era (before 2026-08-16) are excluded.",
   "tags": [
     "aidra",
     "profiles",
@@ -32,103 +32,29 @@
   "templating": {
     "list": [
       {
-        "name": "model",
+        "name": "variant",
         "type": "custom",
-        "label": "Model",
-        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
-        "query": "all,vesseltracker-sar-yolov8,vesseltracker-sar-yolov8-int8-dynamic",
+        "label": "Variant",
+        "description": "Model variant by compression technique. Public dashboards do not interpolate variables and always show the FP32 baseline.",
+        "query": "none,static_int8,dynamic_int8",
         "current": {
-          "text": "vesseltracker-sar-yolov8-int8-dynamic",
-          "value": "vesseltracker-sar-yolov8-int8-dynamic"
+          "text": "none",
+          "value": "none"
         },
         "options": [
           {
-            "text": "all",
-            "value": "all",
-            "selected": false
-          },
-          {
-            "text": "vesseltracker-sar-yolov8",
-            "value": "vesseltracker-sar-yolov8",
-            "selected": false
-          },
-          {
-            "text": "vesseltracker-sar-yolov8-int8-dynamic",
-            "value": "vesseltracker-sar-yolov8-int8-dynamic",
-            "selected": true
-          }
-        ],
-        "multi": false
-      },
-      {
-        "name": "image_id",
-        "type": "custom",
-        "label": "Image ID",
-        "description": "Hardcoded list (custom) — public dashboards do not run query-type template vars.",
-        "query": "all,13b720c6-898b-42e3-a015-499184858d5d,493f46d1-e3b2-47fd-8063-b95aa2c8ffd5,4bc18db9-161f-4251-8c83-938a4733a7cc,7086e4eb-f8d1-45da-8c29-fc16439e10e2,76f82d1c-24d3-40de-bcab-6f14fd467c71,77688a96-9ef7-4a8a-a6a2-93dd71c07e1a,94c52692-be21-4d50-94fe-41fc0bacc197,96aeeeb1-9593-4d94-a99b-cfe52b9c8d8d,b028b2e2-e618-4cc3-aa9e-3f6e17ae88d5,b0c1c489-be11-416c-ae8d-564a80ff106b,d3a823de-3a25-48fb-a4ef-6002887a833d",
-        "current": {
-          "text": "7086e4eb-f8d1-45da-8c29-fc16439e10e2",
-          "value": "7086e4eb-f8d1-45da-8c29-fc16439e10e2"
-        },
-        "options": [
-          {
-            "text": "all",
-            "value": "all",
-            "selected": false
-          },
-          {
-            "text": "13b720c6-898b-42e3-a015-499184858d5d",
-            "value": "13b720c6-898b-42e3-a015-499184858d5d",
-            "selected": false
-          },
-          {
-            "text": "493f46d1-e3b2-47fd-8063-b95aa2c8ffd5",
-            "value": "493f46d1-e3b2-47fd-8063-b95aa2c8ffd5",
-            "selected": false
-          },
-          {
-            "text": "4bc18db9-161f-4251-8c83-938a4733a7cc",
-            "value": "4bc18db9-161f-4251-8c83-938a4733a7cc",
-            "selected": false
-          },
-          {
-            "text": "7086e4eb-f8d1-45da-8c29-fc16439e10e2",
-            "value": "7086e4eb-f8d1-45da-8c29-fc16439e10e2",
+            "text": "none",
+            "value": "none",
             "selected": true
           },
           {
-            "text": "76f82d1c-24d3-40de-bcab-6f14fd467c71",
-            "value": "76f82d1c-24d3-40de-bcab-6f14fd467c71",
+            "text": "static_int8",
+            "value": "static_int8",
             "selected": false
           },
           {
-            "text": "77688a96-9ef7-4a8a-a6a2-93dd71c07e1a",
-            "value": "77688a96-9ef7-4a8a-a6a2-93dd71c07e1a",
-            "selected": false
-          },
-          {
-            "text": "94c52692-be21-4d50-94fe-41fc0bacc197",
-            "value": "94c52692-be21-4d50-94fe-41fc0bacc197",
-            "selected": false
-          },
-          {
-            "text": "96aeeeb1-9593-4d94-a99b-cfe52b9c8d8d",
-            "value": "96aeeeb1-9593-4d94-a99b-cfe52b9c8d8d",
-            "selected": false
-          },
-          {
-            "text": "b028b2e2-e618-4cc3-aa9e-3f6e17ae88d5",
-            "value": "b028b2e2-e618-4cc3-aa9e-3f6e17ae88d5",
-            "selected": false
-          },
-          {
-            "text": "b0c1c489-be11-416c-ae8d-564a80ff106b",
-            "value": "b0c1c489-be11-416c-ae8d-564a80ff106b",
-            "selected": false
-          },
-          {
-            "text": "d3a823de-3a25-48fb-a4ef-6002887a833d",
-            "value": "d3a823de-3a25-48fb-a4ef-6002887a833d",
+            "text": "dynamic_int8",
+            "value": "dynamic_int8",
             "selected": false
           }
         ],
@@ -146,257 +72,23 @@
         "x": 0,
         "y": 0,
         "w": 24,
-        "h": 3
+        "h": 4
       },
       "options": {
         "mode": "html",
-        "content": "<div style='padding:10px 14px;border-radius:10px;background:#0e1620;border:1px solid #2b3645;color:#dde6f3'>\n  <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:4px'>HOW TO READ THIS DASHBOARD</div>\n  <div style='font-size:13px;line-height:1.55'>The <b>same Sentinel-1 scene</b> processed by the <b>same model</b> under five simulated hardware budgets (<i>ground → sat-extreme</i>). Pick a Model and Image ID above. Each panel includes a tooltip explaining what the numbers actually mean — including where the simulation is hard (cgroup-style) and where it is soft (duty cycling). The Pass/Fail table at the bottom is the canonical evidence row for each profile.</div>\n</div>"
-      }
-    },
-    {
-      "id": 1,
-      "title": "Inference latency per profile · full-scene runs",
-      "description": "Wall-clock inference time over the same Sentinel-1 scene under each hardware profile. ground / sat-high / sat-mid stay close because the inference loop is single-threaded and cannot benefit from extra cores. sat-low (target 0.5) and sat-extreme (target 0.25) take ~2x and ~4x ground respectively, driven by the soft duty-cycle CPUThrottle.",
-      "type": "barchart",
-      "gridPos": {
-        "x": 0,
-        "y": 3,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "PostgreSQL"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "PostgreSQL"
-          },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND((AVG(inference_ms) / 60000.0)::numeric, 2) AS \"avg_latency_min\"\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND (LEFT('$image_id', 1) = '$' OR image_id = '$image_id')\n    AND (LEFT('$model', 1) = '$' OR model_name = '$model')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
-          "format": "table",
-          "editorMode": "code"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "axisLabel": "minutes"
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "short",
-          "decimals": 2
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "vertical",
-        "xTickLabelRotation": 0,
-        "showValue": "always",
-        "barWidth": 0.7,
-        "groupWidth": 0.7,
-        "stacking": "none",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 2,
-      "title": "Peak resident memory per profile · full-scene runs",
-      "description": "Peak RSS observed during inference. NOT a hard limit: the previous setrlimit-based enforcement killed the host process when PyTorch + CUDA shared libraries mapped beyond the budget, so memory is now measured and budget breaches are recorded in execution_log.notes (see the Pass/Fail panel below). Counter-intuitive ordering (sat-low lower than sat-mid; sat-extreme highest) is real: the CPUThrottle pauses let GC run on the throttled profiles, while sat-extreme accumulates buffers during long sleeps.",
-      "type": "barchart",
-      "gridPos": {
-        "x": 12,
-        "y": 3,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "PostgreSQL"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "PostgreSQL"
-          },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(peak_ram_mb)::numeric, 1) AS avg_ram_mb\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND (LEFT('$image_id', 1) = '$' OR image_id = '$image_id')\n    AND (LEFT('$model', 1) = '$' OR model_name = '$model')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
-          "format": "table",
-          "editorMode": "code"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "lineWidth": 1
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "decmbytes"
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "vertical",
-        "xTickLabelRotation": 0,
-        "showValue": "always",
-        "barWidth": 0.7,
-        "groupWidth": 0.7,
-        "stacking": "none",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 3,
-      "title": "Detections per profile (output stability check) · full-scene runs",
-      "description": "Number of vessel detections per constraint profile. FP32 deterministic runs should match across profiles; dynamic INT8 can diverge by runtime/profile (R12), so this panel exposes output drift instead of hiding it. Any FP32 divergence is a fail.",
-      "type": "barchart",
-      "gridPos": {
-        "x": 0,
-        "y": 11,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "PostgreSQL"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "PostgreSQL"
-          },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(num_detections)::numeric, 1) AS avg_detections\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND (LEFT('$image_id', 1) = '$' OR image_id = '$image_id')\n    AND (LEFT('$model', 1) = '$' OR model_name = '$model')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
-          "format": "table",
-          "editorMode": "code"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "lineWidth": 1
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "vertical",
-        "xTickLabelRotation": 0,
-        "showValue": "always",
-        "barWidth": 0.7,
-        "groupWidth": 0.7,
-        "stacking": "none",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "id": 4,
-      "title": "Average CPU usage per profile · full-scene runs",
-      "description": "Sum of CPU time across all process threads, expressed as a percentage of one core. ground / sat-high / sat-mid all show ~371% because the OpenMP worker threads PyTorch creates inherit affinity at thread-creation time — applying sched_setaffinity later does NOT migrate them to fewer cores. Only the soft CPUThrottle reduces effective utilisation, which is why sat-low (target 0.5) drops to ~186% and sat-extreme (target 0.25) to ~166%. Hard sub-core enforcement would require cgroup v2 delegation or a Docker side-car.",
-      "type": "barchart",
-      "gridPos": {
-        "x": 12,
-        "y": 11,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "PostgreSQL"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "PostgreSQL"
-          },
-          "rawSql": "SELECT\n    constraint_profile AS profile,\n    ROUND(AVG(cpu_usage_pct)::numeric, 1) AS avg_cpu_pct\nFROM execution_log\nWHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND (LEFT('$image_id', 1) = '$' OR image_id = '$image_id')\n    AND (LEFT('$model', 1) = '$' OR model_name = '$model')\n    AND status = 'success'\n    AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\nGROUP BY constraint_profile\nORDER BY CASE constraint_profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
-          "format": "table",
-          "editorMode": "code"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "lineWidth": 1
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "vertical",
-        "xTickLabelRotation": 0,
-        "showValue": "always",
-        "barWidth": 0.7,
-        "groupWidth": 0.7,
-        "stacking": "none",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "content": "<div style='padding:10px 14px;border-radius:10px;background:#0e1620;border:1px solid #2b3645;color:#dde6f3'>\n  <div style='font-size:11px;color:#7ea0c4;letter-spacing:2px;font-weight:700;margin-bottom:4px'>HOW TO READ THIS DASHBOARD</div>\n  <div style='font-size:13px;line-height:1.55'>The <b>same Sentinel-1 scene</b> processed by the <b>same model</b> under five simulated hardware budgets (<i>ground → sat-extreme</i>). The scene is chosen automatically: the most recent one attempted under all five profiles, and each panel shows the latest attempt per profile. The model is the FP32 baseline unless a <b>Variant</b> is picked above (logged-in Grafana only). RAM is enforced: a run whose peak RSS exceeds its budget is aborted and shows as a failure. The verdict table right below is the evidence row for each profile.</div>\n</div>"
       }
     },
     {
       "id": 5,
-      "title": "Profile Budget Verdict · full-scene runs",
-      "description": "Strict evidence row per profile: observed RAM/CPU is compared to the declared hardware budget, not only to whether the run completed.",
+      "title": "Profile Budget Verdict (Pass / Fail)",
+      "description": "Same scene, same model: each bar is the latest attempt per profile on the most recent scene that was attempted under all five profiles (FP32 baseline unless a Variant is picked; cue crops and pre-affine-mask runs excluded). Verdict per profile against the declared budget. PASS = completed within the RAM budget. FAIL_RAM_ABORTED = the memory guard stopped the run because peak RSS exceeded the budget (enforced since 2026-09). FAIL_RAM_OVER_BUDGET = the run completed but used more RAM than the budget (runs from before the guard was enforced). WARN_CPU = completed within RAM but used more than 110% of the CPU budget. FAIL_RUN = any other failure. NO DATA = no qualifying scene.",
       "type": "table",
       "gridPos": {
         "x": 0,
-        "y": 19,
+        "y": 4,
         "w": 24,
-        "h": 8
+        "h": 7
       },
       "datasource": {
         "type": "postgres",
@@ -409,7 +101,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), runs AS (\n    SELECT\n        constraint_profile AS profile,\n        ROUND((AVG(inference_ms) FILTER (WHERE status = 'success'))::numeric, 1) AS avg_latency_ms,\n        ROUND((AVG(peak_ram_mb) FILTER (WHERE status = 'success'))::numeric, 1) AS avg_ram_mb,\n        ROUND((AVG(cpu_usage_pct) FILTER (WHERE status = 'success'))::numeric, 1) AS avg_cpu_pct,\n        ROUND((AVG(num_detections) FILTER (WHERE status = 'success'))::numeric, 1) AS avg_detections,\n        ROUND((AVG(avg_confidence) FILTER (WHERE status = 'success'))::numeric, 3) AS avg_confidence,\n        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,\n        SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failures\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND (LEFT('$image_id', 1) = '$' OR image_id = '$image_id')\n        AND (LEFT('$model', 1) = '$' OR model_name = '$model')\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-321de6b%')\n    GROUP BY constraint_profile\n)\nSELECT\n    b.profile,\n    b.ram_budget_mb,\n    r.avg_ram_mb,\n    ROUND((r.avg_ram_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n    b.cpu_budget_cores,\n    ROUND((r.avg_cpu_pct / 100.0)::numeric, 2) AS observed_cores,\n    r.avg_latency_ms,\n    r.avg_detections,\n    r.avg_confidence,\n    COALESCE(r.successes, 0) AS successes,\n    COALESCE(r.failures, 0) AS failures,\n    CASE\n        WHEN r.profile IS NULL THEN 'NO DATA'\n        WHEN r.failures > 0 THEN 'FAIL_RUN'\n        WHEN r.avg_ram_mb > b.ram_budget_mb THEN 'FAIL_RAM'\n        WHEN (r.avg_cpu_pct / 100.0) > (b.cpu_budget_cores * 1.10) THEN 'WARN_CPU'\n        WHEN r.avg_confidence < 0.5 THEN 'DEGRADED'\n        ELSE 'PASS'\n    END AS budget_verdict\nFROM budgets b\nLEFT JOIN runs r ON r.profile = b.profile\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), scoped AS (\n    SELECT *\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status IN ('success', 'error', 'failed')\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:%')\n        -- public dashboards do not interpolate variables: default to the FP32 baseline\n        AND COALESCE(NULLIF(compression_technique, ''), 'none')\n            = CASE WHEN LEFT('$variant', 1) = '$' THEN 'none' ELSE '$variant' END\n), scene AS (\n    -- same scene, same model: the most recent scene attempted under all five profiles\n    SELECT image_hash\n    FROM scoped\n    GROUP BY image_hash\n    HAVING COUNT(DISTINCT constraint_profile) = 5\n    ORDER BY MAX(created_at) DESC\n    LIMIT 1\n), latest AS (\n    -- the latest attempt per profile on that scene\n    SELECT DISTINCT ON (constraint_profile)\n        constraint_profile AS profile,\n        status,\n        created_at,\n        image_title,\n        inference_ms,\n        cpu_usage_pct,\n        num_detections,\n        avg_confidence,\n        error_message,\n        COALESCE(peak_ram_mb, (substring(error_message from 'peak RSS ([0-9.]+) MB'))::float) AS peak_mb\n    FROM scoped\n    WHERE image_hash = (SELECT image_hash FROM scene)\n    ORDER BY constraint_profile, created_at DESC\n)\nSELECT\n    b.profile,\n    CASE\n        WHEN l.profile IS NULL THEN 'NO DATA'\n        WHEN l.status <> 'success' AND l.error_message LIKE '%memory budget exceeded%' THEN 'FAIL_RAM_ABORTED'\n        WHEN l.status <> 'success' THEN 'FAIL_RUN'\n        WHEN l.peak_mb > b.ram_budget_mb THEN 'FAIL_RAM_OVER_BUDGET'\n        WHEN (l.cpu_usage_pct / 100.0) > (b.cpu_budget_cores * 1.10) THEN 'WARN_CPU'\n        ELSE 'PASS'\n    END AS budget_verdict,\n    l.status AS run_status,\n    b.ram_budget_mb,\n    ROUND(l.peak_mb::numeric, 0) AS peak_ram_mb,\n    ROUND((l.peak_mb / NULLIF(b.ram_budget_mb, 0))::numeric, 2) AS ram_budget_ratio,\n    b.cpu_budget_cores,\n    ROUND((l.cpu_usage_pct / 100.0)::numeric, 2) AS observed_cores,\n    ROUND((l.inference_ms / 60000.0)::numeric, 1) AS latency_min,\n    l.num_detections AS detections,\n    ROUND(l.avg_confidence::numeric, 3) AS avg_confidence,\n    l.created_at AS run_at,\n    l.image_title AS scene\nFROM budgets b\nLEFT JOIN latest l ON l.profile = b.profile\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
           "format": "table",
           "editorMode": "code"
         }
@@ -463,17 +155,17 @@
                   {
                     "type": "value",
                     "options": {
-                      "DEGRADED": {
-                        "text": "DEGRADED",
-                        "color": "yellow"
+                      "FAIL_RAM_ABORTED": {
+                        "text": "FAIL_RAM_ABORTED",
+                        "color": "red"
                       }
                     }
                   },
                   {
                     "type": "value",
                     "options": {
-                      "FAIL_RAM": {
-                        "text": "FAIL_RAM",
+                      "FAIL_RAM_OVER_BUDGET": {
+                        "text": "FAIL_RAM_OVER_BUDGET",
                         "color": "red"
                       }
                     }
@@ -497,6 +189,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "custom.width",
+                "value": 200
               }
             ]
           },
@@ -610,6 +306,244 @@
             "sum"
           ],
           "countRows": false
+        }
+      }
+    },
+    {
+      "id": 1,
+      "title": "Inference latency per profile",
+      "description": "Same scene, same model: each bar is the latest attempt per profile on the most recent scene that was attempted under all five profiles (FP32 baseline unless a Variant is picked; cue crops and pre-affine-mask runs excluded). Only profiles whose run completed have a bar: a run aborted by the memory guard has no latency. sat-low and sat-extreme are slower because of the soft duty-cycle CPU throttle.",
+      "type": "barchart",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), scoped AS (\n    SELECT *\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status IN ('success', 'error', 'failed')\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:%')\n        -- public dashboards do not interpolate variables: default to the FP32 baseline\n        AND COALESCE(NULLIF(compression_technique, ''), 'none')\n            = CASE WHEN LEFT('$variant', 1) = '$' THEN 'none' ELSE '$variant' END\n), scene AS (\n    -- same scene, same model: the most recent scene attempted under all five profiles\n    SELECT image_hash\n    FROM scoped\n    GROUP BY image_hash\n    HAVING COUNT(DISTINCT constraint_profile) = 5\n    ORDER BY MAX(created_at) DESC\n    LIMIT 1\n), latest AS (\n    -- the latest attempt per profile on that scene\n    SELECT DISTINCT ON (constraint_profile)\n        constraint_profile AS profile,\n        status,\n        created_at,\n        image_title,\n        inference_ms,\n        cpu_usage_pct,\n        num_detections,\n        avg_confidence,\n        error_message,\n        COALESCE(peak_ram_mb, (substring(error_message from 'peak RSS ([0-9.]+) MB'))::float) AS peak_mb\n    FROM scoped\n    WHERE image_hash = (SELECT image_hash FROM scene)\n    ORDER BY constraint_profile, created_at DESC\n)\nSELECT\n    b.profile,\n    ROUND((l.inference_ms / 60000.0)::numeric, 1) AS \"latency_min\"\nFROM budgets b\nJOIN latest l ON l.profile = b.profile\nWHERE l.status = 'success'\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "axisLabel": "minutes"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short",
+          "decimals": 1,
+          "noValue": "No scene has been run under all five profiles for this variant"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Peak resident memory per profile",
+      "description": "Same scene, same model: each bar is the latest attempt per profile on the most recent scene that was attempted under all five profiles (FP32 baseline unless a Variant is picked; cue crops and pre-affine-mask runs excluded). Peak RSS of the run, or the peak reported by the memory guard when it aborted the run ('memory budget exceeded'). Compare with the budget in the verdict table below.",
+      "type": "barchart",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), scoped AS (\n    SELECT *\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status IN ('success', 'error', 'failed')\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:%')\n        -- public dashboards do not interpolate variables: default to the FP32 baseline\n        AND COALESCE(NULLIF(compression_technique, ''), 'none')\n            = CASE WHEN LEFT('$variant', 1) = '$' THEN 'none' ELSE '$variant' END\n), scene AS (\n    -- same scene, same model: the most recent scene attempted under all five profiles\n    SELECT image_hash\n    FROM scoped\n    GROUP BY image_hash\n    HAVING COUNT(DISTINCT constraint_profile) = 5\n    ORDER BY MAX(created_at) DESC\n    LIMIT 1\n), latest AS (\n    -- the latest attempt per profile on that scene\n    SELECT DISTINCT ON (constraint_profile)\n        constraint_profile AS profile,\n        status,\n        created_at,\n        image_title,\n        inference_ms,\n        cpu_usage_pct,\n        num_detections,\n        avg_confidence,\n        error_message,\n        COALESCE(peak_ram_mb, (substring(error_message from 'peak RSS ([0-9.]+) MB'))::float) AS peak_mb\n    FROM scoped\n    WHERE image_hash = (SELECT image_hash FROM scene)\n    ORDER BY constraint_profile, created_at DESC\n)\nSELECT\n    b.profile,\n    ROUND(l.peak_mb::numeric, 0) AS \"peak_ram_mb\"\nFROM budgets b\nJOIN latest l ON l.profile = b.profile\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "decmbytes",
+          "noValue": "No scene has been run under all five profiles for this variant"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Detections per profile (output stability check)",
+      "description": "Same scene, same model: each bar is the latest attempt per profile on the most recent scene that was attempted under all five profiles (FP32 baseline unless a Variant is picked; cue crops and pre-affine-mask runs excluded). Completed runs only. FP32 is deterministic: the same scene must give the same detections under every profile, so any difference is a failure.",
+      "type": "barchart",
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), scoped AS (\n    SELECT *\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status IN ('success', 'error', 'failed')\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:%')\n        -- public dashboards do not interpolate variables: default to the FP32 baseline\n        AND COALESCE(NULLIF(compression_technique, ''), 'none')\n            = CASE WHEN LEFT('$variant', 1) = '$' THEN 'none' ELSE '$variant' END\n), scene AS (\n    -- same scene, same model: the most recent scene attempted under all five profiles\n    SELECT image_hash\n    FROM scoped\n    GROUP BY image_hash\n    HAVING COUNT(DISTINCT constraint_profile) = 5\n    ORDER BY MAX(created_at) DESC\n    LIMIT 1\n), latest AS (\n    -- the latest attempt per profile on that scene\n    SELECT DISTINCT ON (constraint_profile)\n        constraint_profile AS profile,\n        status,\n        created_at,\n        image_title,\n        inference_ms,\n        cpu_usage_pct,\n        num_detections,\n        avg_confidence,\n        error_message,\n        COALESCE(peak_ram_mb, (substring(error_message from 'peak RSS ([0-9.]+) MB'))::float) AS peak_mb\n    FROM scoped\n    WHERE image_hash = (SELECT image_hash FROM scene)\n    ORDER BY constraint_profile, created_at DESC\n)\nSELECT\n    b.profile,\n    l.num_detections AS \"detections\"\nFROM budgets b\nJOIN latest l ON l.profile = b.profile\nWHERE l.status = 'success'\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "noValue": "No scene has been run under all five profiles for this variant"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "CPU usage per profile",
+      "description": "Same scene, same model: each bar is the latest attempt per profile on the most recent scene that was attempted under all five profiles (FP32 baseline unless a Variant is picked; cue crops and pre-affine-mask runs excluded). Completed runs only. Sum of CPU time across threads as a percentage of one core (100% = one core).",
+      "type": "barchart",
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "rawSql": "WITH budgets(profile, cpu_budget_cores, ram_budget_mb) AS (\n    VALUES\n        ('ground', 4.0, 24576),\n        ('sat-high', 2.0, 4096),\n        ('sat-mid', 1.0, 2048),\n        ('sat-low', 0.5, 1024),\n        ('sat-extreme', 0.25, 512)\n), scoped AS (\n    SELECT *\n    FROM execution_log\n    WHERE trigger_type <> 'cue'\n        AND status IN ('success', 'error', 'failed')\n        AND image_hash <> 'pending'\n        AND (notes IS NULL OR notes NOT LIKE '%methodology:%')\n        -- public dashboards do not interpolate variables: default to the FP32 baseline\n        AND COALESCE(NULLIF(compression_technique, ''), 'none')\n            = CASE WHEN LEFT('$variant', 1) = '$' THEN 'none' ELSE '$variant' END\n), scene AS (\n    -- same scene, same model: the most recent scene attempted under all five profiles\n    SELECT image_hash\n    FROM scoped\n    GROUP BY image_hash\n    HAVING COUNT(DISTINCT constraint_profile) = 5\n    ORDER BY MAX(created_at) DESC\n    LIMIT 1\n), latest AS (\n    -- the latest attempt per profile on that scene\n    SELECT DISTINCT ON (constraint_profile)\n        constraint_profile AS profile,\n        status,\n        created_at,\n        image_title,\n        inference_ms,\n        cpu_usage_pct,\n        num_detections,\n        avg_confidence,\n        error_message,\n        COALESCE(peak_ram_mb, (substring(error_message from 'peak RSS ([0-9.]+) MB'))::float) AS peak_mb\n    FROM scoped\n    WHERE image_hash = (SELECT image_hash FROM scene)\n    ORDER BY constraint_profile, created_at DESC\n)\nSELECT\n    b.profile,\n    ROUND(l.cpu_usage_pct::numeric, 1) AS \"cpu_pct\"\nFROM budgets b\nJOIN latest l ON l.profile = b.profile\nWHERE l.status = 'success'\nORDER BY CASE b.profile\n    WHEN 'ground' THEN 1\n    WHEN 'sat-high' THEN 2\n    WHEN 'sat-mid' THEN 3\n    WHEN 'sat-low' THEN 4\n    WHEN 'sat-extreme' THEN 5\nEND",
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percent",
+          "noValue": "No scene has been run under all five profiles for this variant"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "showValue": "always",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
         }
       }
     }
