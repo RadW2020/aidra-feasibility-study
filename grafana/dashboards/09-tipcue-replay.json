@@ -178,6 +178,7 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "noValue": "No data",
           "color": { "mode": "fixed", "fixedColor": "blue" }
         }
       },
