@@ -69,7 +69,7 @@ def _row_to_tasking_entry(row) -> TaskingEntry:  # type: ignore[no-untyped-def]
 async def list_tasking_queue(
     status: str | None = Query(
         None,
-        description="Filter by status: pending, processing, completed, failed",
+        description="Filter by status: pending, processing, completed, expired, failed",
     ),
     limit: int = Query(50, ge=1, le=200, description="Max items to return"),
 ) -> list[TaskingEntry]:
@@ -77,7 +77,7 @@ async def list_tasking_queue(
 
     Returns cue entries ordered by priority (descending) then creation
     time.  Optionally filter by *status* (``pending``, ``processing``,
-    ``completed``, ``failed``).
+    ``completed``, ``expired``, ``failed``).
     """
     if status is not None and status not in CUE_STATUSES:
         raise ApiError(422, "unknown_status", f"Unknown cue status '{status}'", valid_values=list(CUE_STATUSES))

@@ -23,13 +23,14 @@
         "type": "custom",
         "label": "Cue status",
         "description": "Filter cues by lifecycle status.",
-        "query": "all,pending,executing,completed,failed",
+        "query": "all,pending,processing,completed,expired,failed",
         "current": {"text": "all", "value": "all"},
         "options": [
           {"text": "all",       "value": "all",       "selected": true},
           {"text": "pending",   "value": "pending",   "selected": false},
-          {"text": "executing", "value": "executing", "selected": false},
+          {"text": "processing","value": "processing","selected": false},
           {"text": "completed", "value": "completed", "selected": false},
+          {"text": "expired",   "value": "expired",   "selected": false},
           {"text": "failed",    "value": "failed",    "selected": false}
         ],
         "multi": false
@@ -50,10 +51,10 @@
       "id": 100,
       "title": "How to read this dashboard",
       "type": "text",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
       "options": {
         "mode": "markdown",
-        "content": "**Tip & Cue** is AIDRA's autonomous re-tasking loop. When a pipeline run produces a low-or-moderate-confidence detection cluster in a zone of interest, the evaluator queues a `cue` to **re-observe** the same area in the next satellite pass. Each row below is a chain `T0 → Cue → T1`.\n\n- **T0** = the original execution that triggered the cue.\n- **Cue** = the re-tasking entry (target zone, priority, reason).\n- **T1** = the re-observation execution (when the scheduler runs the cue).\n\nClick **▶ Open replay** to see a visual side-by-side comparison: SAR thumbnails of the triggering detections vs. the confirming detections, with confidence uplift and latency metrics. This is the SatCen tender extra: the satellite chasing its own findings.\n\n> Cues created before **2026-05-11** are hidden so the operational KPIs reflect the post-fix build (after the Tip & Cue zone-mapping incident, migrations 013/014). The failed rows are kept in the database for traceability; log in to Grafana to query the full history."
+        "content": "**Tip & Cue** is AIDRA's autonomous re-tasking loop. When a pipeline run produces a low-or-moderate-confidence detection cluster in a zone of interest, the evaluator queues a `cue` to **re-observe** the same area in the next satellite pass. Each row below is a chain `T0 → Cue → T1`.\n\n- **T0** = the original execution that triggered the cue.\n- **Cue** = the re-tasking entry (target zone, priority, reason).\n- **T1** = the re-observation execution: a run on a scene **sensed after** T0's. Until Copernicus publishes one the cue waits in the queue (`awaiting_new_scene`); if none arrives in time it closes as `expired`.\n\nClick **▶ Open replay** to see a visual side-by-side comparison: SAR thumbnails of the triggering detections vs. the confirming detections, with confidence uplift and latency metrics. This is the SatCen tender extra: the satellite chasing its own findings.\n\n> Cues created before **2026-05-11** are hidden so the operational KPIs reflect the post-fix build (after the Tip & Cue zone-mapping incident, migrations 013/014). The failed rows are kept in the database for traceability; log in to Grafana to query the full history.\n\n> Only cues whose T1 ran on a later scene count as **re-observed**. Cues closed before **2026-11-17** mostly re-processed their own scene or were skipped (`result = skipped`); they are kept for traceability and show `re_observed = no`."
       }
     },
     {
@@ -61,7 +62,7 @@
       "title": "Cues in window",
       "description": "Total cues created in the selected time range, filtered by the Cue status variable above (default 'all' shows full history).",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 4, "w": 5, "h": 4 },
+      "gridPos": { "x": 0, "y": 8, "w": 5, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
@@ -93,16 +94,16 @@
     },
     {
       "id": 11,
-      "title": "Pending now (live backlog)",
-      "description": "Cues currently waiting to be executed — ignores the time range and the status filter so the operator always sees the live re-tasking backlog.",
+      "title": "Waiting now (live backlog)",
+      "description": "Cues still open — ignores the time range and the status filter. Most are waiting for Copernicus to publish a scene sensed after the one that raised them; they are re-checked periodically and expire if none arrives.",
       "type": "stat",
-      "gridPos": { "x": 5, "y": 4, "w": 5, "h": 4 },
+      "gridPos": { "x": 5, "y": 8, "w": 5, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COUNT(*) AS pending\nFROM tasking_queue\nWHERE status = 'pending'\n  AND attempts < max_attempts\n  AND (cooldown_until IS NULL OR cooldown_until < NOW())",
+          "rawSql": "SELECT COUNT(*) AS waiting\nFROM tasking_queue\nWHERE status = 'pending'\n  AND attempts < max_attempts",
           "format": "table",
           "editorMode": "code"
         }
@@ -131,16 +132,16 @@
     },
     {
       "id": 2,
-      "title": "Completed (re-observed)",
-      "description": "Cues whose re-observation has been executed.",
+      "title": "Re-observed (later scene)",
+      "description": "Cues closed by a successful run on a scene sensed after the one that raised them (T1 later than T0). A cue whose run was skipped, or that re-processed its own scene, is not a re-observation and is not counted.",
       "type": "stat",
-      "gridPos": { "x": 10, "y": 4, "w": 4, "h": 4 },
+      "gridPos": { "x": 10, "y": 8, "w": 4, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT COUNT(*) AS completed\nFROM tasking_queue\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND status = 'completed'",
+          "rawSql": "SELECT COUNT(*) AS re_observed\nFROM tasking_queue t\nJOIN execution_log e0 ON e0.id = t.triggered_by\nJOIN execution_log e1 ON e1.id = t.execution_id\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND t.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND t.status = 'completed'\n  AND e1.status = 'success' AND e1.image_sensing_date > e0.image_sensing_date",
           "format": "table",
           "editorMode": "code"
         }
@@ -164,7 +165,7 @@
       "title": "Avg triggering detections",
       "description": "Mean number of detections per cue (the cluster size that fired the re-tasking).",
       "type": "stat",
-      "gridPos": { "x": 14, "y": 4, "w": 5, "h": 4 },
+      "gridPos": { "x": 14, "y": 8, "w": 5, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
@@ -193,7 +194,7 @@
       "title": "Top zones by cues",
       "description": "Which zones of interest fire the most re-tasking events.",
       "type": "piechart",
-      "gridPos": { "x": 19, "y": 4, "w": 5, "h": 4 },
+      "gridPos": { "x": 19, "y": 8, "w": 5, "h": 4 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
@@ -213,15 +214,15 @@
     {
       "id": 5,
       "title": "Tip & Cue chains (click ▶ Open replay)",
-      "description": "Each row is a re-tasking cue. Click '▶ Open replay' to see the visual T0 → Cue → T1 walkthrough with SAR thumbnails before / after and confidence uplift.",
+      "description": "Each row is a re-tasking cue. Click '▶ Open replay' to see the visual T0 → Cue → T1 walkthrough with SAR thumbnails before / after and confidence uplift. 're_observed' = yes only when T1 succeeded on a scene sensed after T0's; 'result' awaiting_new_scene = still waiting for that scene, no_new_scene = expired without one.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 16 },
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 16 },
       "datasource": { "type": "postgres", "uid": "PostgreSQL" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "postgres", "uid": "PostgreSQL" },
-          "rawSql": "SELECT\n    'https://aidra-api.uliber.com/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    t.attempts                                    AS \"attempts\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    COALESCE(t.last_error, '')                    AS \"last_error\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND t.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR t.status = '$status')\nORDER BY t.created_at DESC\nLIMIT 100",
+          "rawSql": "SELECT\n    'https://aidra-api.uliber.com/api/tipcue/replay/' || t.id || '.html' AS \"replay\",\n    t.created_at                                  AS \"cue_at\",\n    t.status                                      AS \"status\",\n    COALESCE(t.target_zone, '—')                  AS \"zone\",\n    t.priority                                    AS \"prio\",\n    cardinality(t.triggering_detections)          AS \"trigger_dets\",\n    CASE WHEN t.status = 'completed' AND e1.status = 'success' AND e1.image_sensing_date > e0.image_sensing_date THEN 'yes' ELSE 'no' END AS \"re_observed\",\n    COALESCE(t.confirmed_detections, 0)           AS \"confirmed\",\n    COALESCE(t.result_status, t.status)           AS \"result\",\n    t.attempts                                    AS \"attempts\",\n    COALESCE(t.reason, '')                        AS \"reason\",\n    COALESCE(t.last_error, '')                    AS \"last_error\",\n    t.id::text                                    AS \"tasking_id\"\nFROM tasking_queue t\nLEFT JOIN execution_log e0 ON e0.id = t.triggered_by\nLEFT JOIN execution_log e1 ON e1.id = t.execution_id\nWHERE t.created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND t.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND (LEFT('$status', 1) = '$' OR '$status' = 'all' OR t.status = '$status')\nORDER BY t.created_at DESC\nLIMIT 100",
           "format": "table",
           "editorMode": "code"
         }

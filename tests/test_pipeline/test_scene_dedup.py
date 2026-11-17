@@ -11,7 +11,7 @@ resto de servicios de la maquina.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from src.config import Settings
@@ -77,6 +77,49 @@ class TestSkipReason:
         reason = await eng._skip_reason(
             product=_product("scene-B"),
             request=PipelineRequest(trigger_type="cue", exclude_image_id="scene-A"),
+            model_hash="m" * 64,
+            input_params_hash="p" * 64,
+        )
+
+        assert reason is None
+
+    async def test_cue_does_not_run_on_a_scene_older_than_its_parent(self, monkeypatch) -> None:
+        # Copernicus no publica en orden estricto entre S1A/S1C/S1D: una
+        # escena distinta de la del padre puede ser anterior a T0, y eso no
+        # es una re-observacion.
+        db = _FakeDB(row=None)
+        monkeypatch.setattr("src.db.connection.db", db)
+        eng = _engine()
+        product = _product("scene-older")
+
+        reason = await eng._skip_reason(
+            product=product,
+            request=PipelineRequest(
+                trigger_type="cue",
+                exclude_image_id="scene-A",
+                sensed_after=product.sensing_date + timedelta(hours=12),
+            ),
+            model_hash="m" * 64,
+            input_params_hash="p" * 64,
+        )
+
+        assert reason is not None
+        assert "no scene sensed after" in reason
+        assert db.queries == []
+
+    async def test_cue_runs_on_a_scene_sensed_after_its_parent(self, monkeypatch) -> None:
+        monkeypatch.setattr("src.db.connection.db", _FakeDB(row=None))
+        eng = _engine()
+        product = _product("scene-B")
+
+        reason = await eng._skip_reason(
+            product=product,
+            request=PipelineRequest(
+                trigger_type="cue",
+                exclude_image_id="scene-A",
+                # naive: lo que devolveria una columna sin zona horaria
+                sensed_after=(product.sensing_date - timedelta(hours=12)).replace(tzinfo=None),
+            ),
             model_hash="m" * 64,
             input_params_hash="p" * 64,
         )
@@ -195,6 +238,17 @@ class TestParentImageLookup:
         monkeypatch.setattr("src.pipeline.scheduler_jobs.db", _FakeDB(row={"image_id": "scene-A"}))
 
         assert await _executed_image_id("exec-1") == "scene-A"
+
+
+def test_cue_runs_do_not_raise_cues_of_their_own() -> None:
+    # T0 -> cue -> T1 termina en T1: si T1 encolara cues, cada escena nueva
+    # costaria un run mas que la anterior.
+    eng = _engine()
+    eng.tip_evaluator = object()
+
+    assert eng._raises_cues(PipelineRequest(trigger_type="scheduled")) is True
+    assert eng._raises_cues(PipelineRequest(trigger_type="manual")) is True
+    assert eng._raises_cues(PipelineRequest(trigger_type="cue")) is False
 
 
 def test_request_carries_the_excluded_scene() -> None:

@@ -142,6 +142,11 @@ RETRY_CONFIG: dict[str, dict[str, Any]] = {
 # ====================================================================
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Datetime comparable entre fuentes: los naive se toman como UTC."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 class PipelineRequest(BaseModel):
     """Solicitud de ejecucion del pipeline.
 
@@ -181,6 +186,11 @@ class PipelineRequest(BaseModel):
         existe para mirar algo *nuevo*, no para repetir el trabajo que
         acaba de terminar. Si la busqueda devuelve esa misma escena, el run
         termina en ``skipped`` sin descargar nada.
+    sensed_after:
+        Instante de captura de la escena que genero el cue. Un cue solo
+        re-observa con una escena captada *despues*: si la busqueda devuelve
+        una anterior o simultanea (Copernicus no publica en orden estricto
+        entre S1A/S1C/S1D), el run termina en ``skipped``.
     """
 
     zone: str = "gibraltar"
@@ -190,6 +200,7 @@ class PipelineRequest(BaseModel):
     sensor: str = "s1"  # "s1" for Sentinel-1 SAR, "s2" for Sentinel-2 optical
     image_id: str | None = None
     exclude_image_id: str | None = None
+    sensed_after: datetime | None = None
     aoi_bbox: list[float] | None = None
     # I-DET-4: ``None`` means "use Settings". Resolved once by
     # ``PipelineEngine._apply_settings_defaults`` so cron, Tip & Cue and
@@ -637,7 +648,7 @@ class PipelineEngine:
             )
 
             # ---- Step 12: Evaluate Tip & Cue ----
-            if self.tip_evaluator and self.config.tipcue_enabled:
+            if self._raises_cues(request):
                 detection_dicts = [d.model_dump() for d in detection_result.detections]
                 # Enrich with lon/lat from center_geo for evaluator
                 for dd in detection_dicts:
@@ -1049,6 +1060,19 @@ class PipelineEngine:
             update["iou_threshold"] = self.config.iou_threshold
         return request.model_copy(update=update) if update else request
 
+    def _raises_cues(self, request: PipelineRequest) -> bool:
+        """True si este run puede encolar cues al terminar.
+
+        Un run de cue es el T1 de una cadena T0 -> cue -> T1 y la cierra. Si
+        encolara cues propios, cada escena nueva se procesaria una vez mas que
+        la anterior (el scan mas un run por cada cue vivo).
+        """
+        return bool(
+            self.tip_evaluator
+            and self.config.tipcue_enabled
+            and request.trigger_type != "cue"
+        )
+
     async def _has_live_cues(self) -> bool:
         """True si hay cues en cola que podrian necesitar esta escena.
 
@@ -1148,6 +1172,14 @@ class PipelineEngine:
         if request.exclude_image_id and product.product_id == request.exclude_image_id:
             return (
                 f"skipped: cue would reprocess its own scene ({product.product_id})"
+            )
+
+        if request.sensed_after is not None and _as_utc(product.sensing_date) <= _as_utc(
+            request.sensed_after
+        ):
+            return (
+                f"skipped: cue found no scene sensed after its parent's "
+                f"({product.product_id} was sensed at {product.sensing_date.isoformat()})"
             )
 
         from src.db.connection import db as _db

@@ -33,7 +33,7 @@ EXECUTION_STATUSES: dict[str, dict[str, Any]] = {
     },
     "skipped": {
         "terminal": True,
-        "meaning": "Nothing new to do: the same scene, model and parameters already succeeded, or a cue pointed back at its own scene. Not a failure; notes says which.",
+        "meaning": "Nothing new to do: the same scene, model and parameters already succeeded, or a cue found no scene sensed after the one that raised it. Not a failure; notes says which.",
     },
     "invalid": {
         "terminal": True,
@@ -105,13 +105,14 @@ TIERS: dict[str, str] = {
 TRIGGER_TYPES: dict[str, str] = {
     "manual": "Requested through POST /api/pipeline/trigger. Always runs (no dedup).",
     "scheduled": "APScheduler zone scan every scheduler_interval_hours. Deduplicated against earlier successes.",
-    "cue": "Tip & Cue re-observation from tasking_queue. Deduplicated and never re-processes its parent's scene.",
+    "cue": "Tip & Cue re-observation from tasking_queue. Deduplicated; only runs on a scene sensed after its parent's, and never raises cues of its own.",
 }
 
 CUE_STATUSES: dict[str, dict[str, Any]] = {
-    "pending": {"terminal": False, "meaning": "Queued; the cue processor picks pending cues every 15 minutes, highest priority first."},
+    "pending": {"terminal": False, "meaning": "Queued; the cue processor picks pending cues every 15 minutes, highest priority first. result_status 'awaiting_new_scene' means no scene sensed after the triggering one is published yet: the cue is re-checked every tipcue_recheck_minutes."},
     "processing": {"terminal": False, "meaning": "Picked by the cue processor; a pipeline run is in progress."},
-    "completed": {"terminal": True, "meaning": "The run finished; result_status and execution_id say how."},
+    "completed": {"terminal": True, "meaning": "A run on a later scene finished; result_status and execution_id say how. Cues closed before 2026-11-17 may carry result_status 'skipped' or point at their own scene: those did not re-observe."},
+    "expired": {"terminal": True, "meaning": "No scene sensed after the triggering one appeared within tipcue_max_wait_hours; nothing was re-observed (result_status 'no_new_scene')."},
     "failed": {"terminal": True, "meaning": "Retries exhausted (attempts >= max_attempts); last_error says why."},
 }
 

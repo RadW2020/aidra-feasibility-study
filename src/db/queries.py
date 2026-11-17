@@ -396,7 +396,7 @@ SELECT_SUCCESSFUL_EXECUTION_FOR_INPUTS = """
 # Escena procesada por la ejecucion que genero un cue: el cue no debe volver
 # a procesarla (ver process_pending_cues).
 SELECT_EXECUTION_IMAGE_ID = """
-    SELECT image_id
+    SELECT image_id, image_sensing_date
     FROM execution_log
     WHERE id = $1
 """
@@ -445,6 +445,32 @@ UPDATE_CUE_STATUS = """
         result_status = $4,
         confirmed_detections = $5
     WHERE id = $1
+"""
+
+# A cue whose run was skipped has not re-observed anything: no scene sensed
+# after its parent's is published yet. It goes back to 'pending' to be
+# re-checked after $3 minutes, without spending one of its attempts, until it
+# is $4 hours old; then it closes as 'expired'. execution_id keeps the last
+# skipped run so the wait is auditable.
+UPDATE_CUE_AWAITING_SCENE = """
+    UPDATE tasking_queue
+    SET status = CASE
+            WHEN created_at < NOW() - make_interval(hours => $4) THEN 'expired'
+            ELSE 'pending'
+        END,
+        result_status = CASE
+            WHEN created_at < NOW() - make_interval(hours => $4) THEN 'no_new_scene'
+            ELSE 'awaiting_new_scene'
+        END,
+        execution_id = $2,
+        confirmed_detections = NULL,
+        attempts = GREATEST(attempts - 1, 0),
+        cooldown_until = CASE
+            WHEN created_at < NOW() - make_interval(hours => $4) THEN cooldown_until
+            ELSE NOW() + make_interval(mins => $3)
+        END
+    WHERE id = $1
+    RETURNING status
 """
 
 # Same as UPDATE_CUE_STATUS but the status transitions automatically to

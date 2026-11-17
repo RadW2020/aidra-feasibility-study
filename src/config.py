@@ -150,6 +150,11 @@ class Settings(BaseSettings):
     tipcue_min_confidence: float = 0.7
     tipcue_min_detections: int = 2
     tipcue_cooldown_minutes: int = 60
+    # A cue re-observes: it waits for a scene sensed after the one that
+    # raised it. While none is published it is re-checked every
+    # ``tipcue_recheck_minutes`` and expires after ``tipcue_max_wait_hours``.
+    tipcue_recheck_minutes: int = 360
+    tipcue_max_wait_hours: int = 72
 
     # ---- Scheduler ----
     scheduler_enabled: bool = True

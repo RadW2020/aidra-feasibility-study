@@ -106,6 +106,9 @@ def diagnose(
             return out("skipped_duplicate", "Not run: the same scene, model and parameters had already succeeded (same output_hash by construction, I-TRACE-4).")
         if "own scene" in notes:
             return out("skipped_own_scene", "Not run: the Tip & Cue search returned the scene its parent execution had already processed.")
+        if "no scene sensed after" in notes:
+            steps.append("The cue stays queued and is re-checked until a later scene is published or it expires.")
+            return out("skipped_no_later_scene", "Not run: the Tip & Cue search found no scene sensed after the one that raised the cue.")
         return out("skipped", f"Not run: {notes or 'no reason recorded'}.")
 
     if status == "invalid":

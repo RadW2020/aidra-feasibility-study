@@ -42,6 +42,7 @@ from src.db.queries import (
     SELECT_EXECUTION_IMAGE_ID,
     SELECT_PENDING_CUES,
     UPDATE_CUE_AFTER_ERROR,
+    UPDATE_CUE_AWAITING_SCENE,
     UPDATE_CUE_STATUS,
 )
 from src.observability.prometheus_metrics import ACTIVE_CUES, CUES_EXECUTED_TOTAL
@@ -49,7 +50,7 @@ from src.pipeline.engine import PipelineEngine, PipelineRequest
 from src.tipcue.zones import resolve_search_zone
 
 if TYPE_CHECKING:
-    pass
+    from datetime import datetime
 
 logger = logging.getLogger("aidra.scheduler")
 
@@ -344,7 +345,9 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
             # imagen, el run termina en 'skipped' sin descargar 1,7 GB ni
             # gastar una hora de CPU. El 17/09/2026 ese bucle encadeno
             # cuatro ejecuciones sobre el mismo producto en 95 minutos.
-            parent_image_id = await _executed_image_id(triggered_by)
+            # Y solo re-observa con una escena captada despues de T0: mientras
+            # no exista, el cue espera en la cola en vez de cerrarse.
+            parent_image_id, parent_sensed_at = await _executed_scene(triggered_by)
             request = PipelineRequest(
                 zone=search_zone,
                 model=engine.config.default_model,
@@ -353,8 +356,30 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
                 trigger_type="cue",
                 triggered_by=triggered_by,
                 exclude_image_id=parent_image_id,
+                sensed_after=parent_sensed_at,
             )
             result = await engine.run(request)
+
+            if result.status == "skipped":
+                # Nada posterior a T0 que mirar todavia: el cue NO se ha
+                # re-observado. Vuelve a la cola (sin gastar intento) hasta
+                # que Copernicus publique otra escena o caduque.
+                cue_status = await db.fetchval(
+                    UPDATE_CUE_AWAITING_SCENE,
+                    cue_id,
+                    result.execution_id,
+                    engine.config.tipcue_recheck_minutes,
+                    engine.config.tipcue_max_wait_hours,
+                )
+                CUES_EXECUTED_TOTAL.labels(
+                    status="expired" if cue_status == "expired" else "skipped"
+                ).inc()
+                logger.info(
+                    "Cue %s not re-observed (no scene after T0): %s",
+                    cue_id,
+                    cue_status,
+                )
+                continue
 
             # Update cue with result
             await db.execute(
@@ -366,19 +391,12 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
                 result.num_detections,
             )
 
-            if result.status == "skipped":
-                # No es un fallo: el cue se cierra porque no habia nada nuevo
-                # que mirar. Se cuenta aparte para que el dashboard distinga
-                # "el cue no encontro nada" de "el cue no se llego a ejecutar".
-                CUES_EXECUTED_TOTAL.labels(status="skipped").inc()
-                logger.info("Cue %s skipped: nothing new to process", cue_id)
-            else:
-                CUES_EXECUTED_TOTAL.labels(status="confirmed").inc()
-                logger.info(
-                    "Cue %s completed: detections=%d",
-                    cue_id,
-                    result.num_detections,
-                )
+            CUES_EXECUTED_TOTAL.labels(status="confirmed").inc()
+            logger.info(
+                "Cue %s completed: detections=%d",
+                cue_id,
+                result.num_detections,
+            )
 
         except Exception as exc:
             # Mark for retry; once attempts hits max_attempts the SQL
@@ -401,28 +419,35 @@ async def process_pending_cues(engine: PipelineEngine) -> None:
 
 
 async def _executed_image_id(execution_id: UUID | None) -> str | None:
-    """Escena que proceso la ejecucion dada, o ``None`` si no se sabe.
+    """Escena que proceso la ejecucion dada, o ``None`` si no se sabe."""
+    return (await _executed_scene(execution_id))[0]
+
+
+async def _executed_scene(execution_id: UUID | None) -> tuple[str | None, datetime | None]:
+    """Escena (id, instante de captura) de la ejecucion dada; ``None`` si no se sabe.
 
     Se consulta en vez de arrastrarla en el cue porque ``tasking_queue`` no
     guarda la imagen: guarda quien lo genero (``triggered_by``), y de ahi sale
     el ``image_id`` real del ``execution_log``.
     """
     if execution_id is None:
-        return None
+        return None, None
 
     try:
         row = await db.fetchrow(SELECT_EXECUTION_IMAGE_ID, execution_id)
     except Exception:
         logger.exception("Failed to resolve parent image for execution %s", execution_id)
-        return None
+        return None, None
 
     if not row:
-        return None
+        return None, None
 
     image_id = row["image_id"]
     # 'pending' es el placeholder que create_pending deja cuando la ejecucion
     # todavia no sabe que imagen le tocara: no identifica ninguna escena.
-    return None if image_id in (None, "pending") else str(image_id)
+    if image_id in (None, "pending"):
+        return None, None
+    return str(image_id), row.get("image_sensing_date")
 
 
 async def cleanup_old_images(
