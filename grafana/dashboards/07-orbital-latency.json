@@ -35,8 +35,8 @@
   "panels": [
     {
       "id": 1,
-      "title": "Speedup Factor (OBDP vs Traditional) · full-scene runs",
-      "description": "How many times faster the OBDP path delivers actionable detections vs. the traditional 'downlink-then-process' path. Assumes a typical LEO orbit:\n\n• Traditional path: wait for an X-band contact with capacity (~720 min between passes for a single ground station), downlink the full image (50 Mbps), and run ground processing (~30 min).\n\n• OBDP path: process onboard (real inference_ms from execution_log), wait for ANY contact since the result is ~30 KB (S-band/UHF passes ~every 90 min), downlink the JSON (negligible).\n\nThe previous formula used the same 360-min wait for both paths, which neutralised the architectural advantage and pinned the speedup at 1×.",
+      "title": "Speedup Factor (OBDP vs Traditional) · SSO 700 km, Standard NRT · full-scene runs",
+      "description": "Total latency without OBDP divided by total latency with OBDP; below 1x OBDP is slower. Reference scenario: SSO 700 km (Sentinel-1 orbit), Standard NRT ground chain (15 + 30 + 10 = 55 min).\n\nContact model (same in every panel of this dashboard): both paths wait for the SAME ground-station contact after acquisition (tabulated per orbit: SSO 700 km 180 min, LEO 500 km 360 min, LEO 350 km 720 min). OBDP is NOT credited with extra contact opportunities for its small result, and on-board processing is added to the wait in series (worst case: no overlap with the wait). Without OBDP: wait + full-image downlink at 50 Mbps + ground chain. With OBDP: measured on-board inference + wait + result downlink (negligible).\n\nIt equals the 'SSO 700km / Standard NRT' row of the scenario table. An earlier version gave OBDP a contact every 90 min against 720 min for the traditional path, which the table did not, and reported 5.3x.",
       "type": "stat",
       "gridPos": {
         "x": 0,
@@ -55,7 +55,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS onboard_proc_min,\n        AVG(image_size_mb) AS avg_image_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n      AND inference_ms IS NOT NULL\n      AND image_size_mb IS NOT NULL\n),\ntraditional AS (\n    -- X-band contact with capacity ~ every 12h on a single ground station\n    SELECT 720.0\n           + (l.avg_image_mb * 8.0 / 50.0 / 60.0)\n           + 30.0 AS total_min\n    FROM latency_data l\n),\nobdp AS (\n    -- Any contact suffices for ~30 KB result; S-band/UHF passes typically ~ every 90 min\n    SELECT l.onboard_proc_min\n           + 90.0\n           + (0.03 * 8.0 / 0.5 / 60.0) AS total_min\n    FROM latency_data l\n)\nSELECT ROUND((t.total_min / NULLIF(o.total_min, 0))::numeric, 1) AS speedup_factor\nFROM traditional t, obdp o",
+          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS onboard_proc_min,\n        AVG(image_size_mb) AS avg_image_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n      AND inference_ms IS NOT NULL\n      AND image_size_mb IS NOT NULL\n),\nref AS (\n    -- Reference scenario: SSO 700 km (180 min to the next contact),\n    -- Standard NRT ground chain (15 + 30 + 10 min). Same contact for both paths.\n    SELECT 180.0 AS wait_min, 55.0 AS ground_min\n),\ntotals AS (\n    SELECT\n        r.wait_min + (l.avg_image_mb * 8.0 / 50.0 / 60.0) + r.ground_min AS without_obdp_min,\n        l.onboard_proc_min + r.wait_min AS with_obdp_min\n    FROM latency_data l, ref r\n)\nSELECT ROUND((t.without_obdp_min / NULLIF(t.with_obdp_min, 0))::numeric, 2) AS speedup_factor\nFROM totals t",
           "format": "table",
           "editorMode": "code"
         }
@@ -66,12 +66,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "yellow",
+                "color": "red",
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 1
+              },
+              {
                 "color": "green",
-                "value": 2
+                "value": 1.5
               }
             ]
           },
@@ -103,8 +107,8 @@
     },
     {
       "id": 2,
-      "title": "Vessel Displacement During Latency · full-scene runs",
-      "description": "Distance a vessel (20 knots) travels during total latency: with vs without OBDP.",
+      "title": "Vessel Displacement During Latency · SSO 700 km, Standard NRT · full-scene runs",
+      "description": "Distance a vessel at 20 knots (0.617 km/min) travels during the total latency of each path. Reference scenario: SSO 700 km (Sentinel-1 orbit), Standard NRT ground chain (15 + 30 + 10 = 55 min).\n\nContact model (same in every panel of this dashboard): both paths wait for the SAME ground-station contact after acquisition (tabulated per orbit: SSO 700 km 180 min, LEO 500 km 360 min, LEO 350 km 720 min). OBDP is NOT credited with extra contact opportunities for its small result, and on-board processing is added to the wait in series (worst case: no overlap with the wait). Without OBDP: wait + full-image downlink at 50 Mbps + ground chain. With OBDP: measured on-board inference + wait + result downlink (negligible).",
       "type": "stat",
       "gridPos": {
         "x": 8,
@@ -123,7 +127,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS avg_processing_min\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n        AND inference_ms IS NOT NULL\n)\n-- A vessel at 20 knots = 37 km/h = 0.617 km/min\nSELECT ROUND(((l.avg_processing_min + 5.0) * 0.617)::numeric, 1) AS \"With OBDP (km)\"\nFROM latency_data l",
+          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS onboard_proc_min,\n        AVG(image_size_mb) AS avg_image_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n      AND inference_ms IS NOT NULL\n      AND image_size_mb IS NOT NULL\n),\nref AS (\n    -- Reference scenario: SSO 700 km (180 min to the next contact),\n    -- Standard NRT ground chain (15 + 30 + 10 min). Same contact for both paths.\n    SELECT 180.0 AS wait_min, 55.0 AS ground_min\n),\ntotals AS (\n    SELECT\n        r.wait_min + (l.avg_image_mb * 8.0 / 50.0 / 60.0) + r.ground_min AS without_obdp_min,\n        l.onboard_proc_min + r.wait_min AS with_obdp_min\n    FROM latency_data l, ref r\n)\nSELECT ROUND((t.with_obdp_min * 0.617)::numeric, 0) AS \"With OBDP (km)\"\nFROM totals t",
           "format": "table",
           "editorMode": "code"
         },
@@ -133,7 +137,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "-- Without OBDP: wait orbit (360 min) + ground processing (55 min) = 415 min\n-- At 20 knots = 0.617 km/min\nSELECT ROUND((415.0 * 0.617)::numeric, 0) AS \"Without OBDP (km)\"",
+          "rawSql": "WITH latency_data AS (\n    SELECT\n        AVG(inference_ms) / 1000.0 / 60.0 AS onboard_proc_min,\n        AVG(image_size_mb) AS avg_image_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n      AND inference_ms IS NOT NULL\n      AND image_size_mb IS NOT NULL\n),\nref AS (\n    -- Reference scenario: SSO 700 km (180 min to the next contact),\n    -- Standard NRT ground chain (15 + 30 + 10 min). Same contact for both paths.\n    SELECT 180.0 AS wait_min, 55.0 AS ground_min\n),\ntotals AS (\n    SELECT\n        r.wait_min + (l.avg_image_mb * 8.0 / 50.0 / 60.0) + r.ground_min AS without_obdp_min,\n        l.onboard_proc_min + r.wait_min AS with_obdp_min\n    FROM latency_data l, ref r\n)\nSELECT ROUND((t.without_obdp_min * 0.617)::numeric, 0) AS \"Without OBDP (km)\"\nFROM totals t",
           "format": "table",
           "editorMode": "code"
         }
@@ -182,7 +186,7 @@
     {
       "id": 3,
       "title": "Avg Onboard Processing Time · full-scene runs",
-      "description": "Average on-board processing time (inference).",
+      "description": "Average measured on-board inference time of full-scene runs on the OCI ARM target. This is the only measured term of the latency model; the rest is tabulated.",
       "type": "stat",
       "gridPos": {
         "x": 16,
@@ -201,7 +205,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT ROUND(AVG(inference_ms)::numeric, 0) AS avg_inference_ms\nFROM execution_log\nWHERE trigger_type <> 'cue' AND status = 'success'\n    AND inference_ms IS NOT NULL",
+          "rawSql": "SELECT ROUND(AVG(inference_ms)::numeric, 0) AS \"Onboard inference\"\nFROM execution_log\nWHERE trigger_type <> 'cue' AND status = 'success'\n    AND inference_ms IS NOT NULL",
           "format": "table",
           "editorMode": "code"
         }
@@ -250,7 +254,7 @@
     {
       "id": 4,
       "title": "Latency Breakdown: With vs Without OBDP (Stacked Bar) · full-scene runs",
-      "description": "Latency breakdown: on-board processing, orbital wait, downlink, ground processing.",
+      "description": "Latency breakdown per orbit: on-board processing, orbital wait, downlink, ground processing (Standard NRT, 55 min). Contact model (same in every panel of this dashboard): both paths wait for the SAME ground-station contact after acquisition (tabulated per orbit: SSO 700 km 180 min, LEO 500 km 360 min, LEO 350 km 720 min). OBDP is NOT credited with extra contact opportunities for its small result, and on-board processing is added to the wait in series (worst case: no overlap with the wait). Without OBDP: wait + full-image downlink at 50 Mbps + ground chain. With OBDP: measured on-board inference + wait + result downlink (negligible).",
       "type": "barchart",
       "gridPos": {
         "x": 0,
@@ -369,13 +373,13 @@
     {
       "id": 5,
       "title": "Scenario Comparison Table · full-scene runs",
-      "description": "Detailed comparison by orbit × downlink × processing scenario.",
+      "description": "Every orbit × ground chain combination under the same model. Speedup below 1x (red) means OBDP is slower: the measured on-board inference exceeds what the ground chain saves. Contact model (same in every panel of this dashboard): both paths wait for the SAME ground-station contact after acquisition (tabulated per orbit: SSO 700 km 180 min, LEO 500 km 360 min, LEO 350 km 720 min). OBDP is NOT credited with extra contact opportunities for its small result, and on-board processing is added to the wait in series (worst case: no overlap with the wait). Without OBDP: wait + full-image downlink at 50 Mbps + ground chain. With OBDP: measured on-board inference + wait + result downlink (negligible).",
       "type": "table",
       "gridPos": {
         "x": 0,
         "y": 16,
         "w": 24,
-        "h": 8
+        "h": 11
       },
       "datasource": {
         "type": "postgres",
@@ -388,7 +392,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_data AS (\n    SELECT\n        ROUND(AVG(inference_ms)::numeric, 0) AS avg_inference_ms,\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n        AND inference_ms IS NOT NULL\n        AND image_size_mb IS NOT NULL\n),\norbits AS (\n    SELECT * FROM (VALUES\n        ('LEO 500km', 500, 360, 10),\n        ('SSO 700km', 700, 180, 12),\n        ('LEO 350km', 350, 720, 7)\n    ) AS t(orbit_name, altitude_km, avg_wait_min, contact_min)\n),\nground_chains AS (\n    SELECT * FROM (VALUES\n        ('Fast Automated', 5, 10, 2),\n        ('Standard NRT', 15, 30, 10),\n        ('Manual Analysis', 30, 120, 30)\n    ) AS t(chain_name, ingest_min, processing_min, dissemination_min)\n)\nSELECT\n    o.orbit_name AS \"Orbit\",\n    o.altitude_km AS \"Alt (km)\",\n    g.chain_name AS \"Ground Chain\",\n    o.avg_wait_min AS \"Orbital Wait (min)\",\n    ROUND((a.avg_inference_ms / 1000.0 / 60.0)::numeric, 2) AS \"Onboard Proc (min)\",\n    ROUND((a.avg_image_mb * 8.0 / 50.0 / 60.0)::numeric, 2) AS \"Full Image DL (min)\",\n    g.ingest_min + g.processing_min + g.dissemination_min AS \"Ground Proc (min)\",\n    o.avg_wait_min + ROUND((a.avg_image_mb * 8.0 / 50.0 / 60.0)::numeric, 2) + g.ingest_min + g.processing_min + g.dissemination_min AS \"Total Without OBDP (min)\",\n    ROUND((a.avg_inference_ms / 1000.0 / 60.0)::numeric, 2) + o.avg_wait_min AS \"Total With OBDP (min)\",\n    ROUND((\n        (o.avg_wait_min + (a.avg_image_mb * 8.0 / 50.0 / 60.0) + g.ingest_min + g.processing_min + g.dissemination_min)\n        / NULLIF((a.avg_inference_ms / 1000.0 / 60.0) + o.avg_wait_min, 0)\n    )::numeric, 1) AS \"Speedup\"\nFROM avg_data a\nCROSS JOIN orbits o\nCROSS JOIN ground_chains g\nORDER BY o.altitude_km, g.ingest_min",
+          "rawSql": "WITH avg_data AS (\n    SELECT\n        ROUND(AVG(inference_ms)::numeric, 0) AS avg_inference_ms,\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND status = 'success'\n        AND inference_ms IS NOT NULL\n        AND image_size_mb IS NOT NULL\n),\norbits AS (\n    SELECT * FROM (VALUES\n        ('LEO 500km', 500, 360, 10),\n        ('SSO 700km', 700, 180, 12),\n        ('LEO 350km', 350, 720, 7)\n    ) AS t(orbit_name, altitude_km, avg_wait_min, contact_min)\n),\nground_chains AS (\n    SELECT * FROM (VALUES\n        ('Fast Automated', 5, 10, 2),\n        ('Standard NRT', 15, 30, 10),\n        ('Manual Analysis', 30, 120, 30)\n    ) AS t(chain_name, ingest_min, processing_min, dissemination_min)\n)\nSELECT\n    o.orbit_name AS \"Orbit\",\n    o.altitude_km AS \"Alt (km)\",\n    g.chain_name AS \"Ground Chain\",\n    o.avg_wait_min AS \"Orbital Wait (min)\",\n    ROUND((a.avg_inference_ms / 1000.0 / 60.0)::numeric, 2) AS \"Onboard Proc (min)\",\n    ROUND((a.avg_image_mb * 8.0 / 50.0 / 60.0)::numeric, 2) AS \"Full Image DL (min)\",\n    g.ingest_min + g.processing_min + g.dissemination_min AS \"Ground Proc (min)\",\n    o.avg_wait_min + ROUND((a.avg_image_mb * 8.0 / 50.0 / 60.0)::numeric, 2) + g.ingest_min + g.processing_min + g.dissemination_min AS \"Total Without OBDP (min)\",\n    ROUND((a.avg_inference_ms / 1000.0 / 60.0)::numeric, 2) + o.avg_wait_min AS \"Total With OBDP (min)\",\n    ROUND((\n        (o.avg_wait_min + (a.avg_image_mb * 8.0 / 50.0 / 60.0) + g.ingest_min + g.processing_min + g.dissemination_min)\n        / NULLIF((a.avg_inference_ms / 1000.0 / 60.0) + o.avg_wait_min, 0)\n    )::numeric, 2) AS \"Speedup\"\nFROM avg_data a\nCROSS JOIN orbits o\nCROSS JOIN ground_chains g\nORDER BY o.altitude_km, g.ingest_min",
           "format": "table",
           "editorMode": "code"
         }
@@ -424,8 +428,12 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "yellow",
+                      "color": "red",
                       "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1
                     },
                     {
                       "color": "green",
