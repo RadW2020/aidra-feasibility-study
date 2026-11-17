@@ -311,6 +311,14 @@
             "properties": [{ "id": "custom.width", "value": 90 }]
           },
           {
+            "matcher": { "id": "byName", "options": "reason" },
+            "properties": [{ "id": "custom.width", "value": 340 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "re_observed" },
+            "properties": [{ "id": "custom.width", "value": 120 }]
+          },
+          {
             "matcher": { "id": "byName", "options": "tasking_id" },
             "properties": [{ "id": "custom.hidden", "value": true }]
           }
