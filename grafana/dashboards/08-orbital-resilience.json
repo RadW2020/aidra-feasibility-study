@@ -81,7 +81,7 @@
     {
       "id": 1,
       "title": "Bit-Flip Degradation (max in window)",
-      "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU). Higher = more brittle.",
+      "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU) in the selected time range. Higher = more brittle. degradation_pct is stored as a percentage (0-100). Bit-flip sweeps are run on demand (POST /api/orbital/resilience/bitflip), not on a schedule, so short ranges are usually empty.",
       "type": "gauge",
       "gridPos": {
         "x": 0,
@@ -100,7 +100,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COALESCE(LEAST(100, MAX(CASE WHEN degradation_pct > 1 THEN degradation_pct ELSE degradation_pct * 100 END)), 0) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
+          "rawSql": "SELECT MAX(LEAST(100, degradation_pct)) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
           "format": "table",
           "editorMode": "code"
         }
@@ -153,8 +153,8 @@
     },
     {
       "id": 2,
-      "title": "Battery Level (last sim)",
-      "description": "Final battery level (Wh) at the end of the most recent orbit simulation. Coloured by remaining capacity vs. nominal 100 Wh.",
+      "title": "Battery Level (last sim, % of capacity)",
+      "description": "Battery left at the end of the most recent orbit simulation, as a percentage of that satellite's capacity (SATELLITE_POWER_BUDGETS: cubesat_3u 30 Wh, cubesat_6u 60 Wh, small_sat 300 Wh, medium_sat 2000 Wh).",
       "type": "gauge",
       "gridPos": {
         "x": 8,
@@ -173,7 +173,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT final_battery_wh\nFROM orbit_sim_runs\nORDER BY created_at DESC\nLIMIT 1",
+          "rawSql": "WITH capacity(satellite, battery_wh) AS (\n  VALUES ('cubesat_3u', 30.0), ('cubesat_6u', 60.0), ('small_sat', 300.0), ('medium_sat', 2000.0)\n)\nSELECT ROUND((100.0 * r.final_battery_wh / c.battery_wh)::numeric, 1) AS battery_pct\nFROM orbit_sim_runs r\nJOIN capacity c ON c.satellite = r.satellite\nORDER BY r.created_at DESC\nLIMIT 1",
           "format": "table",
           "editorMode": "code"
         }
@@ -204,7 +204,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "unit": "watth",
+          "unit": "percent",
           "min": 0,
           "max": 100,
           "noValue": "No orbit simulations recorded"
