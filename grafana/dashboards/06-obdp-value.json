@@ -18,7 +18,7 @@
   "schemaVersion": 39,
   "version": 1,
   "time": {
-    "from": "now-24h",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {
@@ -319,7 +319,7 @@
     {
       "id": 5,
       "title": "Daily Capacity (images/day) by Downlink Profile · full-scene runs",
-      "description": "Daily image-processing capacity per downlink profile.",
+      "description": "Daily capacity per downlink profile: how many scenes fit in the daily contact time as full images (without OBDP) vs. as detection results (with OBDP). 'Without OBDP' is fractional on purpose: S-band cannot bring down one full scene per day (0.02 means one scene every ~45 days). The improvement factor is the ratio of the two capacities, i.e. average image size / average result size, so it is the same for every link.",
       "type": "table",
       "gridPos": {
         "x": 0,
@@ -338,7 +338,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(COALESCE(num_valid_targets, num_detections), 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND(\n        FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0))::numeric\n        / NULLIF(FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 0),\n        0\n    ) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(COALESCE(num_valid_targets, num_detections), 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    ROUND(((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 2) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND((a.avg_image_mb / NULLIF(a.avg_result_mb, 0))::numeric, 0) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
           "format": "table",
           "editorMode": "code"
         }
@@ -478,7 +478,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        ((e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(COALESCE(e.num_valid_targets, e.num_detections), 0) * 300, 0\n        ))::numeric\n    , 0) AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND (e.notes IS NULL OR e.notes NOT LIKE '%methodology:pre-affine-mask%') AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND COALESCE(e.num_valid_targets, e.num_detections) > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
+          "rawSql": "SELECT\n    e.created_at AS \"time\",\n    ROUND(\n        ((e.image_size_mb * 1024.0 * 1024.0) / NULLIF(\n            200 + GREATEST(COALESCE(e.num_valid_targets, e.num_detections), 0) * 300, 0\n        ))::numeric\n    , 0)::float8 AS compression_ratio\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND (e.notes IS NULL OR e.notes NOT LIKE '%methodology:pre-affine-mask%') AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0\n    AND COALESCE(e.num_valid_targets, e.num_detections) > 0\n    AND $__timeFilter(e.created_at)\nORDER BY e.created_at",
           "format": "time_series",
           "editorMode": "code"
         }

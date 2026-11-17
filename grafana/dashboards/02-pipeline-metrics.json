@@ -110,7 +110,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Pipeline Run Rate (runs/hour)",
+      "title": "Pipeline Runs per Hour (by status)",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
@@ -119,33 +119,32 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
+        "type": "postgres",
+        "uid": "PostgreSQL"
       },
       "targets": [
         {
           "refId": "A",
           "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
+            "type": "postgres",
+            "uid": "PostgreSQL"
           },
-          "expr": "sum(rate(aidra_pipeline_runs_total[1h])) by (status)",
-          "legendFormat": "{{status}}",
-          "editorMode": "code"
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(created_at, '1h') AS \"time\",\n       status AS metric,\n       COUNT(*)::int AS runs\nFROM execution_log\nWHERE $__timeFilter(created_at)\nGROUP BY 1, 2\nORDER BY 1"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
-            "fillOpacity": 20,
+            "fillOpacity": 80,
             "pointSize": 5,
-            "lineWidth": 2,
+            "lineWidth": 1,
             "showPoints": "auto",
             "spanNulls": false,
             "stacking": {
-              "mode": "none"
+              "mode": "normal"
             },
             "axisPlacement": "auto",
             "thresholdsStyle": {
@@ -155,9 +154,54 @@
           "color": {
             "mode": "palette-classic"
           },
-          "unit": "ops"
+          "unit": "short"
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "skipped"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#8e8e8e",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "invalid"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -176,13 +220,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "success"
+              "options": "failed"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "green",
+                  "fixedColor": "dark-red",
                   "mode": "fixed"
                 }
               }
@@ -200,7 +244,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "Runs recorded in execution_log per hour, by final status. 'skipped' = nothing new to process. Sourced from Postgres: the Prometheus counter behind the previous rate() query resets on every redeploy, so the panel was empty after each deploy."
     },
     {
       "id": 2,
@@ -263,7 +308,7 @@
     },
     {
       "id": 3,
-      "title": "Peak RAM (MB)",
+      "title": "Peak RAM (MB) · max in range",
       "type": "gauge",
       "gridPos": {
         "x": 0,
@@ -272,19 +317,18 @@
         "h": 6
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
+        "type": "postgres",
+        "uid": "PostgreSQL"
       },
       "targets": [
         {
           "refId": "A",
           "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
+            "type": "postgres",
+            "uid": "PostgreSQL"
           },
-          "expr": "max(aidra_peak_ram_mb)",
-          "legendFormat": "Peak RAM",
-          "editorMode": "code"
+          "format": "table",
+          "rawSql": "SELECT MAX(peak_ram_mb) AS \"Peak RAM\"\nFROM execution_log\nWHERE status = 'success'\n  AND $__timeFilter(created_at)"
         }
       ],
       "fieldConfig": {
@@ -330,12 +374,13 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true,
         "orientation": "auto"
-      }
+      },
+      "description": "Highest peak RSS recorded by a successful run in the selected time range (execution_log.peak_ram_mb). The Prometheus gauge used before is lost on every redeploy."
     },
     {
       "id": 4,
-      "title": "CPU Usage (% of 4 OCPU)",
-      "description": "Process CPU usage during the last inference, expressed as a percentage of the 4-OCPU OCI ARM A1 budget (Linux convention: 100% = one core saturated, 400% = all four cores saturated).",
+      "title": "CPU Usage (% of 4 OCPU) · max in range",
+      "description": "Highest process CPU usage recorded by a successful run in the selected time range (execution_log.cpu_usage_pct), on the Linux convention: 100% = one core saturated, 400% = all four OCPU of the OCI ARM A1 budget. The Prometheus gauge used before is lost on every redeploy.",
       "type": "gauge",
       "gridPos": {
         "x": 6,
@@ -344,19 +389,18 @@
         "h": 6
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "Prometheus"
+        "type": "postgres",
+        "uid": "PostgreSQL"
       },
       "targets": [
         {
           "refId": "A",
           "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
+            "type": "postgres",
+            "uid": "PostgreSQL"
           },
-          "expr": "max(aidra_cpu_usage_percent)",
-          "legendFormat": "CPU Usage",
-          "editorMode": "code"
+          "format": "table",
+          "rawSql": "SELECT MAX(cpu_usage_pct) AS \"CPU Usage\"\nFROM execution_log\nWHERE status = 'success'\n  AND $__timeFilter(created_at)"
         }
       ],
       "fieldConfig": {
@@ -530,8 +574,8 @@
     },
     {
       "id": 7,
-      "title": "Pipeline Runs Total",
-      "description": "Total runs recorded in execution_log (success / total). Sourced from Postgres so the value persists across app restarts; the equivalent Prometheus counter resets on every redeploy.",
+      "title": "Pipeline Runs in Range",
+      "description": "Runs recorded in execution_log in the selected time range: successful, skipped (nothing new to process) and total. Sourced from Postgres so the value persists across app restarts.",
       "type": "stat",
       "gridPos": {
         "x": 0,
@@ -550,7 +594,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(*) FILTER (WHERE status = 'success')::int AS \"success\", COUNT(*)::int AS \"total\" FROM execution_log",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE status = 'success')::int AS \"success\",\n       COUNT(*) FILTER (WHERE status = 'skipped')::int AS \"skipped\",\n       COUNT(*)::int AS \"total\"\nFROM execution_log\nWHERE $__timeFilter(created_at)",
           "format": "table"
         }
       ],
@@ -589,7 +633,7 @@
     {
       "id": 8,
       "title": "Model Size (MB)",
-      "description": "Disk size of each registered model variant. Sourced from models_registry (the equivalent Prometheus gauge aidra_model_size_mb is defined but never populated, so it always reads 0).",
+      "description": "Disk size of each variant of the models under compression evaluation (a model with at least one compressed variant in models_registry), with its registry status. Other registered models are not part of the comparison and are left out.",
       "type": "bargauge",
       "gridPos": {
         "x": 4,
@@ -608,7 +652,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT (name || ':' || version) AS model_variant, size_mb FROM models_registry ORDER BY size_mb DESC",
+          "rawSql": "SELECT (name || ':' || version || ' (' || status || ')') AS model_variant, size_mb\nFROM models_registry\nWHERE name IN (SELECT name FROM models_registry WHERE compression_technique <> 'none')\nORDER BY size_mb DESC",
           "format": "table"
         }
       ],
@@ -658,7 +702,7 @@
     {
       "id": 9,
       "title": "Recent Pipeline Runs",
-      "description": "Last 20 entries of execution_log with key telemetry. Replaces the previous Loki log panel — the Coolify deployment intentionally omits Promtail to avoid mounting docker.sock on a shared host, so Loki never receives the app stdout. Postgres execution_log is the canonical run record anyway.",
+      "description": "Last 20 entries of execution_log in the selected time range, with key telemetry. Replaces the previous Loki log panel — the Coolify deployment intentionally omits Promtail to avoid mounting docker.sock on a shared host, so Loki never receives the app stdout. Postgres execution_log is the canonical run record anyway.",
       "type": "table",
       "gridPos": {
         "x": 0,
@@ -677,7 +721,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT created_at AS \"started_at\",\n       status,\n       constraint_profile AS \"profile\",\n       model_name AS \"model\",\n       model_version AS \"version\",\n       num_detections AS \"detections\",\n       num_valid_targets AS \"valid_targets\",\n       ROUND((inference_ms / 1000.0)::numeric, 2) AS \"inference_s\",\n       peak_ram_mb AS \"peak_ram_mb\",\n       cpu_usage_pct AS \"cpu_pct\",\n       error_message AS \"error\"\nFROM execution_log\nORDER BY created_at DESC\nLIMIT 20",
+          "rawSql": "SELECT created_at AS \"started_at\",\n       status,\n       constraint_profile AS \"profile\",\n       model_name AS \"model\",\n       model_version AS \"version\",\n       num_detections AS \"detections\",\n       num_valid_targets AS \"valid_targets\",\n       ROUND((inference_ms / 1000.0)::numeric, 2) AS \"inference_s\",\n       peak_ram_mb AS \"peak_ram_mb\",\n       cpu_usage_pct AS \"cpu_pct\",\n       error_message AS \"error\"\nFROM execution_log\nWHERE $__timeFilter(created_at)\nORDER BY created_at DESC\nLIMIT 20",
           "format": "table"
         }
       ],
