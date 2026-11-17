@@ -386,6 +386,7 @@ class DecisionEngine:
         )
         if drift_result.is_drifting:
             return drift_result
+        max_z = drift_result.z_score
 
         # Check avg_confidence
         recent_conf = np.array(
@@ -404,12 +405,14 @@ class DecisionEngine:
             )
             if drift_result.is_drifting:
                 return drift_result
+            max_z = max(max_z, drift_result.z_score)
 
-        # No drift detected
+        # No drift detected: report how close the nearest metric came to the
+        # threshold instead of a flat 0, which read as "identical to history".
         return DriftResult(
             is_drifting=False,
             metric="all",
-            z_score=0.0,
+            z_score=max_z,
             recent_mean=float(np.mean(recent_dets)),
             historical_mean=float(np.mean(hist_dets)),
             recommendation="continue",
