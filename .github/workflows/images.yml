@@ -87,7 +87,9 @@ jobs:
 
   # El despliegue lo dispara el workflow, no el push: si Coolify se lanzase
   # solo con el commit, haria pull de una etiqueta :main que todavia apunta a
-  # la imagen anterior. Aqui ya esta publicada.
+  # la imagen anterior. Aqui ya esta publicada. Por eso el auto-deploy por
+  # push de Coolify debe estar desactivado: el 17/11/2026 se adelanto 3 s a la
+  # imagen de Grafana y el servidor se quedo con la anterior.
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -104,5 +106,7 @@ jobs:
             echo "::warning::COOLIFY_WEBHOOK/COOLIFY_TOKEN sin configurar: las imagenes estan publicadas pero el servidor seguira con la anterior hasta que alguien despliegue"
             exit 0
           fi
-          curl --fail --silent --show-error --request GET \
+          # Coolify solo acepta POST en /api/v1/deploy; a un GET responde
+          # "This endpoint has changed to a POST request." y no despliega.
+          curl --fail --silent --show-error --request POST \
             "$WEBHOOK" --header "Authorization: Bearer $TOKEN"
