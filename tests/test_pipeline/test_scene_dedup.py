@@ -213,3 +213,74 @@ def test_pipeline_result_accepts_the_skipped_status() -> None:
     assert result.status == "skipped"
     assert result.num_detections == 0
     assert Path("/nonexistent").exists() is False  # sanity: no side effects on disk
+
+
+class _RecordingDB:
+    """Stand-in de src.db.connection.db que guarda los ``execute``."""
+
+    def __init__(self) -> None:
+        self.executed: list[tuple] = []
+
+    async def execute(self, query: str, *args):
+        self.executed.append((query, args))
+
+
+class TestSkippedRunKeepsItsScene:
+    """I-TRACE-1: un run saltado deja escrito que escena miro."""
+
+    async def test_skipped_run_records_the_scene_it_found(self, monkeypatch) -> None:
+        from unittest.mock import AsyncMock, MagicMock
+        from uuid import uuid4
+
+        db = _RecordingDB()
+        monkeypatch.setattr("src.db.connection.db", db)
+
+        eng = _engine()
+        execution_id = uuid4()
+        detector = MagicMock()
+        detector.get_model_info.return_value = {
+            "name": "yolov8n-sar",
+            "version": "1.0.0",
+            "hash": "m" * 64,
+            "size_mb": 6.0,
+            "format": "onnx",
+            "sensor": "sar",
+        }
+        eng.model_manager = MagicMock()
+        eng.model_manager.get_model = AsyncMock(return_value=detector)
+        eng.recorder = MagicMock()
+        eng.recorder.create_pending = AsyncMock(return_value=execution_id)
+        eng.recorder.update_status = AsyncMock()
+        eng.recorder.update = AsyncMock()
+        monkeypatch.setattr(eng, "_validate_model_for_sensor", lambda *a, **k: None)
+
+        product = _product("scene-A")
+        product.footprint = {
+            "type": "Polygon",
+            "coordinates": [[[-6, 35], [-5, 35], [-5, 36], [-6, 36], [-6, 35]]],
+        }
+        product.size_mb = 1700.0
+        monkeypatch.setattr(eng, "_search_image", AsyncMock(return_value=product))
+        monkeypatch.setattr(
+            eng,
+            "_skip_reason",
+            AsyncMock(return_value="skipped: scene-A already processed by execution x"),
+        )
+
+        result = await eng.run(PipelineRequest(trigger_type="scheduled"))
+
+        assert result.status == "skipped"
+        assert len(db.executed) == 1
+        query, args = db.executed[0]
+        assert "UPDATE execution_log" in query
+        assert args[0] == execution_id
+        assert args[1] == "scene-A"
+        # Nada se descargo: el hash no se inventa, se conserva el placeholder.
+        assert args[2] is None
+        assert "COALESCE($3, image_hash)" in query
+        assert args[3] == "S1C_IW_GRDH_TEST"
+        assert args[4] == product.sensing_date
+        assert args[5] == 1700.0
+        assert '"Polygon"' in args[6]
+        eng.recorder.update.assert_awaited_once()
+        assert eng.recorder.update.await_args.kwargs["status"] == "skipped"

@@ -396,6 +396,9 @@ class PipelineEngine:
             )
             if skip_reason is not None:
                 total_ms = (time.monotonic() - start_time) * 1000.0
+                # I-TRACE-1: a skipped run still names the scene it looked at.
+                # image_hash stays a placeholder: nothing was downloaded.
+                await self._record_image_metadata(execution_id, product)
                 await self.recorder.update(
                     execution_id=execution_id,
                     status="skipped",
@@ -436,31 +439,7 @@ class PipelineEngine:
                 execution_id=execution_id,
                 status="running",
             )
-            # Use a direct DB update via recorder for image fields
-            # that were placeholders at creation time
-            from src.db.connection import db as _db
-
-            footprint_geojson = json.dumps(product.footprint) if product.footprint else None
-
-            await _db.execute(
-                """
-                UPDATE execution_log
-                SET image_id = $2,
-                    image_hash = $3,
-                    image_title = $4,
-                    image_sensing_date = $5,
-                    image_size_mb = $6,
-                    image_bbox = ST_GeomFromGeoJSON($7)
-                WHERE id = $1
-                """,
-                execution_id,
-                product.product_id,
-                image_hash,
-                product.title,
-                product.sensing_date,
-                product.size_mb,
-                footprint_geojson,
-            )
+            await self._record_image_metadata(execution_id, product, image_hash)
 
             # ---- Step 7: Preprocess (calibrate, filter, tile) ----
             preprocess_start = time.monotonic()
@@ -1094,6 +1073,41 @@ class PipelineEngine:
             return False
 
         return bool(row and row["live"] > 0)
+
+    async def _record_image_metadata(
+        self,
+        execution_id: UUID,
+        product: CopernicusSearchResult,
+        image_hash: str | None = None,
+    ) -> None:
+        """Sustituye los placeholders de imagen del registro por la escena real.
+
+        ``image_hash`` solo se conoce tras descargar; con ``None`` se conserva
+        el valor que ya tuviera la fila.
+        """
+        from src.db.connection import db as _db
+
+        footprint_geojson = json.dumps(product.footprint) if product.footprint else None
+
+        await _db.execute(
+            """
+            UPDATE execution_log
+            SET image_id = $2,
+                image_hash = COALESCE($3, image_hash),
+                image_title = $4,
+                image_sensing_date = $5,
+                image_size_mb = $6,
+                image_bbox = ST_GeomFromGeoJSON($7)
+            WHERE id = $1
+            """,
+            execution_id,
+            product.product_id,
+            image_hash,
+            product.title,
+            product.sensing_date,
+            product.size_mb,
+            footprint_geojson,
+        )
 
     async def _skip_reason(
         self,
