@@ -58,5 +58,8 @@ def test_dashboard_has_source_selector_and_tier_panel():
     d = json.loads(Path("grafana/dashboards/01-map-detections.json").read_text())
     assert any(v["name"] == "source" for v in d["templating"]["list"])
     assert any("source = fused" in p["title"] for p in d["panels"])
-    sqls = [t["rawSql"] for p in d["panels"] for t in p.get("targets", []) if "d.quality_verdict = '$quality'" in t.get("rawSql", "")]
+    sqls = [t["rawSql"] for p in d["panels"] for t in p.get("targets", []) if "d.quality_verdict = " in t.get("rawSql", "")]
     assert sqls and all("d.source = '$source'" in s for s in sqls if "FILTER (WHERE d.source = 'fused')" not in s)
+    # Public dashboards pass '$quality' literally: the filter must fall back to
+    # the variable's default instead of switching itself off.
+    assert all("WHEN LEFT('$quality', 1) = '$' THEN 'valid_sea_target'" in s for s in sqls)
