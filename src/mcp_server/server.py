@@ -25,7 +25,7 @@ logger = logging.getLogger("aidra.mcp")
 Profile = Literal["ground", "sat-high", "sat-mid", "sat-low", "sat-extreme"]
 ExecutionStatus = Literal["pending", "running", "success", "skipped", "invalid", "error", "failed"]
 TriggerType = Literal["manual", "scheduled", "cue"]
-QualityVerdict = Literal["valid_sea_target", "candidate", "land_artifact", "cluster_artifact", "outside_footprint"]
+QualityVerdict = Literal["valid_sea_target", "candidate", "coastal_candidate", "land_artifact", "cluster_artifact", "outside_footprint"]
 Bbox = Annotated[
     list[float],
     Field(min_length=4, max_length=4, description="[lon_min, lat_min, lon_max, lat_max] in WGS-84 degrees (longitude first)."),

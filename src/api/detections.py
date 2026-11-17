@@ -196,7 +196,7 @@ async def list_detections(
     quality_verdict: str | None = Query(
         None,
         description=(
-            "Filter by quality verdict: valid_sea_target, candidate, "
+            "Filter by quality verdict: valid_sea_target, candidate, coastal_candidate, "
             "land_artifact, cluster_artifact, outside_footprint."
         ),
     ),
@@ -356,7 +356,7 @@ async def list_detections_geojson(
     quality_verdict: str | None = Query(
         None,
         description=(
-            "Filter by quality verdict: valid_sea_target, candidate, "
+            "Filter by quality verdict: valid_sea_target, candidate, coastal_candidate, "
             "land_artifact, cluster_artifact, outside_footprint."
         ),
     ),

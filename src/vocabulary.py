@@ -66,6 +66,10 @@ QUALITY_VERDICTS: dict[str, dict[str, Any]] = {
         "counts_as_sea_target": False,
         "meaning": "At sea but CFAR-only: a bright point reflector without CNN confirmation.",
     },
+    "coastal_candidate": {
+        "counts_as_sea_target": False,
+        "meaning": "CFAR-only and within Settings.coastal_buffer_km of land: mostly shoreline and harbour returns (6 % matched a vessel on xView3-SAR against 33 % offshore). Kept for audit, never dropped.",
+    },
     "land_artifact": {
         "counts_as_sea_target": False,
         "meaning": "Centre falls on land (global-land-mask). Kept for audit, excluded from sea metrics (I-DET-2).",

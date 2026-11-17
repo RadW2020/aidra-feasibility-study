@@ -108,6 +108,36 @@ class TestDetectionQualityHelpers:
             == "candidate"
         )
 
+    def test_cfar_only_near_the_coast_is_labelled_not_dropped(self):
+        # Shoreline returns: kept with their own verdict (I-SAR-3 forbids
+        # dropping a produced detection for where it falls).
+        assert (
+            PipelineEngine._detection_quality_verdict(
+                "cfar", on_land=False, cluster_anomaly=False, near_coast=True
+            )
+            == "coastal_candidate"
+        )
+        # A YOLO-confirmed target stays valid however close to shore it is.
+        assert (
+            PipelineEngine._detection_quality_verdict(
+                "fused", on_land=False, cluster_anomaly=False, near_coast=True
+            )
+            == "valid_sea_target"
+        )
+
+    def test_near_land_uses_the_buffer_from_settings(self):
+        from src.config import Settings
+        from src.pipeline.detection import near_land
+
+        buffer_km = Settings(_env_file=None).coastal_buffer_km
+        assert buffer_km > 0
+        # Mid Alboran Sea: tens of km from any coast.
+        assert near_land(36.0, -3.5, buffer_km) is False
+        # Bay of Algeciras, a few hundred metres off the breakwater.
+        assert near_land(36.13, -5.435, 3.0) is True
+        # 0 disables the label.
+        assert near_land(36.13, -5.435, 0.0) is False
+
     def test_non_finite_detector_scores_are_dropped_before_db(self):
         assert PipelineEngine._finite_or_none(float("inf")) is None
         assert PipelineEngine._finite_or_none(float("-inf")) is None

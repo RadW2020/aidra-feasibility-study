@@ -22,7 +22,7 @@ evidence: failed runs and rejected variants are part of it.
 | search zone vs Tip & Cue zone | Runs take a search zone (`gibraltar`, …). Cues use operational zones (`gibraltar_strait`, `algeciras_port`, `med_patrol`) that map to a search zone. `GET /api/catalog` has both and the mapping |
 | model / version | `vesseltracker-sar-yolov8` has `v1.0` (FP32 baseline), `int8-static` (active), `int8-dynamic` (**rejected**, I-MOD-3). `cfar-default` is built in. `yolov8n` is a COCO model and the SAR gate refuses it |
 | source / tier | `cfar`, `yolo`, `fused` (both agreed). `tier=high` = fused: precision 0.31, recall 0.12 on xView3. An operating point, not the full output |
-| quality_verdict | `valid_sea_target` (YOLO-confirmed at sea) · `candidate` (CFAR-only) · `land_artifact` (kept, excluded from sea metrics, I-DET-2) · `cluster_artifact` · `outside_footprint` (historical rows) |
+| quality_verdict | `valid_sea_target` (YOLO-confirmed at sea) · `candidate` (CFAR-only) · `coastal_candidate` (CFAR-only within `coastal_buffer_km` of land, mostly shoreline returns) · `land_artifact` (kept, excluded from sea metrics, I-DET-2) · `cluster_artifact` · `outside_footprint` (historical rows) |
 | triplet | {FP32 baseline, compressed variant, profile}. No compression claim without all three (I-MOD-1); degradation budget ΔmAP ≤ 5 pts (I-MOD-3) |
 | cue | A Tip & Cue re-observation request in `tasking_queue`, processed every 15 min |
 

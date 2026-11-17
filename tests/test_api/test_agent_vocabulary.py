@@ -36,7 +36,7 @@ def test_every_execution_status_written_is_documented():
 
 def test_every_quality_verdict_the_engine_assigns_is_documented():
     assigned = _literals(r'return "([a-z_]+)"', ["src/pipeline/engine.py"]) & {
-        "land_artifact", "cluster_artifact", "valid_sea_target", "candidate",
+        "land_artifact", "cluster_artifact", "valid_sea_target", "candidate", "coastal_candidate",
     }
     assert assigned <= set(QUALITY_VERDICTS)
 

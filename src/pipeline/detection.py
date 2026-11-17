@@ -52,6 +52,32 @@ def _get_globe() -> Any:
     return _GLOBE_LAND if _GLOBE_LAND is not False else None
 
 
+def near_land(lat: float, lon: float, buffer_km: float, step_km: float = 0.25) -> bool:
+    """True if land lies within ``buffer_km`` of a point at sea.
+
+    Samples global-land-mask on rings of 24 bearings every ``step_km``.
+    The mask is ~1.85 km NOAA data, so this is a coarse coastal band, not
+    a shoreline distance. False when the package is unavailable or the
+    buffer is not positive.
+    """
+    globe = _get_globe()
+    if globe is None or buffer_km <= 0:
+        return False
+    bearings = np.linspace(0.0, 2.0 * np.pi, 24, endpoint=False)
+    km_per_deg_lon = 111.32 * max(np.cos(np.radians(lat)), 1e-6)
+    radius = step_km
+    try:
+        while radius <= buffer_km + 1e-9:
+            lats = lat + radius / 111.32 * np.sin(bearings)
+            lons = lon + radius / km_per_deg_lon * np.cos(bearings)
+            if bool(np.any(globe.is_land(lats, lons))):
+                return True
+            radius += step_km
+    except Exception:
+        return False
+    return False
+
+
 def _build_sea_mask(
     geo_bounds: dict[str, float | None],
     tile_shape: tuple[int, int],

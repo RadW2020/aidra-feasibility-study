@@ -58,7 +58,13 @@ from src.observability.prometheus_metrics import (
     SCENES_PROCESSED_TOTAL,
     TIPS_GENERATED_TOTAL,
 )
-from src.pipeline.detection import Detection, DetectionEngine, DetectionMetrics, DetectionResult
+from src.pipeline.detection import (
+    Detection,
+    DetectionEngine,
+    DetectionMetrics,
+    DetectionResult,
+    near_land,
+)
 from src.pipeline.ingestion import SEARCH_ZONES, CopernicusSearchResult, ImageIngester
 from src.pipeline.preprocessing import open_preprocess_stream, preprocess_full
 from src.profiles.manager import ProfileManager
@@ -1254,6 +1260,7 @@ class PipelineEngine:
                 "edge_buffer_px": self.config.edge_buffer_px,
                 "cluster_anomaly_radius_deg": self.config.cluster_anomaly_radius_deg,
                 "cluster_anomaly_min_neighbours": self.config.cluster_anomaly_min_neighbours,
+                "coastal_buffer_km": self.config.coastal_buffer_km,
                 "pipeline_version": "1.0.0",
             },
             "model": {
@@ -1837,10 +1844,18 @@ class PipelineEngine:
                 det.on_land = on_land
                 det.cluster_anomaly = cluster_anomaly
                 thumbnail_path = getattr(det, "thumbnail_path", None) or None
+                # Solo se consulta para lo que acabaria en 'candidate'.
+                near_coast = (
+                    det.source == "cfar"
+                    and not on_land
+                    and not cluster_anomaly
+                    and near_land(lat, lon, self.config.coastal_buffer_km)
+                )
                 quality_verdict = self._detection_quality_verdict(
                     det.source,
                     on_land=on_land,
                     cluster_anomaly=cluster_anomaly,
+                    near_coast=near_coast,
                 )
                 det.quality_verdict = quality_verdict
                 verdict_counts[quality_verdict] = verdict_counts.get(quality_verdict, 0) + 1
@@ -1947,6 +1962,7 @@ class PipelineEngine:
         *,
         on_land: bool,
         cluster_anomaly: bool,
+        near_coast: bool = False,
     ) -> str:
         """Classify a persisted detection without discarding raw evidence."""
         if on_land:
@@ -1955,6 +1971,8 @@ class PipelineEngine:
             return "cluster_artifact"
         if source in {"yolo", "fused"}:
             return "valid_sea_target"
+        if near_coast:
+            return "coastal_candidate"
         return "candidate"
 
     async def _create_cue(self, tip: TipResult) -> None:

@@ -167,7 +167,7 @@
         "type": "custom",
         "label": "Quality verdict",
         "description": "Operational view defaults to valid sea targets. Use all/candidate/artifacts for audit.",
-        "query": "valid_sea_target,all,candidate,land_artifact,cluster_artifact,outside_footprint",
+        "query": "valid_sea_target,all,candidate,coastal_candidate,land_artifact,cluster_artifact,outside_footprint",
         "current": {
           "text": "valid_sea_target",
           "value": "valid_sea_target"
@@ -186,6 +186,11 @@
           {
             "text": "candidate",
             "value": "candidate",
+            "selected": false
+          },
+          {
+            "text": "coastal_candidate",
+            "value": "coastal_candidate",
             "selected": false
           },
           {

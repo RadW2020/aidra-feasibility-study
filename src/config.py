@@ -128,6 +128,13 @@ class Settings(BaseSettings):
     # speckle bursts or unfiltered land returns.
     cluster_anomaly_radius_deg: float = 0.01
     cluster_anomaly_min_neighbours: int = 8
+    # CFAR-only detections this close to land are labelled
+    # ``coastal_candidate`` instead of ``candidate``. They are kept, not
+    # dropped: on xView3-SAR (Adriatic, 11 scenes) CFAR-only detections
+    # within 0.5 km of land match a vessel 6 % of the time against 33 %
+    # beyond 3 km, but suppressing them would cost 3 points of Pd
+    # (scripts/coastal_buffer_whatif.py). 0 disables the label.
+    coastal_buffer_km: float = 0.5
 
     # ---- Tile defaults ----
     tile_size: int = 640
