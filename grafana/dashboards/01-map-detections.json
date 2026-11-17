@@ -369,7 +369,7 @@
           "lastOnly": false
         },
         "basemap": {
-          "type": "default",
+          "type": "osm-standard",
           "name": "OpenStreetMap"
         },
         "layers": [
