@@ -209,12 +209,15 @@ async def _build_replay(tasking_id: UUID, base_url: str) -> dict[str, Any]:
         triggering = [_detection_to_dict(r, base_url) for r in rows]
 
     # T1: re-execution that confirmed (or not) the detection.
-    t1 = await _execution_brief(cue.get("execution_id"))
+    # Only a completed cue has one: while a cue waits for a later scene (or
+    # after it expires) execution_id points at its last skipped check.
+    t1_id = cue.get("execution_id") if cue.get("status") == "completed" else None
+    t1 = await _execution_brief(t1_id)
 
     confirming: list[dict[str, Any]] = []
-    if cue.get("execution_id") is not None:
+    if t1_id is not None:
         rows = await db.fetch(
-            _SELECT_TOP_DETECTIONS_FOR_EXECUTION, cue["execution_id"]
+            _SELECT_TOP_DETECTIONS_FOR_EXECUTION, t1_id
         )
         confirming = [_detection_to_dict(r, base_url) for r in rows]
 
