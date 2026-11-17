@@ -257,7 +257,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH v AS (\n    SELECT *, COALESCE(NULLIF(compression_technique, ''), 'none') AS technique\n    FROM validation_runs\n),\nensemble_baseline(variant_model, baseline_model) AS (\n    VALUES ('aidra-cfar+vesseltracker-sar-yolov8-int8-static-union', 'aidra-cfar+yolo-union')\n),\nvariant_runs AS (\n    SELECT DISTINCT ON (model_name, model_version, dataset, pipeline_path) *\n    FROM v\n    WHERE technique <> 'none'\n    ORDER BY model_name, model_version, dataset, pipeline_path, created_at DESC\n),\nreg AS (\n    SELECT compression_technique AS technique, status\n    FROM models_registry\n    WHERE compression_technique <> 'none'\n)\nSELECT\n    vr.model_name || ':' || vr.model_version AS variant,\n    COALESCE(reg.status, 'unregistered') AS registry_status,\n    vr.dataset,\n    ROUND(b.map_at_iou::numeric, 4) AS fp32_map,\n    ROUND(vr.map_at_iou::numeric, 4) AS variant_map,\n    ROUND(((vr.map_at_iou - b.map_at_iou) * 100)::numeric, 2) AS delta_map_pts,\n    ROUND(b.pd_recall::numeric, 3) AS fp32_pd,\n    ROUND(vr.pd_recall::numeric, 3) AS variant_pd,\n    ROUND(b.far_per_km2::numeric, 4) AS fp32_far_km2,\n    ROUND(vr.far_per_km2::numeric, 4) AS variant_far_km2,\n    CASE\n        WHEN b.id IS NULL THEN 'NO BASELINE'\n        WHEN (b.map_at_iou - vr.map_at_iou) * 100 > 5 THEN 'REJECT (> 5 pts)'\n        ELSE 'within budget'\n    END AS verdict\nFROM variant_runs vr\nLEFT JOIN LATERAL (\n    SELECT *\n    FROM v b\n    WHERE b.technique = 'none'\n      AND b.model_name = COALESCE(\n            (SELECT baseline_model FROM ensemble_baseline WHERE variant_model = vr.model_name),\n            regexp_replace(vr.model_name, '-int8-(dynamic|static)$', ''))\n      AND b.dataset = vr.dataset\n      AND b.pipeline_path IS NOT DISTINCT FROM vr.pipeline_path\n      AND b.match_mode = vr.match_mode\n      AND b.iou_threshold = vr.iou_threshold\n      AND b.confidence_threshold = vr.confidence_threshold\n      AND (b.params_json ->> 'yolo_input') IS NOT DISTINCT FROM (vr.params_json ->> 'yolo_input')\n      AND (b.params_json ->> 'fusion_mode') IS NOT DISTINCT FROM (vr.params_json ->> 'fusion_mode')\n    ORDER BY b.created_at DESC\n    LIMIT 1\n) b ON true\nLEFT JOIN reg ON reg.technique = vr.technique\nORDER BY (b.id IS NULL), vr.dataset, vr.model_name",
+          "rawSql": "WITH v AS (\n    SELECT *, COALESCE(NULLIF(compression_technique, ''), 'none') AS technique\n    FROM validation_runs\n),\nensemble_baseline(variant_model, baseline_model) AS (\n    VALUES ('aidra-cfar+vesseltracker-sar-yolov8-int8-static-union', 'aidra-cfar+yolo-union')\n),\nvariant_runs AS (\n    SELECT DISTINCT ON (model_name, model_version, dataset, pipeline_path) *\n    FROM v\n    WHERE technique <> 'none'\n    ORDER BY model_name, model_version, dataset, pipeline_path, created_at DESC\n),\nreg AS (\n    SELECT compression_technique AS technique, status\n    FROM models_registry\n    WHERE compression_technique <> 'none'\n)\nSELECT\n    vr.model_name || ':' || vr.model_version AS variant,\n    COALESCE(reg.status, 'unregistered') AS registry_status,\n    CASE\n        WHEN b.id IS NULL THEN 'NO BASELINE'\n        WHEN (b.map_at_iou - vr.map_at_iou) * 100 > 5 THEN 'REJECT (> 5 pts)'\n        ELSE 'within budget'\n    END AS verdict,\n    vr.dataset,\n    ROUND(b.map_at_iou::numeric, 4) AS fp32_map,\n    ROUND(vr.map_at_iou::numeric, 4) AS variant_map,\n    ROUND(((vr.map_at_iou - b.map_at_iou) * 100)::numeric, 2) AS delta_map_pts,\n    ROUND(b.pd_recall::numeric, 3) AS fp32_pd,\n    ROUND(vr.pd_recall::numeric, 3) AS variant_pd,\n    ROUND(b.far_per_km2::numeric, 4) AS fp32_far_km2,\n    ROUND(vr.far_per_km2::numeric, 4) AS variant_far_km2\nFROM variant_runs vr\nLEFT JOIN LATERAL (\n    SELECT *\n    FROM v b\n    WHERE b.technique = 'none'\n      AND b.model_name = COALESCE(\n            (SELECT baseline_model FROM ensemble_baseline WHERE variant_model = vr.model_name),\n            regexp_replace(vr.model_name, '-int8-(dynamic|static)$', ''))\n      AND b.dataset = vr.dataset\n      AND b.pipeline_path IS NOT DISTINCT FROM vr.pipeline_path\n      AND b.match_mode = vr.match_mode\n      AND b.iou_threshold = vr.iou_threshold\n      AND b.confidence_threshold = vr.confidence_threshold\n      AND (b.params_json ->> 'yolo_input') IS NOT DISTINCT FROM (vr.params_json ->> 'yolo_input')\n      AND (b.params_json ->> 'fusion_mode') IS NOT DISTINCT FROM (vr.params_json ->> 'fusion_mode')\n    ORDER BY b.created_at DESC\n    LIMIT 1\n) b ON true\nLEFT JOIN reg ON reg.technique = vr.technique\nORDER BY (b.id IS NULL), vr.dataset, vr.model_name",
           "format": "table",
           "editorMode": "code"
         }
@@ -318,7 +318,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 420
+                "value": 330
               }
             ]
           },
@@ -355,6 +355,18 @@
                 "value": {
                   "type": "color-text"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dataset"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 240
               }
             ]
           }
