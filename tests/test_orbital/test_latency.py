@@ -41,6 +41,31 @@ class TestOBDPLatency:
         assert with_obdp.ground_processing_s == 0.0
         assert with_obdp.onboard_processing_s > 0.0
 
+    def test_onboard_processing_overlaps_the_wait_for_contact(self):
+        """The satellite processes while it waits: inference shorter than
+        the wait adds no latency, and both paths wait for the same contact.
+        """
+        sim = OrbitalLatencySimulator()
+        without = sim.simulate_without_obdp(orbit="sso_700")
+        quick = sim.simulate_with_obdp(orbit="sso_700", inference_ms=1_000.0)
+        slower = sim.simulate_with_obdp(orbit="sso_700", inference_ms=600_000.0)
+
+        assert slower.onboard_processing_s == 600.0
+        assert slower.onboard_processing_s + slower.wait_for_contact_s == without.wait_for_contact_s
+        assert slower.total_seconds == quick.total_seconds
+
+    def test_inference_longer_than_the_wait_delays_the_result(self):
+        """Measured full-scene inference (~53 min) outlasts the ~25 min
+        average wait: the result leaves when it is ready, not before.
+        """
+        sim = OrbitalLatencySimulator()
+        without = sim.simulate_without_obdp(orbit="sso_700")
+        result = sim.simulate_with_obdp(orbit="sso_700", inference_ms=53 * 60_000.0)
+
+        assert result.wait_for_contact_s == 0.0
+        assert result.onboard_processing_s > without.wait_for_contact_s
+        assert result.total_seconds > result.onboard_processing_s
+
     def test_without_obdp_includes_ground_processing(self):
         """Without OBDP, ground_processing_s must be positive (image
         is processed on the ground).

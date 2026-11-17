@@ -59,7 +59,10 @@ class LatencyBreakdown(BaseModel):
         description="0 without OBDP; inference_ms with OBDP",
     )
     wait_for_contact_s: float = Field(
-        description="Dominant latency component (orbit-dependent)",
+        description=(
+            "Wait for the ground-station contact (orbit-dependent). With OBDP, "
+            "the part of it left after on-board processing, which runs meanwhile"
+        ),
     )
     downlink_s: float = Field(
         description="Drastically different with/without OBDP",
@@ -203,8 +206,8 @@ class OrbitalLatencySimulator:
 
         Steps:
         1. Capture (reference t=0).
-        2. On-board inference (< 1 second typically).
-        3. Wait for ground-station contact window.
+        2. On-board inference, concurrent with the wait for contact.
+        3. Remaining wait for the ground-station contact window.
         4. Downlink the small result payload (~instant).
         5. Ground ingest (~1 min for small payload).
         6. Dissemination (~1 min).
@@ -231,8 +234,12 @@ class OrbitalLatencySimulator:
 
         onboard_s = inference_ms / 1000.0
 
-        # Wait: same orbital mechanics apply
-        wait_s = float(orb["period_min"]) * 60.0 / 4.0
+        # Wait: same orbital mechanics apply, and the same contact as the
+        # traditional path. Processing runs while the satellite waits, so
+        # only the wait left over after inference adds latency; if inference
+        # outlasts the wait, the result leaves as soon as it is ready.
+        contact_s = float(orb["period_min"]) * 60.0 / 4.0
+        wait_s = max(contact_s - onboard_s, 0.0)
 
         # Downlink tiny result
         bw_mb_s = float(dl["bandwidth_mbps"]) / 8.0
