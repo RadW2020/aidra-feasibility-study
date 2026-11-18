@@ -202,3 +202,38 @@ class TestMTBF:
 
         with pytest.raises(KeyError, match="not found"):
             sim.estimate_mtbf(orbit="nonexistent_orbit")
+
+
+def test_flips_land_on_layers_in_proportion_to_their_size():
+    """A flip hits a uniformly drawn bit, so a big layer takes most of them.
+
+    Picking the layer first, uniformly, gave a 16-weight layer the same share
+    as a 16 000-weight one and overstated how fragile the model is.
+    """
+    weights = {
+        "big.weight": np.ones(16_000, dtype=np.float32),
+        "small.bias": np.ones(16, dtype=np.float32),
+    }
+    sim = BitFlipSimulator(model_weights=weights)
+
+    _, records = sim.inject_bitflips(num_flips=2000, rng=np.random.default_rng(7))
+
+    small = sum(r.layer_name == "small.bias" for r in records)
+    # Expected share 16 / 16 016 = 0.1 %: about 2 of 2000, never hundreds.
+    assert small < 20
+    assert len(records) - small > 1900
+
+
+def test_target_layers_restrict_where_flips_land():
+    weights = {
+        "a.weight": np.ones(1000, dtype=np.float32),
+        "b.weight": np.ones(1000, dtype=np.float32),
+    }
+    sim = BitFlipSimulator(model_weights=weights)
+
+    corrupted, records = sim.inject_bitflips(
+        num_flips=50, target_layers=["b.weight"], rng=np.random.default_rng(1)
+    )
+
+    assert {r.layer_name for r in records} == {"b.weight"}
+    assert np.array_equal(corrupted["a.weight"], weights["a.weight"])

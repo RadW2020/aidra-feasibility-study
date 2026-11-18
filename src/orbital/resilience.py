@@ -158,8 +158,12 @@ class BitFlipSimulator:
         num_flips:
             Number of independent bit-flips to inject.
         target_layers:
-            If given, only flip bits in these layers.  Otherwise select
-            layers uniformly at random.
+            If given, only flip bits in these layers.  Otherwise every
+            layer is eligible.  Each flip lands on a bit drawn uniformly
+            over all eligible bits, so a layer is hit in proportion to its
+            size -- as a particle strike on the weight memory would.
+            (Picking the layer first, uniformly, over-exposed the small
+            layers: a 16-weight bias was hit as often as a 2M-weight conv.)
         bit_position:
             ``"random"`` (uniform 0-31), ``"msb"`` (bit 31, sign bit --
             most destructive), or ``"lsb"`` (bit 0, least destructive).
@@ -177,10 +181,17 @@ class BitFlipSimulator:
         corrupted = deepcopy(self._original_weights)
         records: list[BitFlipRecord] = []
         available_layers = target_layers if target_layers else self._layer_names
+        # Cumulative element counts: a uniform draw over all elements picks a
+        # layer with probability proportional to its size.
+        layer_ends = np.cumsum([corrupted[name].size for name in available_layers])
+        total_elements = int(layer_ends[-1]) if len(layer_ends) else 0
+        if num_flips > 0 and total_elements == 0:
+            raise ValueError("no weights to flip in the selected layers")
 
         for _ in range(num_flips):
-            # 1. Select random layer
-            layer_name = available_layers[rng.integers(0, len(available_layers))]
+            # 1. Select a layer, weighted by its number of elements
+            global_idx = int(rng.integers(0, total_elements))
+            layer_name = available_layers[int(np.searchsorted(layer_ends, global_idx, side="right"))]
             tensor = corrupted[layer_name]
 
             # Ensure float32
