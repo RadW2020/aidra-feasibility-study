@@ -411,6 +411,19 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
                 f"output ({baseline_detections} -> {roundtrip_detections} detections).",
             )
 
+        # Sensitivity: weights that are plainly wrong must change the output.
+        # If they do not, the weights are not reaching the model that infers
+        # (Ultralytics may run a copy) and every flip count would read 0%.
+        detector.load_weights_dict({name: np.zeros_like(arr) for name, arr in weights.items()})
+        zeroed_detections = len(detector.predict(test_image))
+        detector.load_weights_dict(weights)
+        if zeroed_detections == baseline_detections:
+            raise HTTPException(
+                500,
+                "Bit-flip sweep aborted: zeroing every weight left the output unchanged, "
+                "so loaded weights are not reaching the inference model.",
+            )
+
         result = simulator.sweep_bitflips(
             image=test_image,
             model=detector,

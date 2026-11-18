@@ -100,7 +100,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT MAX(LEAST(100, degradation_pct)) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:20:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
+          "rawSql": "SELECT MAX(LEAST(100, degradation_pct)) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:33:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
           "format": "table",
           "editorMode": "code"
         }
@@ -352,7 +352,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:20:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
+          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:33:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
           "format": "table",
           "editorMode": "code"
         }

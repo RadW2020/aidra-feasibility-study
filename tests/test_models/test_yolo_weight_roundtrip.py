@@ -47,3 +47,23 @@ def test_weights_with_another_shape_are_refused() -> None:
 
     with pytest.raises(ValueError, match="another shape"):
         det.load_weights_dict({"weight": np.zeros((2, 1, 5, 5), dtype=np.float32)})
+
+
+def test_weights_target_the_module_the_predictor_runs() -> None:
+    # Segun la version, Ultralytics infiere con una copia fusionada del
+    # modelo: los pesos se leen y se escriben ahi, no en el original.
+    original = torch.nn.Conv2d(1, 2, 3)
+    running = torch.nn.Conv2d(1, 2, 3)
+    det = object.__new__(YOLODetector)
+    det._model = SimpleNamespace(
+        model=original,
+        predictor=SimpleNamespace(model=SimpleNamespace(model=running)),
+    )
+    untouched = original.weight.detach().clone()
+
+    weights = det.get_weights_dict()
+    weights["weight"][...] = 3.0
+    det.load_weights_dict(weights)
+
+    assert torch.all(running.weight == 3.0)
+    assert torch.equal(original.weight, untouched)

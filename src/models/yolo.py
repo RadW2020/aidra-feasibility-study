@@ -125,6 +125,22 @@ class YOLODetector(BaseDetector):
         """
         return self._model.model
 
+    def _inference_module(self) -> Any:
+        """The torch module inference actually runs through.
+
+        After the first ``predict()`` Ultralytics holds the model behind its
+        predictor backend; depending on the version that is the same object
+        as ``self._model.model`` or a fused copy of it. Reading or writing
+        weights anywhere else has no effect on the detections.
+        """
+        import torch
+
+        backend = getattr(getattr(self._model, "predictor", None), "model", None)
+        inner = getattr(backend, "model", None)
+        if isinstance(inner, torch.nn.Module):
+            return inner
+        return self._model.model
+
     def get_weights_dict(self) -> dict[str, Any]:
         """Return a copy of model weights as {name: numpy_array} dict.
 
@@ -136,7 +152,7 @@ class YOLODetector(BaseDetector):
         inference reads.
         """
         weights = {}
-        for name, param in self._model.model.named_parameters():
+        for name, param in self._inference_module().named_parameters():
             weights[name] = param.detach().cpu().numpy().copy()
         return weights
 
@@ -147,7 +163,8 @@ class YOLODetector(BaseDetector):
         """
         import torch
 
-        state = self._model.model.state_dict()
+        module = self._inference_module()
+        state = module.state_dict()
         unknown = [name for name in weights if name not in state]
         mismatched = [
             name
@@ -165,7 +182,7 @@ class YOLODetector(BaseDetector):
             )
         for name, arr in weights.items():
             state[name] = torch.from_numpy(arr)
-        self._model.model.load_state_dict(state)
+        module.load_state_dict(state)
 
     # ------------------------------------------------------------------
     # Public API
