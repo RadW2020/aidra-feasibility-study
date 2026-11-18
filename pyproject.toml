@@ -19,8 +19,11 @@ dependencies = [
     "pyproj>=3.6.1",
 
     # IA / ML
-    "ultralytics>=8.2.0",
-    "torch>=2.3.0",
+    # Pinned to what production runs. Ultralytics changes how the predictor
+    # holds the model between releases (fusion, inference copy), and that hid
+    # an invalid bit-flip sweep while local and production versions differed.
+    "ultralytics==8.4.215",
+    "torch==2.15.0",
     "onnx>=1.16.0",
     "onnxruntime>=1.18.0",
 
