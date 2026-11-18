@@ -407,7 +407,7 @@
     {
       "id": 5,
       "title": "Battery Timeline (most recent orbit sim, by decision step)",
-      "description": "Battery level (Wh) after each decision step of the most recent simulated orbit (one step per image). Drops mark eclipse or heavy inference; recoveries mark sun-lit recharge.",
+      "description": "Battery level (Wh) after each decision step of the most recent simulated orbit (one step per image). Drops mark eclipse or heavy inference; recoveries mark sun-lit recharge. Left to right: first to last step.",
       "type": "barchart",
       "gridPos": {
         "x": 12,
@@ -436,7 +436,8 @@
           "custom": {
             "fillOpacity": 80,
             "lineWidth": 1,
-            "gradientMode": "none"
+            "gradientMode": "none",
+            "axisLabel": ""
           },
           "color": {
             "mode": "fixed",
@@ -446,13 +447,25 @@
           "min": 0,
           "noValue": "No orbit simulations recorded — POST /api/orbital/resilience/simulate-orbit"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "step"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "hidden"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "orientation": "vertical",
         "xField": "step",
         "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 100,
         "showValue": "never",
         "barWidth": 0.8,
         "groupWidth": 0.7,

@@ -181,7 +181,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Vessels at sea",
+      "title": "Valid sea-target detections",
       "gridPos": {
         "x": 4,
         "y": 5,
@@ -199,7 +199,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND e.status = 'success'\n  AND d.quality_verdict = 'valid_sea_target'\n  AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR e.model_name = '$model')\n  AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR e.constraint_profile = '$profile')",
+          "rawSql": "SELECT COUNT(*) AS value\nFROM detections d\nJOIN execution_log e ON e.id = d.execution_id\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND e.status = 'success'\n  AND e.id = (\n    -- a scene processed more than once counts once, from its latest successful run\n    SELECT e2.id FROM execution_log e2\n    WHERE e2.image_id = e.image_id AND e2.status = 'success'\n    ORDER BY e2.created_at DESC LIMIT 1\n  )\n  AND d.quality_verdict = 'valid_sea_target'\n  AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR e.model_name = '$model')\n  AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR e.constraint_profile = '$profile')",
           "format": "table",
           "editorMode": "code"
         }
@@ -238,7 +238,8 @@
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto"
-      }
+      },
+      "description": "YOLO-confirmed detections at sea (quality_verdict = valid_sea_target) in the selected range. Detections, not distinct vessels; a scene processed more than once counts once (latest successful run)."
     },
     {
       "id": 4,
@@ -783,7 +784,7 @@
       "id": 10,
       "type": "table",
       "title": "GEOINT scene coverage and quality flags",
-      "description": "Separates actionable sea detections from raw CFAR/Yolo output, land hits and cluster anomalies.",
+      "description": "Separates actionable sea detections from raw CFAR/Yolo output, land hits and cluster anomalies. Counts come from the latest successful run of each scene; successful_runs says how many times it was processed.",
       "gridPos": {
         "x": 0,
         "y": 31,
@@ -801,7 +802,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  COUNT(DISTINCT e.id) AS runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'valid_sea_target') AS valid_sea_targets,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'candidate') AS cfar_candidates,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'coastal_candidate') AS coastal_candidates,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'land_artifact') AS land_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'cluster_artifact') AS cluster_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'outside_footprint') AS outside_footprint,\n  ROUND(AVG(d.confidence) FILTER (WHERE d.quality_verdict = 'valid_sea_target')::numeric, 3) AS valid_avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND e.status = 'success'\n  AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR e.model_name = '$model')\n  AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
+          "rawSql": "SELECT\n  e.image_title AS scene,\n  MIN(e.image_sensing_date) AS sensed_at,\n  (SELECT COUNT(*) FROM execution_log r WHERE r.image_title = e.image_title AND r.status = 'success') AS successful_runs,\n  COUNT(d.id) AS raw_detections,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'valid_sea_target') AS valid_sea_targets,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'candidate') AS cfar_candidates,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'coastal_candidate') AS coastal_candidates,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'land_artifact') AS land_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'cluster_artifact') AS cluster_artifacts,\n  COUNT(d.id) FILTER (WHERE d.quality_verdict = 'outside_footprint') AS outside_footprint,\n  ROUND(AVG(d.confidence) FILTER (WHERE d.quality_verdict = 'valid_sea_target')::numeric, 3) AS valid_avg_confidence\nFROM execution_log e\nLEFT JOIN detections d ON d.execution_id = e.id\nWHERE $__timeFilter(e.created_at)\n  AND e.created_at >= '2026-05-11T00:00:00Z'::timestamptz\n  AND e.status = 'success'\n  AND e.id = (\n    -- a scene processed more than once counts once, from its latest successful run\n    SELECT e2.id FROM execution_log e2\n    WHERE e2.image_id = e.image_id AND e2.status = 'success'\n    ORDER BY e2.created_at DESC LIMIT 1\n  )\n  AND (LEFT('$model', 1) = '$' OR '$model' = 'all' OR e.model_name = '$model')\n  AND (LEFT('$profile', 1) = '$' OR '$profile' = 'all' OR e.constraint_profile = '$profile')\nGROUP BY e.image_title\nORDER BY sensed_at DESC NULLS LAST\nLIMIT 12",
           "format": "table",
           "editorMode": "code"
         }
