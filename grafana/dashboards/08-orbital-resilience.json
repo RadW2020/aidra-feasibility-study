@@ -81,7 +81,7 @@
     {
       "id": 1,
       "title": "Bit-Flip Degradation (max in window)",
-      "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU) in the selected time range. Higher = more brittle. degradation_pct is stored as a percentage (0-100). Bit-flip sweeps are run on demand (POST /api/orbital/resilience/bitflip), not on a schedule, so short ranges are usually empty. Sweeps stored before 2026-11-18 are hidden: they read the weights before Ultralytics fused the layers, so they measured a weight-reload artefact, not bit-flips. The rows are kept in bitflip_runs.",
+      "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU) in the selected time range. Higher = more brittle. degradation_pct is stored as a percentage (0-100). Bit-flip sweeps are run on demand (POST /api/orbital/resilience/bitflip), not on a schedule, so short ranges are usually empty. Each flip lands on a bit drawn uniformly over all the weights, so a layer is hit in proportion to its size. Earlier sweeps are hidden: up to 2026-11-18 10:33 UTC they measured a weight-reload artefact instead of bit-flips, and up to 12:25 UTC they picked the layer first, which over-exposed the small ones. The rows are kept in bitflip_runs.",
       "type": "gauge",
       "gridPos": {
         "x": 0,
@@ -100,7 +100,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT MAX(LEAST(100, degradation_pct)) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:33:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
+          "rawSql": "SELECT MAX(LEAST(100, degradation_pct)) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T12:25:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
           "format": "table",
           "editorMode": "code"
         }
@@ -333,7 +333,7 @@
     {
       "id": 4,
       "title": "Bit-Flip Degradation Curve (detections vs num_flips)",
-      "description": "Average detections on one synthetic 640 px tile per (model_variant, num_flips) cell across all bit-flip sweeps in the window. The X axis is num_flips (cosmic-ray-event proxy); a sharp drop identifies the model's critical SEU threshold. Sweeps stored before 2026-11-18 are hidden: they read the weights before Ultralytics fused the layers, so they measured a weight-reload artefact, not bit-flips. The rows are kept in bitflip_runs.",
+      "description": "Average detections on one synthetic 640 px tile per (model_variant, num_flips) cell across all bit-flip sweeps in the window. The X axis is num_flips (cosmic-ray-event proxy); a sharp drop identifies the model's critical SEU threshold. Each flip lands on a bit drawn uniformly over all the weights, so a layer is hit in proportion to its size. Earlier sweeps are hidden: up to 2026-11-18 10:33 UTC they measured a weight-reload artefact instead of bit-flips, and up to 12:25 UTC they picked the layer first, which over-exposed the small ones. The rows are kept in bitflip_runs.",
       "type": "barchart",
       "gridPos": {
         "x": 0,
@@ -352,7 +352,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:33:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
+          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T12:25:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
           "format": "table",
           "editorMode": "code"
         }
@@ -406,8 +406,8 @@
     },
     {
       "id": 5,
-      "title": "Battery Timeline (most recent orbit sim, by decision step)",
-      "description": "Battery level (Wh) after each decision step of the most recent simulated orbit (one step per image). Drops mark eclipse or heavy inference; recoveries mark sun-lit recharge. Left to right: first to last step.",
+      "title": "Battery Discharge (most recent orbit sim, Wh below full, by decision step)",
+      "description": "Energy missing from a full battery after each decision step of the most recent simulated orbit (one step per scene); 0 = full. Each processed scene costs the energy measured for that model on full Sentinel-1 scenes: mean inference time x CPU cores used x 3 W per core (OCI ARM A1), from execution_log. Bars grow while scenes are processed in eclipse and shrink with sun-lit recharge. Left to right: first to last step.",
       "type": "barchart",
       "gridPos": {
         "x": 12,
@@ -426,7 +426,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH latest AS (\n  SELECT id, created_at, battery_timeline\n  FROM orbit_sim_runs\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT\n  lpad(ord::text, 2, '0') AS step,\n  battery_wh\nFROM latest, unnest(latest.battery_timeline) WITH ORDINALITY AS t(battery_wh, ord)\nORDER BY ord",
+          "rawSql": "WITH capacity(satellite, battery_wh) AS (\n  VALUES ('cubesat_3u', 30.0), ('cubesat_6u', 60.0), ('small_sat', 300.0), ('medium_sat', 2000.0)\n), latest AS (\n  SELECT r.battery_timeline, c.battery_wh AS capacity_wh\n  FROM orbit_sim_runs r\n  JOIN capacity c ON c.satellite = r.satellite\n  ORDER BY r.created_at DESC\n  LIMIT 1\n)\nSELECT\n  lpad(ord::text, 2, '0') AS step,\n  ROUND((latest.capacity_wh - level_wh)::numeric, 2) AS discharged_wh\nFROM latest, unnest(latest.battery_timeline) WITH ORDINALITY AS t(level_wh, ord)\nORDER BY ord",
           "format": "table",
           "editorMode": "code"
         }
@@ -441,7 +441,7 @@
           },
           "color": {
             "mode": "fixed",
-            "fixedColor": "green"
+            "fixedColor": "orange"
           },
           "unit": "watth",
           "min": 0,

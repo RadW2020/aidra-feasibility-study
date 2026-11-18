@@ -20,7 +20,7 @@ AIDRA = **Artificial Intelligence In-orbit Data pRocessing Assessment**. Proof-o
 | Datasets | xView3-SAR, HRSID, OpenSARShip | Verificados, gratuitos, licencia compatible |
 | Hardware target | **OCI ARM A1 Free Tier** (4 OCPU, 24 GB) | Simula restricción espacial; dentro UE (Frankfurt) |
 | Lenguaje | **100% Python ≥ 3.11** | Coherencia stack (FastAPI, PyTorch, rasterio) |
-| Persistencia | PostgreSQL 16 + PostGIS 3.4 | Geometría nativa + auditabilidad |
+| Persistencia | PostgreSQL 16 + PostGIS 3 (producción: 3.7.0; CI y compose local: imagen `16-3.4`) | Geometría nativa + auditabilidad |
 | Region almacenamiento | **UE únicamente** | Requisito contractual |
 | Co-author commits | **Nunca** Co-Authored-By | Preferencia del usuario |
 
