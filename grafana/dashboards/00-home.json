@@ -109,8 +109,8 @@
     {
       "id": 11,
       "type": "stat",
-      "title": "Vessels at sea",
-      "description": "Detections after the on_land and cluster_anomaly post-filters (operationally meaningful count). Raw detections \u2014 which include CFAR firings on land features \u2014 are roughly 9\u00d7 higher; the breakdown is shown in the note below the stats row.",
+      "title": "Valid sea-target detections (all runs)",
+      "description": "YOLO-confirmed detections at sea (quality_verdict = valid_sea_target) summed over every run since the start. These are detections, not distinct vessels: a scene processed several times, or a ship seen in several scenes, counts each time.",
       "gridPos": {
         "x": 6,
         "y": 12,
@@ -128,7 +128,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(*)::int AS \"value\" FROM detections WHERE on_land = false AND cluster_anomaly = false",
+          "rawSql": "SELECT COUNT(*)::int AS \"value\" FROM detections WHERE quality_verdict = 'valid_sea_target'",
           "format": "table"
         }
       ],
@@ -217,7 +217,7 @@
       },
       "options": {
         "mode": "html",
-        "content": "<div style='padding:6px 10px;background:#1f2733;border-left:3px solid #f3d76b;border-radius:4px;font-size:12px;color:#cfd8e3;line-height:1.5'>\n  <strong style='color:#f3d76b'>About the gap between raw and filtered counts.</strong>\n  Sentinel-1 IW scenes over the Strait of Gibraltar cover ~50,000 km\u00b2, of which less than 5% is sea. CFAR is a statistical outlier detector that assumes a Rayleigh sea-clutter background; on land it fires on every bright building, terrain edge or vehicle. The <code>on_land</code> post-flag (NOAA 1.85 km coastline mask) drops ~88% of CFAR detections, leaving the operationally meaningful count under 'Vessels at sea'. YOLO is not affected \u2014 it is trained to discriminate vessels visually. Production deployment should mask land <em>before</em> CFAR runs to remove this overhead.\n</div>"
+        "content": "<div style='padding:6px 10px;background:#1f2733;border-left:3px solid #f3d76b;border-radius:4px;font-size:12px;color:#cfd8e3;line-height:1.5'>\n  <strong style='color:#f3d76b'>About the gap between raw and filtered counts.</strong>\n  Sentinel-1 IW scenes over the Strait of Gibraltar cover ~50,000 km\u00b2, of which less than 5% is sea. CFAR is a statistical outlier detector that assumes a Rayleigh sea-clutter background; on land it fires on every bright building, terrain edge or vehicle. The <code>on_land</code> post-flag (NOAA 1.85 km coastline mask) drops ~88% of CFAR detections, leaving the operationally meaningful count under 'Vessels at sea'. YOLO is not affected \u2014 it is trained to discriminate vessels visually. Since 2026-08 the pipeline masks land <em>before</em> CFAR runs; the older rows are kept for audit.\n</div>"
       }
     },
     {
@@ -364,7 +364,7 @@
       },
       "options": {
         "mode": "html",
-        "content": "<a href='/public-dashboards/39f33a0fd99f4e739b47fd73ebc95078' target='_blank' rel='noopener noreferrer' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>02 \u00b7 PIPELINE METRICS</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Is the system healthy?</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Run rate, inference latency, peak RAM, CPU, error rate and structured logs. Sourced from Prometheus and Loki, scoped to the AIDRA service.</div>\n  </div>\n</a>"
+        "content": "<a href='/public-dashboards/39f33a0fd99f4e739b47fd73ebc95078' target='_blank' rel='noopener noreferrer' style='text-decoration:none;color:inherit;display:block;height:100%'>\n  <div style='height:100%;padding:18px 20px;border-radius:12px;background:#111922;border:1px solid #2b3645;transition:all .15s ease'>\n    <div style='display:flex;justify-content:space-between;align-items:start'>\n      <div style='font-size:11px;color:#7ee2a8;letter-spacing:2px;font-weight:700'>02 \u00b7 PIPELINE METRICS</div>\n      <div style='font-size:13px;color:#84baef'>open \u2192</div>\n    </div>\n    <div style='font-size:18px;font-weight:700;color:#f3f6fb;margin:8px 0 6px'>Is the system healthy?</div>\n    <div style='font-size:13px;line-height:1.5;color:#aebed1'>Run rate, inference latency, peak RAM, CPU, error rate and structured logs. Sourced from the execution log in Postgres, so the figures survive redeploys.</div>\n  </div>\n</a>"
       }
     },
     {

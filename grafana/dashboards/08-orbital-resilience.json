@@ -406,9 +406,9 @@
     },
     {
       "id": 5,
-      "title": "Battery Timeline (most recent orbit sim)",
-      "description": "Battery level (Wh) at each decision step of the most recent simulated orbit. Drops mark eclipse / heavy inference; recoveries mark sun-lit recharge windows.",
-      "type": "timeseries",
+      "title": "Battery Timeline (most recent orbit sim, by decision step)",
+      "description": "Battery level (Wh) after each decision step of the most recent simulated orbit (one step per image). Drops mark eclipse or heavy inference; recoveries mark sun-lit recharge.",
+      "type": "barchart",
       "gridPos": {
         "x": 12,
         "y": 10,
@@ -426,55 +426,41 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH latest AS (\n  SELECT id, created_at, battery_timeline\n  FROM orbit_sim_runs\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT\n  latest.created_at + (ord || ' minute')::interval AS time,\n  battery_wh\nFROM latest, unnest(latest.battery_timeline) WITH ORDINALITY AS t(battery_wh, ord)\nORDER BY ord",
-          "format": "time_series",
+          "rawSql": "WITH latest AS (\n  SELECT id, created_at, battery_timeline\n  FROM orbit_sim_runs\n  ORDER BY created_at DESC\n  LIMIT 1\n)\nSELECT\n  lpad(ord::text, 2, '0') AS step,\n  battery_wh\nFROM latest, unnest(latest.battery_timeline) WITH ORDINALITY AS t(battery_wh, ord)\nORDER BY ord",
+          "format": "table",
           "editorMode": "code"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "fillOpacity": 20,
-            "lineWidth": 2,
-            "showPoints": "auto",
-            "spanNulls": false,
-            "gradientMode": "none",
-            "thresholdsStyle": {
-              "mode": "area"
-            }
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "gradientMode": "none"
           },
           "color": {
-            "mode": "continuous-GrYlRd"
+            "mode": "fixed",
+            "fixedColor": "green"
           },
           "unit": "watth",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 20
-              },
-              {
-                "color": "green",
-                "value": 50
-              }
-            ]
-          },
           "min": 0,
           "noValue": "No orbit simulations recorded — POST /api/orbital/resilience/simulate-orbit"
         },
         "overrides": []
       },
       "options": {
+        "orientation": "vertical",
+        "xField": "step",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100,
+        "showValue": "never",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "stacking": "none",
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": false
         },
         "tooltip": {
           "mode": "single",
@@ -613,10 +599,10 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "fillOpacity": 20,
-            "lineWidth": 2,
+            "drawStyle": "bars",
+            "lineInterpolation": "linear",
+            "fillOpacity": 80,
+            "lineWidth": 1,
             "showPoints": "auto",
             "spanNulls": false,
             "stacking": {

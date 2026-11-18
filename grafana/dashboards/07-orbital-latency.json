@@ -35,7 +35,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Speedup Factor (OBDP vs Traditional) · SSO 700 km, Standard NRT · full-scene runs",
+      "title": "Speedup (OBDP vs Traditional) · SSO 700 km, Standard NRT",
       "description": "Total latency without OBDP divided by total latency with OBDP; below 1x OBDP is slower. Reference scenario: SSO 700 km (Sentinel-1 orbit), Standard NRT ground chain (15 + 30 + 10 = 55 min).\n\nContact model (same in every panel of this dashboard): both paths wait for the SAME ground-station contact after acquisition (tabulated per orbit: SSO 700 km 180 min, LEO 500 km 360 min, LEO 350 km 720 min). OBDP is NOT credited with extra contact opportunities for its small result. On-board processing runs while the satellite waits for that contact, so it only adds latency if it outlasts the wait. Without OBDP: wait + full-image downlink at 100 Mbps (smallsat_xband) + ground chain. With OBDP: the longer of {measured on-board inference, wait} + result downlink (negligible) + 2 min of ground ingest and dissemination. Same parameters as GET /api/orbital/latency (src/orbital/orbit_params.py).\n\nIt equals the 'SSO 700km / Standard NRT' row of the scenario table. The gain is what the ground chain and the full-image downlink no longer cost; it is not multiplied by extra contacts.",
       "type": "stat",
       "gridPos": {
@@ -107,7 +107,7 @@
     },
     {
       "id": 2,
-      "title": "Vessel Displacement During Latency · SSO 700 km, Standard NRT · full-scene runs",
+      "title": "Vessel Displacement During Latency · SSO 700 km, Standard NRT",
       "description": "Distance a vessel at 20 knots (0.617 km/min) travels during the total latency of each path. Reference scenario: SSO 700 km (Sentinel-1 orbit), Standard NRT ground chain (15 + 30 + 10 = 55 min).\n\nContact model (same in every panel of this dashboard): both paths wait for the SAME ground-station contact after acquisition (tabulated per orbit: SSO 700 km 180 min, LEO 500 km 360 min, LEO 350 km 720 min). OBDP is NOT credited with extra contact opportunities for its small result. On-board processing runs while the satellite waits for that contact, so it only adds latency if it outlasts the wait. Without OBDP: wait + full-image downlink at 100 Mbps (smallsat_xband) + ground chain. With OBDP: the longer of {measured on-board inference, wait} + result downlink (negligible) + 2 min of ground ingest and dissemination. Same parameters as GET /api/orbital/latency (src/orbital/orbit_params.py).",
       "type": "stat",
       "gridPos": {
@@ -144,29 +144,44 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 10
-              },
-              {
-                "color": "red",
-                "value": 50
-              }
-            ]
-          },
           "color": {
-            "mode": "thresholds"
+            "mode": "fixed",
+            "fixedColor": "text"
           },
           "unit": "suffix: km"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "With OBDP (km)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Without OBDP (km)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "reduceOptions": {
@@ -185,7 +200,7 @@
     },
     {
       "id": 3,
-      "title": "Avg Onboard Processing Time · full-scene runs",
+      "title": "Avg Onboard Processing Time",
       "description": "Average measured on-board inference time of full-scene runs on the OCI ARM target. This is the only measured term of the latency model; the rest is tabulated.",
       "type": "stat",
       "gridPos": {
@@ -212,25 +227,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 5000
-              },
-              {
-                "color": "red",
-                "value": 30000
-              }
-            ]
-          },
           "color": {
-            "mode": "thresholds"
+            "mode": "fixed",
+            "fixedColor": "blue"
           },
           "unit": "ms"
         },

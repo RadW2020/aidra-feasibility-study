@@ -342,15 +342,11 @@
               },
               {
                 "color": "yellow",
-                "value": 512
+                "value": 2048
               },
               {
                 "color": "orange",
-                "value": 1024
-              },
-              {
-                "color": "red",
-                "value": 2048
+                "value": 4096
               }
             ]
           },
@@ -359,7 +355,7 @@
           },
           "unit": "decmbytes",
           "min": 0,
-          "max": 4096
+          "max": 8192
         },
         "overrides": []
       },
@@ -375,7 +371,7 @@
         "showThresholdMarkers": true,
         "orientation": "auto"
       },
-      "description": "Highest peak RSS recorded by a successful run in the selected time range (execution_log.peak_ram_mb). The Prometheus gauge used before is lost on every redeploy."
+      "description": "Highest peak RSS recorded by a successful run in the selected time range (execution_log.peak_ram_mb). The Prometheus gauge used before is lost on every redeploy. Colour marks which satellite profile the run would fit: green under 2 GB (sat-mid), yellow under 4 GB (sat-high), orange above."
     },
     {
       "id": 4,
@@ -638,8 +634,8 @@
       "gridPos": {
         "x": 4,
         "y": 14,
-        "w": 8,
-        "h": 6
+        "w": 20,
+        "h": 4
       },
       "datasource": {
         "type": "postgres",
@@ -676,9 +672,11 @@
             ]
           },
           "color": {
-            "mode": "thresholds"
+            "mode": "fixed",
+            "fixedColor": "blue"
           },
-          "unit": "decmbytes"
+          "unit": "decmbytes",
+          "min": 0
         },
         "overrides": []
       },
@@ -691,7 +689,7 @@
           "values": true
         },
         "orientation": "horizontal",
-        "displayMode": "gradient",
+        "displayMode": "basic",
         "showUnfilled": true,
         "minVizWidth": 0,
         "minVizHeight": 10,
@@ -770,6 +768,14 @@
                       "failed": {
                         "color": "red",
                         "index": 3
+                      },
+                      "skipped": {
+                        "color": "#8e8e8e",
+                        "index": 4
+                      },
+                      "invalid": {
+                        "color": "orange",
+                        "index": 5
                       }
                     }
                   }

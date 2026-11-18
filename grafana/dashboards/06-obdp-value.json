@@ -107,7 +107,7 @@
     {
       "id": 2,
       "title": "Total Bandwidth Saved (GB) · full-scene runs",
-      "description": "Total bandwidth saved by transmitting only results instead of full images.",
+      "description": "Bandwidth saved by downlinking only the results instead of the full images, counting each distinct scene once (its latest successful run). Same set of scenes as 'Scenes Processed'.",
       "type": "stat",
       "gridPos": {
         "x": 8,
@@ -126,7 +126,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n    ROUND((\n        SUM(e.image_size_mb)\n        - SUM((200.0 + GREATEST(COALESCE(e.num_valid_targets, e.num_detections), 0) * 300.0) / (1024.0 * 1024.0))\n    )::numeric / 1024.0, 2) AS bandwidth_saved_gb\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND (e.notes IS NULL OR e.notes NOT LIKE '%methodology:pre-affine-mask%') AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL\n    AND e.image_size_mb > 0",
+          "rawSql": "WITH scenes AS (\n    SELECT DISTINCT ON (e.image_id)\n        e.image_size_mb,\n        (200.0 + GREATEST(COALESCE(e.num_valid_targets, e.num_detections), 0) * 300.0) / (1024.0 * 1024.0) AS result_mb\n    FROM execution_log e\n    WHERE e.trigger_type <> 'cue' AND e.status = 'success'\n        AND e.image_size_mb IS NOT NULL\n        AND e.image_size_mb > 0\n    ORDER BY e.image_id, e.created_at DESC\n)\nSELECT ROUND(((SUM(image_size_mb) - SUM(result_mb)) / 1024.0)::numeric, 2) AS bandwidth_saved_gb\nFROM scenes",
           "format": "table",
           "editorMode": "code"
         }
@@ -170,8 +170,8 @@
     },
     {
       "id": 3,
-      "title": "Images Processed · full-scene runs",
-      "description": "Total images processed with OBDP.",
+      "title": "Scenes Processed · full-scene runs",
+      "description": "Distinct Sentinel-1 scenes processed by at least one successful full-scene run. Benchmark and repeat runs of the same scene count once.",
       "type": "stat",
       "gridPos": {
         "x": 16,
@@ -190,7 +190,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT COUNT(*) AS total_processed\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL",
+          "rawSql": "SELECT COUNT(DISTINCT e.image_id) AS scenes_processed\nFROM execution_log e\nWHERE e.trigger_type <> 'cue' AND e.status = 'success'\n    AND e.image_size_mb IS NOT NULL",
           "format": "table",
           "editorMode": "code"
         }
@@ -230,7 +230,7 @@
     {
       "id": 4,
       "title": "Downlink Time: Without vs With OBDP · full-scene runs",
-      "description": "Downlink time comparison by satellite/link profile: without OBDP (full image) vs with OBDP (results only).",
+      "description": "Downlink time comparison by satellite/link profile: without OBDP (full image) vs with OBDP (results only). Logarithmic scale: the two paths differ by four to five orders of magnitude.",
       "type": "barchart",
       "gridPos": {
         "x": 0,
@@ -259,7 +259,11 @@
           "custom": {
             "fillOpacity": 80,
             "gradientMode": "none",
-            "lineWidth": 1
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "log",
+              "log": 10
+            }
           },
           "color": {
             "mode": "palette-classic"
@@ -300,8 +304,8 @@
         ]
       },
       "options": {
-        "orientation": "vertical",
-        "xTickLabelRotation": -45,
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
         "showValue": "always",
         "barWidth": 0.7,
         "groupWidth": 0.7,
