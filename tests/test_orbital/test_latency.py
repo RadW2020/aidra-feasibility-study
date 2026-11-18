@@ -55,16 +55,28 @@ class TestOBDPLatency:
         assert slower.total_seconds == quick.total_seconds
 
     def test_inference_longer_than_the_wait_delays_the_result(self):
-        """Measured full-scene inference (~53 min) outlasts the ~25 min
-        average wait: the result leaves when it is ready, not before.
+        """Inference that outlasts the wait for contact: the result leaves
+        when it is ready, not before.
         """
         sim = OrbitalLatencySimulator()
         without = sim.simulate_without_obdp(orbit="sso_700")
-        result = sim.simulate_with_obdp(orbit="sso_700", inference_ms=53 * 60_000.0)
+        result = sim.simulate_with_obdp(orbit="sso_700", inference_ms=200 * 60_000.0)
 
         assert result.wait_for_contact_s == 0.0
         assert result.onboard_processing_s > without.wait_for_contact_s
         assert result.total_seconds > result.onboard_processing_s
+
+    def test_both_paths_wait_for_the_same_tabulated_contact(self):
+        """The wait comes from ORBIT_PARAMS, identical with and without OBDP."""
+        from src.orbital.orbit_params import ORBIT_PARAMS
+
+        sim = OrbitalLatencySimulator()
+        for orbit, params in ORBIT_PARAMS.items():
+            expected_s = params["contact_wait_min"] * 60.0
+            without = sim.simulate_without_obdp(orbit=orbit)
+            with_obdp = sim.simulate_with_obdp(orbit=orbit, inference_ms=1_000.0)
+            assert without.wait_for_contact_s == expected_s
+            assert with_obdp.onboard_processing_s + with_obdp.wait_for_contact_s == expected_s
 
     def test_without_obdp_includes_ground_processing(self):
         """Without OBDP, ground_processing_s must be positive (image

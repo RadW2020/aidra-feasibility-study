@@ -110,6 +110,11 @@ DOWNLINK_PROFILES: dict[str, dict[str, object]] = {
 # Parametros orbitales
 # ====================================================================
 
+# ``contact_wait_min``: average wait from acquisition to the next usable
+# ground-station contact, taken as half of ``avg_revisit_hours`` (a single
+# station, no relay network). Declared, not measured. It is the same for the
+# OBDP and the traditional path: the latency model does not credit OBDP with
+# extra contact opportunities for its small result.
 ORBIT_PARAMS: dict[str, dict[str, object]] = {
     "leo_500": {
         "altitude_km": 500,
@@ -118,6 +123,7 @@ ORBIT_PARAMS: dict[str, dict[str, object]] = {
         "ground_track_km_s": 6.9,
         "max_contact_min": 10,
         "avg_revisit_hours": 12,
+        "contact_wait_min": 360,
         "description": "LEO 500 km (tipica EO)",
     },
     "sso_700": {
@@ -127,6 +133,7 @@ ORBIT_PARAMS: dict[str, dict[str, object]] = {
         "ground_track_km_s": 6.8,
         "max_contact_min": 12,
         "avg_revisit_hours": 6,
+        "contact_wait_min": 180,
         "description": "SSO 700 km (Sentinel-1)",
     },
     "leo_350_isstyle": {
@@ -136,6 +143,7 @@ ORBIT_PARAMS: dict[str, dict[str, object]] = {
         "ground_track_km_s": 7.1,
         "max_contact_min": 7,
         "avg_revisit_hours": 24,
+        "contact_wait_min": 720,
         "description": "LEO baja 350 km (ISS-like)",
     },
 }

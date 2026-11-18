@@ -242,6 +242,34 @@ async def obdp_value_report() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+# Used only when execution_log has no successful full-scene run to average.
+_FALLBACK_INFERENCE_MS = 150.0
+_FALLBACK_IMAGE_SIZE_MB = 800.0
+
+_SELECT_MEASURED_LATENCY_INPUTS = """
+    SELECT AVG(inference_ms) AS inference_ms, AVG(image_size_mb) AS image_size_mb
+    FROM execution_log
+    WHERE trigger_type <> 'cue' AND status = 'success'
+      AND inference_ms IS NOT NULL
+      AND image_size_mb IS NOT NULL
+"""
+
+
+async def _measured_latency_inputs() -> tuple[float, float]:
+    """Average inference time (ms) and image size (MB) of full-scene runs."""
+    try:
+        row = await db.fetchrow(_SELECT_MEASURED_LATENCY_INPUTS)
+    except Exception:
+        logger.exception("Could not read measured latency inputs; using fallbacks")
+        row = None
+    inference = row["inference_ms"] if row else None
+    image = row["image_size_mb"] if row else None
+    return (
+        float(inference) if inference is not None else _FALLBACK_INFERENCE_MS,
+        float(image) if image is not None else _FALLBACK_IMAGE_SIZE_MB,
+    )
+
+
 @router.get("/latency")
 async def latency_comparison(
     orbit: str | None = Query(None, description="Orbit type (leo_500, sso_700, leo_350_isstyle)"),
@@ -249,13 +277,35 @@ async def latency_comparison(
         None,
         description="Downlink profile (cubesat_uhf, cubesat_sband, smallsat_xband, highcap_ka)",
     ),
-    inference_ms: float = Query(150.0, description="On-board inference time in ms"),
-    image_size_mb: float = Query(800.0, description="Image size in MB"),
+    inference_ms: float | None = Query(
+        None,
+        description=(
+            "On-board inference time in ms. Default: measured average of "
+            "successful full-scene runs (execution_log)."
+        ),
+    ),
+    image_size_mb: float | None = Query(
+        None,
+        description="Image size in MB. Default: measured average of the same runs.",
+    ),
     result_size_kb: float = Query(10.0, description="Result size in KB"),
 ) -> list[dict[str, Any]]:
-    """Compare latency scenarios with vs without OBDP."""
+    """Compare latency scenarios with vs without OBDP.
+
+    Both paths wait for the same ground-station contact (tabulated per
+    orbit) and on-board processing overlaps that wait. Without explicit
+    values the comparison uses the measured inference time and image size,
+    so it matches the Orbital Latency dashboard.
+    """
     try:
         from src.orbital.latency import OrbitalLatencySimulator
+
+        if inference_ms is None or image_size_mb is None:
+            measured = await _measured_latency_inputs()
+            if inference_ms is None:
+                inference_ms = measured[0]
+            if image_size_mb is None:
+                image_size_mb = measured[1]
 
         simulator = OrbitalLatencySimulator()
         comparisons = simulator.compare_scenarios(

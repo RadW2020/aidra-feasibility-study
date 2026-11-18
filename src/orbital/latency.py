@@ -163,8 +163,8 @@ class OrbitalLatencySimulator:
         gnd = self._get_ground_chain(ground_chain)
         dl = self._get_downlink(downlink_profile)
 
-        # Wait: average is period/4 for LEO with global ground stations
-        wait_s = float(orb["period_min"]) * 60.0 / 4.0
+        # Wait for the next contact: tabulated per orbit, same as with OBDP.
+        wait_s = float(orb["contact_wait_min"]) * 60.0
 
         # Downlink raw image
         bw_mb_s = float(dl["bandwidth_mbps"]) / 8.0
@@ -238,7 +238,7 @@ class OrbitalLatencySimulator:
         # traditional path. Processing runs while the satellite waits, so
         # only the wait left over after inference adds latency; if inference
         # outlasts the wait, the result leaves as soon as it is ready.
-        contact_s = float(orb["period_min"]) * 60.0 / 4.0
+        contact_s = float(orb["contact_wait_min"]) * 60.0
         wait_s = max(contact_s - onboard_s, 0.0)
 
         # Downlink tiny result
