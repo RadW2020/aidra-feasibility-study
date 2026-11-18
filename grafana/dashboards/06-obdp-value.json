@@ -230,7 +230,7 @@
     {
       "id": 4,
       "title": "Downlink Time: Without vs With OBDP · full-scene runs",
-      "description": "Downlink time comparison by satellite/link profile: without OBDP (full image) vs with OBDP (results only). Logarithmic scale: the two paths differ by four to five orders of magnitude.",
+      "description": "Time to downlink one average scene (without OBDP) vs. its detection results (with OBDP), per link of DOWNLINK_PROFILES in src/orbital/orbit_params.py. Logarithmic scale: the two paths differ by four to five orders of magnitude.",
       "type": "barchart",
       "gridPos": {
         "x": 0,
@@ -249,7 +249,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(COALESCE(num_valid_targets, num_detections), 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_types AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5),\n        ('X-band (50 Mbps)', 50.0),\n        ('Ka-band (300 Mbps)', 300.0),\n        ('Laser (1800 Mbps)', 1800.0)\n    ) AS t(link_type, mbps)\n)\nSELECT\n    d.link_type,\n    ROUND((a.avg_image_mb * 8 / d.mbps)::numeric, 2) AS \"Without OBDP (sec)\",\n    ROUND((a.avg_result_mb * 8 / d.mbps)::numeric, 4) AS \"With OBDP (sec)\"\nFROM avg_sizes a\nCROSS JOIN downlink_types d\nORDER BY d.mbps",
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(COALESCE(num_valid_targets, num_detections), 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_types AS (\n    -- src/orbital/orbit_params.py DOWNLINK_PROFILES\n    SELECT * FROM (VALUES\n        ('UHF (0.009 Mbps)', 0.009),\n        ('S-band (2 Mbps)', 2.0),\n        ('X-band (100 Mbps)', 100.0),\n        ('Ka-band (800 Mbps)', 800.0)\n    ) AS t(link_type, mbps)\n)\nSELECT\n    d.link_type,\n    ROUND((a.avg_image_mb * 8 / d.mbps)::numeric, 2) AS \"Without OBDP (sec)\",\n    ROUND((a.avg_result_mb * 8 / d.mbps)::numeric, 4) AS \"With OBDP (sec)\"\nFROM avg_sizes a\nCROSS JOIN downlink_types d\nORDER BY d.mbps",
           "format": "table",
           "editorMode": "code"
         }
@@ -323,7 +323,7 @@
     {
       "id": 5,
       "title": "Daily Capacity (images/day) by Downlink Profile · full-scene runs",
-      "description": "Daily capacity per downlink profile: how many scenes fit in the daily contact time as full images (without OBDP) vs. as detection results (with OBDP). 'Without OBDP' is fractional on purpose: S-band cannot bring down one full scene per day (0.02 means one scene every ~45 days). The improvement factor is the ratio of the two capacities, i.e. average image size / average result size, so it is the same for every link.",
+      "description": "Daily capacity per downlink profile (DOWNLINK_PROFILES in src/orbital/orbit_params.py; daily contact = window x passes): how many scenes fit as full images (without OBDP) vs. as detection results (with OBDP). 'Without OBDP' is fractional on purpose: a UHF or S-band link cannot bring down one full scene per day. The improvement factor is average image size / average result size, so it is the same for every link.",
       "type": "table",
       "gridPos": {
         "x": 0,
@@ -342,7 +342,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(COALESCE(num_valid_targets, num_detections), 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    SELECT * FROM (VALUES\n        ('S-band (0.5 Mbps)', 0.5, 10),\n        ('X-band (50 Mbps)', 50.0, 10),\n        ('Ka-band (300 Mbps)', 300.0, 10),\n        ('Laser (1800 Mbps)', 1800.0, 5)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    ROUND(((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 2) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND((a.avg_image_mb / NULLIF(a.avg_result_mb, 0))::numeric, 0) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
+          "rawSql": "WITH avg_sizes AS (\n    SELECT\n        ROUND(AVG(image_size_mb)::numeric, 1) AS avg_image_mb,\n        ROUND(AVG((200.0 + GREATEST(COALESCE(num_valid_targets, num_detections), 0) * 300.0) / (1024.0 * 1024.0))::numeric, 6) AS avg_result_mb\n    FROM execution_log\n    WHERE trigger_type <> 'cue' AND (notes IS NULL OR notes NOT LIKE '%methodology:pre-affine-mask%') AND status = 'success'\n        AND image_size_mb IS NOT NULL\n        AND image_size_mb > 0\n),\ndownlink_profiles AS (\n    -- src/orbital/orbit_params.py DOWNLINK_PROFILES: contact = window_minutes x passes_per_day\n    SELECT * FROM (VALUES\n        ('UHF (0.009 Mbps)', 0.009, 32),\n        ('S-band (2 Mbps)', 2.0, 32),\n        ('X-band (100 Mbps)', 100.0, 60),\n        ('Ka-band (800 Mbps)', 800.0, 80)\n    ) AS t(link_type, mbps, contact_min_per_day)\n)\nSELECT\n    d.link_type AS \"Downlink Type\",\n    d.mbps AS \"Link Speed (Mbps)\",\n    d.contact_min_per_day AS \"Contact (min/day)\",\n    ROUND(((d.contact_min_per_day * 60 * d.mbps / 8.0) / a.avg_image_mb)::numeric, 4) AS \"Without OBDP (img/day)\",\n    FLOOR((d.contact_min_per_day * 60 * d.mbps / 8.0) / NULLIF(a.avg_result_mb, 0)) AS \"With OBDP (img/day)\",\n    ROUND((a.avg_image_mb / NULLIF(a.avg_result_mb, 0))::numeric, 0) AS \"Improvement Factor\"\nFROM avg_sizes a\nCROSS JOIN downlink_profiles d\nORDER BY d.mbps",
           "format": "table",
           "editorMode": "code"
         }

@@ -429,7 +429,7 @@ class DecisionEngine:
         solar_recharge_w: float = 5.0,
         orbit_period_min: float = 95.0,
         image_interval_min: float = 10.0,
-        battery_capacity_wh: float = 60.0,
+        battery_capacity_wh: float | None = None,
     ) -> OrbitSimulationResult:
         """Simulate a sequence of autonomous decisions during one orbit.
 
@@ -451,12 +451,15 @@ class DecisionEngine:
         image_interval_min:
             Time between image captures in minutes.
         battery_capacity_wh:
-            Maximum battery capacity in watt-hours.
+            Maximum battery capacity in watt-hours. Defaults to
+            ``initial_battery_wh`` (the orbit starts on a full battery).
 
         Returns
         -------
         OrbitSimulationResult
         """
+        if battery_capacity_wh is None:
+            battery_capacity_wh = initial_battery_wh
         battery_wh = initial_battery_wh
         timeline: list[float] = [battery_wh]
         decisions: list[DecisionResult] = []

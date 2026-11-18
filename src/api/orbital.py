@@ -497,6 +497,10 @@ async def simulate_orbit(request: OrbitSimulationRequest) -> dict[str, Any]:
         result = engine.simulate_orbit_sequence(
             num_images=request.num_images,
             initial_battery_wh=sat["battery_wh"],
+            # Without this the simulator clamped every satellite to its 60 Wh
+            # default on the first recharge: a 300 Wh small_sat "lost" 240 Wh
+            # in one step.
+            battery_capacity_wh=sat["battery_wh"],
             solar_recharge_w=sat["total_w"] * sat["sunlit_fraction"] * 0.3,
             orbit_period_min=sat["orbit_period_min"],
         )
