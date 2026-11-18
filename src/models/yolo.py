@@ -130,6 +130,10 @@ class YOLODetector(BaseDetector):
 
         Each tensor is detached, moved to CPU, and converted to a
         contiguous numpy array copy (safe for mutation).
+
+        Call it after the first ``predict()``: Ultralytics fuses Conv+BN
+        layers on first use, and only the fused parameters are the ones
+        inference reads.
         """
         weights = {}
         for name, param in self._model.model.named_parameters():
@@ -144,9 +148,23 @@ class YOLODetector(BaseDetector):
         import torch
 
         state = self._model.model.state_dict()
+        unknown = [name for name in weights if name not in state]
+        mismatched = [
+            name
+            for name, arr in weights.items()
+            if name in state and tuple(state[name].shape) != tuple(arr.shape)
+        ]
+        if unknown or mismatched:
+            # Ultralytics fuses Conv+BN on the first predict(): weights read
+            # before it no longer describe the model that infers. Loading
+            # them anyway silently changes the network.
+            raise ValueError(
+                f"weights do not match the loaded model ({len(unknown)} unknown, "
+                f"{len(mismatched)} with another shape); read them with "
+                "get_weights_dict() after the first predict()"
+            )
         for name, arr in weights.items():
-            if name in state:
-                state[name] = torch.from_numpy(arr)
+            state[name] = torch.from_numpy(arr)
         self._model.model.load_state_dict(state)
 
     # ------------------------------------------------------------------

@@ -362,11 +362,6 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
 
         detector = YOLODetector(model_path=model_path)
 
-        # Get weights via public API
-        weights = detector.get_weights_dict()
-
-        simulator = BitFlipSimulator(model_weights=weights)
-
         # Generate test image.  generate_synthetic_sar_tile() returns a single
         # float32 SAR amplitude band roughly in [0, vessel_amplitude].  YOLO
         # weights expect a 3-channel uint8 [0, 255] image, so we normalise the
@@ -396,6 +391,25 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
             if baseline_dets
             else 0.0
         )
+
+        # Weights are read AFTER the baseline inference. Ultralytics fuses
+        # Conv+BN on first use; weights read before it are those of a model
+        # that no longer exists, and reloading them changed the detections
+        # with zero flips (the sweeps stored up to 2026-05 measured that, not
+        # bit-flips).
+        weights = detector.get_weights_dict()
+        simulator = BitFlipSimulator(model_weights=weights)
+
+        # Round trip: reloading the untouched weights must reproduce the
+        # baseline, or the sweep would measure the reload, not the flips.
+        detector.load_weights_dict(weights)
+        roundtrip_detections = len(detector.predict(test_image))
+        if roundtrip_detections != baseline_detections:
+            raise HTTPException(
+                500,
+                "Bit-flip sweep aborted: reloading the unmodified weights changed the "
+                f"output ({baseline_detections} -> {roundtrip_detections} detections).",
+            )
 
         result = simulator.sweep_bitflips(
             image=test_image,

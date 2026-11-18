@@ -81,7 +81,7 @@
     {
       "id": 1,
       "title": "Bit-Flip Degradation (max in window)",
-      "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU) in the selected time range. Higher = more brittle. degradation_pct is stored as a percentage (0-100). Bit-flip sweeps are run on demand (POST /api/orbital/resilience/bitflip), not on a schedule, so short ranges are usually empty.",
+      "description": "Maximum detection-degradation percentage observed under simulated bit-flips (SEU) in the selected time range. Higher = more brittle. degradation_pct is stored as a percentage (0-100). Bit-flip sweeps are run on demand (POST /api/orbital/resilience/bitflip), not on a schedule, so short ranges are usually empty. Sweeps stored before 2026-11-18 are hidden: they read the weights before Ultralytics fused the layers, so they measured a weight-reload artefact, not bit-flips. The rows are kept in bitflip_runs.",
       "type": "gauge",
       "gridPos": {
         "x": 0,
@@ -100,7 +100,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT MAX(LEAST(100, degradation_pct)) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
+          "rawSql": "SELECT MAX(LEAST(100, degradation_pct)) AS max_degradation\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:20:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')",
           "format": "table",
           "editorMode": "code"
         }
@@ -333,7 +333,7 @@
     {
       "id": 4,
       "title": "Bit-Flip Degradation Curve (detections vs num_flips)",
-      "description": "Average detections per (model_variant, num_flips) cell across all bit-flip sweeps in the window. The X axis is num_flips (cosmic-ray-event proxy); a sharp drop identifies the model's critical SEU threshold.",
+      "description": "Average detections on one synthetic 640 px tile per (model_variant, num_flips) cell across all bit-flip sweeps in the window. The X axis is num_flips (cosmic-ray-event proxy); a sharp drop identifies the model's critical SEU threshold. Sweeps stored before 2026-11-18 are hidden: they read the weights before Ultralytics fused the layers, so they measured a weight-reload artefact, not bit-flips. The rows are kept in bitflip_runs.",
       "type": "barchart",
       "gridPos": {
         "x": 0,
@@ -352,7 +352,7 @@
             "type": "postgres",
             "uid": "PostgreSQL"
           },
-          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
+          "rawSql": "SELECT\n  num_flips::text AS num_flips,\n  AVG(avg_detections) AS avg_detections,\n  AVG(avg_confidence) AS avg_confidence\nFROM bitflip_runs\nWHERE created_at BETWEEN $__timeFrom() AND $__timeTo()\n  AND created_at >= '2026-11-18T10:20:00Z'::timestamptz\n  AND (LEFT('$model_variant', 1) = '$' OR '$model_variant' = 'all' OR model_variant LIKE '$model_variant')\nGROUP BY num_flips\nORDER BY num_flips::int",
           "format": "table",
           "editorMode": "code"
         }
