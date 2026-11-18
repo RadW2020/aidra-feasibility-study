@@ -470,6 +470,72 @@ async def bitflip_sweep(request: BitFlipRequest) -> dict[str, Any]:
         raise HTTPException(503, f"Resilience module not available: {e}") from e
 
 
+# Reference processor of the measurements: the runs in execution_log were
+# taken on the OCI ARM A1 host.
+_MEASURED_ON_PROCESSOR = "oci_arm_a1"
+
+# Per registered model: mean inference time and CPU use of its successful
+# full-scene runs. Cue runs are crops, not scenes; the constrained profiles
+# throttle the CPU, so only the unconstrained ``ground`` profile is averaged.
+_SELECT_MEASURED_MODEL_COSTS = """
+    SELECT m.*,
+           r.inference_ms AS measured_inference_ms,
+           r.cpu_usage_pct AS measured_cpu_usage_pct
+    FROM models_registry m
+    JOIN (
+        SELECT model_hash,
+               AVG(inference_ms) AS inference_ms,
+               AVG(cpu_usage_pct) AS cpu_usage_pct
+        FROM execution_log
+        WHERE status = 'success' AND trigger_type <> 'cue'
+          AND constraint_profile = 'ground'
+          AND inference_ms IS NOT NULL AND cpu_usage_pct IS NOT NULL
+        GROUP BY model_hash
+    ) r ON r.model_hash = m.file_hash
+    WHERE m.status <> 'rejected'
+    ORDER BY m.name, m.version
+"""
+
+
+async def _evaluated_models() -> tuple[list[Any], dict[str, Any]]:
+    """Models the decision engine may pick, with their measured per-scene cost.
+
+    Only models with successful full-scene runs are returned: a model that
+    never ran has no cost to simulate, and a rejected variant (I-MOD-3) is
+    not a candidate for flight. Energy per scene is the measured inference
+    time times the cores actually used times the processor's per-core power.
+    """
+    from src.db.models import ModelInfo
+    from src.orbital.decision_engine import DecisionEngine, ModelCost
+    from src.orbital.energy import EnergyProfiler
+
+    profiler = EnergyProfiler(reference_processor=_MEASURED_ON_PROCESSOR)
+    models: list[Any] = []
+    costs: dict[str, Any] = {}
+    for row in await db.fetch(_SELECT_MEASURED_MODEL_COSTS):
+        model = ModelInfo(
+            id=row["id"],
+            name=row["name"],
+            version=row["version"],
+            format=row["format"],
+            file_hash=row["file_hash"],
+            size_mb=row["size_mb"],
+            num_params=row.get("num_params"),
+            status=row["status"],
+        )
+        inference_ms = float(row["measured_inference_ms"])
+        estimate = profiler.estimate_inference_energy(
+            cpu_time_seconds=inference_ms / 1000.0,
+            cpu_cores_used=float(row["measured_cpu_usage_pct"]) / 100.0,
+        )
+        models.append(model)
+        costs[DecisionEngine.cost_key(model)] = ModelCost(
+            energy_wh=estimate.energy_wh,
+            latency_ms=inference_ms,
+        )
+    return models, costs
+
+
 class OrbitSimulationRequest(BaseModel):
     """Request body for orbit simulation."""
 
@@ -492,34 +558,18 @@ async def simulate_orbit(request: OrbitSimulationRequest) -> dict[str, Any]:
 
         sat = SATELLITE_POWER_BUDGETS[request.satellite]
 
-        # Build model infos from registry
-        from src.db.queries import SELECT_ALL_MODELS
-
-        rows = await db.fetch(SELECT_ALL_MODELS)
-
-        from src.db.models import ModelInfo
-
-        models = []
-        for row in rows:
-            models.append(
-                ModelInfo(
-                    id=row["id"],
-                    name=row["name"],
-                    version=row["version"],
-                    format=row["format"],
-                    file_hash=row["file_hash"],
-                    size_mb=row["size_mb"],
-                    num_params=row.get("num_params"),
-                )
-            )
+        models, model_costs = await _evaluated_models()
 
         if not models:
             return {
-                "message": "No models registered. Run the pipeline first to populate model registry."
+                "message": (
+                    "No registered model has a successful full-scene run to cost. "
+                    "Run the pipeline first."
+                )
             }
 
         config = DecisionConfig()
-        engine = DecisionEngine(models=models, energy_profiler=None, config=config)
+        engine = DecisionEngine(models=models, energy_profiler=None, config=config, model_costs=model_costs)
 
         result = engine.simulate_orbit_sequence(
             num_images=request.num_images,
@@ -663,32 +713,15 @@ class DecisionRequest(BaseModel):
 async def query_decision_engine(request: DecisionRequest) -> dict[str, Any]:
     """Query the autonomous decision engine for model selection."""
     try:
-        from src.db.queries import SELECT_ALL_MODELS
         from src.orbital.decision_engine import DecisionConfig, DecisionEngine
 
-        rows = await db.fetch(SELECT_ALL_MODELS)
-
-        from src.db.models import ModelInfo
-
-        models = []
-        for row in rows:
-            models.append(
-                ModelInfo(
-                    id=row["id"],
-                    name=row["name"],
-                    version=row["version"],
-                    format=row["format"],
-                    file_hash=row["file_hash"],
-                    size_mb=row["size_mb"],
-                    num_params=row.get("num_params"),
-                )
-            )
+        models, model_costs = await _evaluated_models()
 
         if not models:
-            return {"action": "skip", "reason": "No models registered", "selected_model": None}
+            return {"action": "skip", "reason": "No registered model has a measured full-scene run", "selected_model": None}
 
         config = DecisionConfig()
-        engine = DecisionEngine(models=models, energy_profiler=None, config=config)
+        engine = DecisionEngine(models=models, energy_profiler=None, config=config, model_costs=model_costs)
 
         result = engine.decide_model(
             available_cpu=request.available_cpu,

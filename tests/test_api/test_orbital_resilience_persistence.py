@@ -66,22 +66,26 @@ async def test_simulate_orbit_persists_run(client, mock_db):
     """Successful orbit simulation issues INSERT_ORBIT_SIM_RUN with the
     right argument shape (satellite, totals, decision counters, JSONB
     models_used, battery_timeline array, energy_efficiency)."""
-    # Return a single fake model for SELECT_ALL_MODELS so DecisionEngine
-    # has something to schedule.
+    # One registered model with measured full-scene runs (53 min at 1.17
+    # cores, the production FP32 figures) so DecisionEngine has something to
+    # schedule and a real cost to charge.
     mock_db.fetch = AsyncMock(
         return_value=[
             {
                 "id": uuid4(),
-                "name": "yolov8n",
+                "name": "vesseltracker-sar-yolov8",
                 "version": "v1.0",
                 "format": "pytorch",
                 "file_hash": "0" * 64,
-                "size_mb": 6.2,
+                "size_mb": 49.62,
                 "base_model": None,
                 "compression_technique": "none",
                 "num_params": 3_000_000,
                 "input_size": [640, 640],
                 "classes": ["vessel"],
+                "status": "active",
+                "measured_inference_ms": 3_193_000.0,
+                "measured_cpu_usage_pct": 117.0,
             }
         ]
     )
@@ -95,7 +99,11 @@ async def test_simulate_orbit_persists_run(client, mock_db):
 
     body = resp.json()
     assert body["total_images"] == 5
-    assert body["processed_images"] >= 0  # decision engine may skip
+    assert body["processed_images"] == 5
+    # Each scene costs its measured energy (3193 s x 1.17 cores x 3 W = 3.11 Wh),
+    # not the per-tile heuristic that left the battery flat.
+    assert all(abs(d["estimated_energy_wh"] - 3.113) < 0.01 for d in body["decisions"])
+    assert min(body["battery_timeline"]) < 300.0
     assert isinstance(body["battery_timeline"], list)
     assert "final_battery_wh" in body
 
@@ -134,7 +142,7 @@ async def test_simulate_orbit_no_models_short_circuits(client, mock_db):
         json={"satellite": "cubesat_3u", "num_images": 3},
     )
     assert resp.status_code == 200
-    assert "No models registered" in resp.json().get("message", "")
+    assert "No registered model" in resp.json().get("message", "")
 
     inserts = [
         c

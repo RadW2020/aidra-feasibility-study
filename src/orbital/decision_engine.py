@@ -143,11 +143,20 @@ class OrbitSimulationResult(BaseModel):
     )
 
 
+class ModelCost(BaseModel):
+    """Measured cost of running one model over one full scene."""
+
+    energy_wh: float = Field(description="Energy for one scene, in watt-hours")
+    latency_ms: float = Field(description="Inference time for one scene, in ms")
+
+
 # ====================================================================
-# Default model-energy heuristics (used when no profiler data exists)
+# Default model-energy heuristics (used when no measured cost is given)
 # ====================================================================
 
-# Approximate inference time (ms) and RAM (MB) per common model variant
+# Approximate cost of ONE 640 px TILE per common model variant. A Sentinel-1
+# scene is thousands of tiles, so these figures never drain a battery: the
+# orbit simulation needs ``model_costs`` (measured per scene) to be meaningful.
 _MODEL_HEURISTICS: dict[str, dict[str, float]] = {
     "yolov8n-sar": {"inference_ms": 50.0, "ram_mb": 200.0, "energy_wh": 0.00004},
     "yolov8s-sar": {"inference_ms": 120.0, "ram_mb": 400.0, "energy_wh": 0.0001},
@@ -173,6 +182,10 @@ class DecisionEngine:
         An ``EnergyProfiler`` instance for energy estimates.
     config:
         Decision-engine configuration.  Uses defaults if not given.
+    model_costs:
+        Measured per-scene cost of each model, keyed by ``"name:version"``.
+        A model listed here uses its measured energy and latency; any other
+        model falls back to the per-tile heuristics.
     """
 
     def __init__(
@@ -180,14 +193,42 @@ class DecisionEngine:
         models: list[ModelInfo],
         energy_profiler: EnergyProfiler | None = None,
         config: DecisionConfig | None = None,
+        model_costs: dict[str, ModelCost] | None = None,
     ) -> None:
         self.models = sorted(models, key=lambda m: m.size_mb)
         self.energy_profiler = energy_profiler or EnergyProfiler()
         self.config = config or DecisionConfig()
+        self.model_costs = model_costs or {}
+        names = [m.name for m in self.models]
+        self._ambiguous_names = {n for n in names if names.count(n) > 1}
         logger.info(
             "DecisionEngine initialised with %d models, config=%s",
             len(self.models),
             self.config.model_dump_json(indent=None),
+        )
+
+    # ------------------------------------------------------------------
+    # Model identity and cost
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def cost_key(model: ModelInfo) -> str:
+        """Key of *model* in ``model_costs``."""
+        return f"{model.name}:{model.version}"
+
+    def _label(self, model: ModelInfo) -> str:
+        """Name reported for *model*; versioned when the name alone is ambiguous."""
+        return self.cost_key(model) if model.name in self._ambiguous_names else model.name
+
+    def _cost(self, model: ModelInfo) -> tuple[float, float]:
+        """``(energy_wh, latency_ms)`` for one image: measured, else heuristic."""
+        measured = self.model_costs.get(self.cost_key(model))
+        if measured is not None:
+            return measured.energy_wh, measured.latency_ms
+        heuristic = _MODEL_HEURISTICS.get(model.name, {})
+        return (
+            heuristic.get("energy_wh", model.size_mb * 0.00005),
+            heuristic.get("inference_ms", model.size_mb * 5.0),
         )
 
     # ------------------------------------------------------------------
@@ -255,9 +296,7 @@ class DecisionEngine:
         # Filter by energy
         energy_candidates: list[tuple[ModelInfo, float, float]] = []
         for model in ram_candidates:
-            heuristic = _MODEL_HEURISTICS.get(model.name, {})
-            est_energy_wh = heuristic.get("energy_wh", model.size_mb * 0.00005)
-            est_latency_ms = heuristic.get("inference_ms", model.size_mb * 5.0)
+            est_energy_wh, est_latency_ms = self._cost(model)
             if est_energy_wh <= available_energy_wh:
                 energy_candidates.append((model, est_energy_wh, est_latency_ms))
 
@@ -295,12 +334,14 @@ class DecisionEngine:
         if priority >= 2:
             # Urgent: pick fastest
             selected, energy, latency = min(energy_candidates, key=lambda t: t[2])
-            reason = f"URGENT priority: selected fastest model '{selected.name}' (latency ~{latency:.0f} ms)."
+            reason = f"URGENT priority: selected fastest model '{self._label(selected)}' (latency ~{latency:.0f} ms)."
             confidence = "medium"
         elif priority == 1:
             # High: pick most accurate (largest that fits)
             selected, energy, latency = max(energy_candidates, key=lambda t: t[0].size_mb)
-            reason = f"HIGH priority: selected most accurate model '{selected.name}' ({selected.size_mb:.1f} MB)."
+            reason = (
+                f"HIGH priority: selected most accurate model '{self._label(selected)}' ({selected.size_mb:.1f} MB)."
+            )
             confidence = "high"
         else:
             # Normal: maximise precision per watt (size_mb as proxy for precision)
@@ -310,14 +351,14 @@ class DecisionEngine:
             )
             selected, energy, latency = best
             reason = (
-                f"NORMAL priority: selected '{selected.name}' "
+                f"NORMAL priority: selected '{self._label(selected)}' "
                 f"(best precision/energy ratio: {selected.size_mb:.1f} MB / {energy:.6f} Wh)."
             )
             confidence = "high" if selected.size_mb > 10.0 else "medium"
 
         return DecisionResult(
             action="process",
-            selected_model=selected.name,
+            selected_model=self._label(selected),
             selected_profile=None,
             reason=reason,
             estimated_energy_wh=round(energy, 8),
